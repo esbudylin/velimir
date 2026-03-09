@@ -1,0 +1,12 @@
+services:
+  loader:
+    build: .
+    container_name: loader
+    volumes:
+      - ./output:/app/output:Z
+    command: python main.py
+
+  loader-tests:
+    build: .
+    container_name: loader-tests
+    command: python -m unittest tests.parse_lines
