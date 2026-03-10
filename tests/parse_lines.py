@@ -9,11 +9,16 @@ from src.parsers import collect_line_text, parse_lines
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
 
-xml_line_with_date = """
+xml_line_with_date = """<p class="verse">
 <line meter="Я4ж"/>Божѐственно̀ю нѐгой <rhyme-zone/>ды̀шит.</p>
 
 <p class="date"><noindex>1823<br/>
 Одесса</noindex></p>
+"""
+
+# ритм в поле метра должен иметь приоритет над разметкой ударений
+xml_line_with_rhythm = """
+<p class="verse"><line meter="Дк3м 2*4*0"/>Но̀гу на̀ ногу <rhyme-zone/>заложѝв<br/>
 """
 
 
@@ -27,7 +32,19 @@ class TestParseLine(unittest.TestCase):
     def test_collect_text_from_line(self, xml_line, text):
         soup = BeautifulSoup(xml_line, "xml")
         line = soup.find("line")
-        self.assertEqual(collect_line_text(line), "")
+        self.assertEqual(collect_line_text(line), text)
+
+    def test_parse_line_with_rhythm(self):
+        result = list(parse_lines(xml_line_with_rhythm))
+        self.assertEqual(len(result), 1)
+        line = result[0]
+
+        self.assertIsInstance(line, Line)
+
+        self.assertListEqual(
+            line.syllable_masks.poetic_accent_mask,
+            [False, False, True, False, False, False, False, True],
+        )
 
     def test_parse_line_with_meter(self):
         result = list(parse_lines(xml_line))
@@ -58,7 +75,3 @@ class TestParseLine(unittest.TestCase):
             line.syllable_masks.last_in_word_mask,
             [False, True, True, False, True, True, False, False, True],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()
