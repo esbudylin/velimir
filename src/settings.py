@@ -7,10 +7,10 @@ from pydantic_settings import BaseSettings
 DATA_FOLDER = "data"
 
 METADATA_TABLE = os.path.join(DATA_FOLDER, "tables", "poetic.csv")
-TEXSTS_FOLDER = os.path.join(DATA_FOLDER, "texts")
+TEXTS_DIR = os.path.join(DATA_FOLDER, "texts")
 
-OUTPUT_FOLDER = "output"
-OUTPUT_JSON = os.path.join(OUTPUT_FOLDER, "output.json")
+OUTPUT_DIR = "output"
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "output.msgpack")
 
 
 class InputDialect(csv.unix_dialect):
@@ -18,7 +18,7 @@ class InputDialect(csv.unix_dialect):
 
 
 class LoggingSettings(BaseSettings):
-    filename: str = os.path.join(OUTPUT_FOLDER, "main.log")
+    filename: str = os.path.join(OUTPUT_DIR, "main.log")
     level: int = logging.INFO
     filemode: str = "w"
 

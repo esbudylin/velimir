@@ -2,13 +2,16 @@ import csv
 import logging
 import os
 from typing import Iterator
+from itertools import islice
+
+import msgpack
 
 from src.logger import delayed_logger
 from src.models import InputPoem, OutputPoem
 from src.settings import (
     METADATA_TABLE,
-    OUTPUT_JSON,
-    TEXSTS_FOLDER,
+    OUTPUT_FILE,
+    TEXTS_DIR,
     InputDialect,
     LoggingSettings,
 )
@@ -16,7 +19,7 @@ from src.parsers import transform_poem
 
 
 def read_poem_xml(text_path):
-    xml_path = os.path.join(TEXSTS_FOLDER, text_path) + ".xml"
+    xml_path = os.path.join(TEXTS_DIR, text_path) + ".xml"
 
     with open(xml_path, "r", encoding="utf8") as f:
         return f.read()
@@ -42,12 +45,26 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
 
 
 def save_data(data: Iterator[OutputPoem]):
-    with open(OUTPUT_JSON, "w", encoding="utf8") as json_file:
-        json_file.write(
-            ",\n".join(
-                [poem.model_dump_json(indent=2) for poem in data],
-            )
+    batch_size = 500
+    batch_num = 0
+
+    while True:
+        if batch_num > 1:
+            return
+
+        chunk = list(islice(data, batch_size))
+        if not chunk:
+            break
+
+        serialized_data = msgpack.packb(
+            [poem.model_dump() for poem in chunk], use_bin_type=True
         )
+
+        pack_path = OUTPUT_FILE
+        with open(pack_path, "wb") as f:
+            f.write(serialized_data)
+
+        batch_num += 1
 
 
 def main():
