@@ -1,22 +1,36 @@
 import unittest
 
 from bs4 import BeautifulSoup
+from parameterized import parameterized
 
 from src.models import Line, Meter
 from src.parsers import collect_line_text, parse_lines
 
 
-class TestParseLine(unittest.TestCase):
-    def setUp(self):
-        self.xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
+xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
 
-    def test_collect_text_from_line(self):
-        soup = BeautifulSoup(self.xml_line, "xml")
+xml_line_with_date = """
+<line meter="Я4ж"/>Божѐственно̀ю нѐгой <rhyme-zone/>ды̀шит.</p>
+
+<p class="date"><noindex>1823<br/>
+Одесса</noindex></p>
+"""
+
+
+class TestParseLine(unittest.TestCase):
+    @parameterized.expand(
+        [
+            (xml_line, "Ещѐ вкруг со̀лнцев нѐ враща̀лись"),
+            (xml_line_with_date, "Божѐственно̀ю нѐгой ды̀шит."),
+        ]
+    )
+    def test_collect_text_from_line(self, xml_line, text):
+        soup = BeautifulSoup(xml_line, "xml")
         line = soup.find("line")
-        self.assertEqual(collect_line_text(line), "Ещѐ вкруг со̀лнцев нѐ враща̀лись")
+        self.assertEqual(collect_line_text(line), "")
 
     def test_parse_line_with_meter(self):
-        result = list(parse_lines(self.xml_line))
+        result = list(parse_lines(xml_line))
 
         self.assertEqual(len(result), 1)
         line = result[0]

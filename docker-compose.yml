@@ -9,4 +9,4 @@ services:
   loader-tests:
     build: .
     container_name: loader-tests
-    command: python -m unittest tests.parse_lines
+    command: python -m unittest tests.parse_lines tests.encoding

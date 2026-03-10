@@ -1,3 +1,6 @@
+import bitarray.util as bu
+
+from bitarray import bitarray
 from pydantic import BaseModel, Field
 
 
@@ -17,12 +20,47 @@ class SyllableMasks(BaseModel):
     poetic_accent_mask: list[bool]  # as marked in corpus
     last_in_word_mask: list[bool]
 
+    def encode(self):
+        def serialize(mask):
+            return bu.serialize(bitarray(mask))
+
+        return [
+            serialize(self.linguistic_accent_mask),
+            serialize(self.poetic_accent_mask),
+            serialize(self.last_in_word_mask),
+        ]
+
+    @classmethod
+    def decode(cls, data):
+        def deserialize(b):
+            ba = bu.deserialize(b)
+            return ba.tolist()
+
+        return cls(
+            linguistic_accent_mask=deserialize(data[0]),
+            poetic_accent_mask=deserialize(data[1]),
+            last_in_word_mask=deserialize(data[2]),
+        )
+
 
 class Meter(BaseModel):
     meter: str
     feet: int
     clausula: str
     unstable: bool = Field(default=False)
+
+    def encode(self):
+        return [self.meter, self.feet, self.clausula, self.unstable]
+
+    @classmethod
+    def decode(cls, data):
+        meter, feet, clausula, unstable = data
+        return cls(
+            meter=meter,
+            feet=feet,
+            clausula=clausula,
+            unstable=unstable,
+        )
 
 
 class Line(BaseModel):
@@ -32,7 +70,39 @@ class Line(BaseModel):
     caesura: int
     syllable_masks: SyllableMasks
 
+    def encode(self):
+        return [
+            self.caesura,
+            self.syllable_masks.encode(),
+            [m.encode() for m in self.meters],
+        ]
+
+    @classmethod
+    def decode(cls, data):
+        caesura, masks_data, meters_data = data
+
+        return cls(
+            caesura=caesura,
+            syllable_masks=SyllableMasks.decode(masks_data),
+            meters=[Meter.decode(m) for m in meters_data],
+        )
+
 
 class OutputPoem(BaseModel):
     path: str
     lines: list[Line]
+
+    def encode(self):
+        return [
+            self.path,
+            [line.encode() for line in self.lines],
+        ]
+
+    @classmethod
+    def decode(cls, data):
+        path, lines_data = data
+
+        return cls(
+            path=path,
+            lines=[Line.decode(line) for line in lines_data],
+        )

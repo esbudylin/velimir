@@ -47,19 +47,18 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
 def save_data(data: Iterator[OutputPoem]):
     batch_size = 500
 
-    while True:
-        chunk = list(islice(data, batch_size))
-        if not chunk:
-            break
+    with open(OUTPUT_FILE, "wb") as f:
+        while True:
+            chunk = list(islice(data, batch_size))
+            if not chunk:
+                break
 
-        serialized_data = msgpack.packb(
-            [poem.model_dump() for poem in chunk], use_bin_type=True
-        )
+            serialized_data = msgpack.packb(
+                [poem.encode() for poem in chunk],
+                use_bin_type=True,
+            )
 
-        pack_path = OUTPUT_FILE
-        with open(pack_path, "wb") as f:
             f.write(serialized_data)
-
 
 
 def main():
