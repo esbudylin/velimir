@@ -46,12 +46,8 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
 
 def save_data(data: Iterator[OutputPoem]):
     batch_size = 500
-    batch_num = 0
 
     while True:
-        if batch_num > 1:
-            return
-
         chunk = list(islice(data, batch_size))
         if not chunk:
             break
@@ -64,7 +60,6 @@ def save_data(data: Iterator[OutputPoem]):
         with open(pack_path, "wb") as f:
             f.write(serialized_data)
 
-        batch_num += 1
 
 
 def main():

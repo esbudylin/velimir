@@ -6,11 +6,15 @@ from bs4 import BeautifulSoup
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
+from stressrnn import StressRNN
 
 from src.logger import delayed_logger
 from src.models import InputPoem, Line, Meter, OutputPoem, SyllableMasks
 
 vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
+
+stress_rnn = StressRNN()
+accent_mark = "+"
 
 grammar = Grammar(
     """
@@ -120,12 +124,11 @@ def remove_accent_marks(text: str) -> str:
 
 def extract_accent_mask(text: str) -> List[bool]:
     stress_mark_ord = 768
-    apostrophe = "'"
 
     result = []
 
     def accent_test(char):
-        return ord(char) in [stress_mark_ord, ord(apostrophe)]
+        return ord(char) in [stress_mark_ord, ord(accent_mark)]
 
     for i, char in enumerate(text):
         if char in vowels:
@@ -148,12 +151,6 @@ def extract_word_ending_mask(text: str) -> List[bool]:
     return result
 
 
-def accentuate(text: str):
-    import ru_accent_poet
-
-    return ru_accent_poet.accent_line(text)
-
-
 def extract_syllable_masks(poetic_accent_mask: List[bool], line: str) -> SyllableMasks:
     if not poetic_accent_mask:
         # в корпусе не размечен ритм строки
@@ -161,7 +158,12 @@ def extract_syllable_masks(poetic_accent_mask: List[bool], line: str) -> Syllabl
         poetic_accent_mask = extract_accent_mask(line)
 
     cleaned_line = remove_accent_marks(line)
-    line_with_linguistic_accents = accentuate(cleaned_line)
+
+    line_with_linguistic_accents = stress_rnn.put_stress(
+        cleaned_line,
+        accent_mark,
+        use_batch_mode=True,
+    )
 
     return SyllableMasks(
         linguistic_accent_mask=extract_accent_mask(line_with_linguistic_accents),

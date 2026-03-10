@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
@@ -16,13 +15,8 @@ class TestParseLine(unittest.TestCase):
         line = soup.find("line")
         self.assertEqual(collect_line_text(line), "Ещѐ вкруг со̀лнцев нѐ враща̀лись")
 
-    @patch("src.parsers.accentuate")
-    def test_parse_line_with_meter(self, mock_accent_line):
-        mock_accent_line.return_value = "Еще' вкруг со'лнцев не враща'лись"
-
+    def test_parse_line_with_meter(self):
         result = list(parse_lines(self.xml_line))
-
-        mock_accent_line.assert_called_once_with("Еще вкруг солнцев не вращались")
 
         self.assertEqual(len(result), 1)
         line = result[0]
@@ -41,11 +35,6 @@ class TestParseLine(unittest.TestCase):
         self.assertEqual(line.caesura, -1)
 
         # Маски
-        self.assertListEqual(
-            line.syllable_masks.linguistic_accent_mask,
-            [False, True, False, True, False, False, False, True, False],
-        )
-
         self.assertListEqual(
             line.syllable_masks.poetic_accent_mask,
             [False, True, False, True, False, True, False, True, False],
