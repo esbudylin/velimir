@@ -19,6 +19,7 @@ class InputDialect(csv.unix_dialect):
 
 class LoggingSettings(BaseSettings):
     filename: str = os.path.join(OUTPUT_DIR, "main.log")
+    encoding: str = "utf-8"
     level: int = logging.INFO
     filemode: str = "w"
 

@@ -1,6 +1,6 @@
 import logging
 import unicodedata
-from typing import Iterator, List
+from typing import Iterator
 
 from bs4 import BeautifulSoup
 from parsimonious import IncompleteParseError, ParseError
@@ -122,7 +122,7 @@ def remove_accent_marks(text: str) -> str:
     )
 
 
-def extract_accent_mask(text: str) -> List[bool]:
+def extract_accent_mask(text: str) -> list[bool]:
     stress_mark_ord = 768
 
     result = []
@@ -140,7 +140,7 @@ def extract_accent_mask(text: str) -> List[bool]:
     return result
 
 
-def extract_word_ending_mask(text: str) -> List[bool]:
+def extract_word_ending_mask(text: str) -> list[bool]:
     result = []
 
     for word in text.split():
@@ -151,7 +151,7 @@ def extract_word_ending_mask(text: str) -> List[bool]:
     return result
 
 
-def extract_syllable_masks(poetic_accent_mask: List[bool], line: str) -> SyllableMasks:
+def extract_syllable_masks(poetic_accent_mask: list[bool], line: str) -> SyllableMasks:
     if not poetic_accent_mask:
         # в корпусе не размечен ритм строки
         # собираем эти данные из размеченных поэтических ударений

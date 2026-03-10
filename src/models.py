@@ -1,5 +1,3 @@
-from typing import List
-
 from pydantic import BaseModel, Field
 
 
@@ -15,9 +13,9 @@ class InputPoem(BaseModel):
 
 
 class SyllableMasks(BaseModel):
-    linguistic_accent_mask: List[bool]  # as marked by accentuator
-    poetic_accent_mask: List[bool]  # as marked in corpus
-    last_in_word_mask: List[bool]
+    linguistic_accent_mask: list[bool]  # as marked by accentuator
+    poetic_accent_mask: list[bool]  # as marked in corpus
+    last_in_word_mask: list[bool]
 
 
 class Meter(BaseModel):
@@ -29,7 +27,7 @@ class Meter(BaseModel):
 
 class Line(BaseModel):
     # строка может содержать несколько метров: например, в случае цезурного разделения строки
-    meters: List[Meter]
+    meters: list[Meter]
     # слог, после которого располагается цезура. -1, если цезура отсутствует
     caesura: int
     syllable_masks: SyllableMasks
@@ -37,4 +35,4 @@ class Line(BaseModel):
 
 class OutputPoem(BaseModel):
     path: str
-    lines: List[Line]
+    lines: list[Line]
