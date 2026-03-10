@@ -3,7 +3,7 @@ import unittest
 from bs4 import BeautifulSoup
 from parameterized import parameterized
 
-from src.models import Line, Meter
+from src.models import Line, Meter, Clausula
 from src.parsers import collect_line_text, parse_lines
 
 
@@ -60,7 +60,7 @@ class TestParseLine(unittest.TestCase):
         self.assertIsInstance(meter, Meter)
         self.assertEqual(meter.meter, "Я")
         self.assertEqual(meter.feet, 4)
-        self.assertEqual(meter.clausula, "ж")
+        self.assertEqual(meter.clausula, Clausula.FEMININE)
         self.assertFalse(meter.unstable)
 
         self.assertEqual(line.caesura, -1)

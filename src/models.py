@@ -1,3 +1,5 @@
+from enum import IntEnum
+
 import bitarray.util as bu
 
 from bitarray import bitarray
@@ -43,10 +45,33 @@ class SyllableMasks(BaseModel):
         )
 
 
+class Clausula(IntEnum):
+    MASCULINE = 0
+    FEMININE = 1
+    DACTYLIC = 2
+    HYPERDACTYLIC = 3
+
+    @classmethod
+    def from_str(cls, s: str):
+        map = {
+            "м": cls.MASCULINE,
+            "ж": cls.FEMININE,
+            "д": cls.DACTYLIC,
+            "г": cls.HYPERDACTYLIC,
+        }
+        return map[s]
+
+    def to_str(self) -> str:
+        for k, v in self._MAP.items():
+            if v == self:
+                return k
+        raise ValueError(self)
+
+
 class Meter(BaseModel):
     meter: str
     feet: int
-    clausula: str
+    clausula: Clausula
     unstable: bool = Field(default=False)
 
     def encode(self):
