@@ -6,8 +6,8 @@ from bs4 import BeautifulSoup
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
-from stressrnn import StressRNN
 
+import src.accentuator as accentuator
 from src.logger import delayed_logger
 from src.models import (
     InputPoem,
@@ -20,9 +20,6 @@ from src.models import (
 )
 
 vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
-
-stress_rnn = StressRNN()
-accent_mark = "+"
 
 grammar = Grammar(
     """
@@ -132,7 +129,7 @@ def extract_accent_mask(text: str) -> list[bool]:
     result = []
 
     def accent_test(char):
-        return ord(char) in [stress_mark_ord, ord(accent_mark)]
+        return ord(char) in [stress_mark_ord, ord(accentuator.accent_mark)]
 
     for i, char in enumerate(text):
         if char in vowels:
@@ -163,10 +160,8 @@ def extract_syllable_masks(poetic_accent_mask: list[bool], line: str) -> Syllabl
 
     cleaned_line = remove_accent_marks(line)
 
-    line_with_linguistic_accents = stress_rnn.put_stress(
+    line_with_linguistic_accents = accentuator.accent_line(
         cleaned_line,
-        accent_mark,
-        use_batch_mode=True,
     )
 
     return SyllableMasks(

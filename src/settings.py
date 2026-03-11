@@ -6,8 +6,8 @@ from pydantic_settings import BaseSettings
 
 DATA_FOLDER = "data"
 
-METADATA_TABLE = os.path.join(DATA_FOLDER, "tables", "poetic.csv")
-TEXTS_DIR = os.path.join(DATA_FOLDER, "texts")
+METADATA_TABLE = os.path.join(DATA_FOLDER, "rnc", "tables", "poetic.csv")
+TEXTS_DIR = os.path.join(DATA_FOLDER, "rnc", "texts")
 
 OUTPUT_DIR = "output"
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "output.msgpack")

@@ -5,6 +5,7 @@ from parameterized import parameterized
 
 from src.models import Line, Meter, Clausula, MeterType, OutputPoem
 from src.parsers import collect_line_text, parse_lines
+from src.accentuator import accent_line
 
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
@@ -96,10 +97,15 @@ class TestParseLine(unittest.TestCase):
             [False, True, True, False, True, True, False, False, True],
         )
 
+        self.assertEqual(
+            len(line.syllable_masks.poetic_accent_mask),
+            len(line.syllable_masks.linguistic_accent_mask),
+        )
+
 
 class TestEncoding(unittest.TestCase):
     def setUp(self):
-        self.xml_path = "data/texts/xix/1830/1830-001.xml"
+        self.xml_path = "data/rnc/texts/xix/1830/1830-001.xml"
 
     def test_data_round_trip(self):
         with open(self.xml_path, "r", encoding="utf8") as f:
@@ -111,3 +117,12 @@ class TestEncoding(unittest.TestCase):
         decoded = OutputPoem.decode(encoded)
 
         self.assertDictEqual(poem.model_dump(), decoded.model_dump())
+
+
+class TestAccentuator(unittest.TestCase):
+    def test_accent_line(self):
+        line = "Еще вкруг солнцев не вращались"
+
+        res = accent_line(line)
+
+        self.assertEqual(res, "Ещё вкруг со'лнцев не враща'лись")
