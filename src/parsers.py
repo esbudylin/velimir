@@ -9,7 +9,15 @@ from parsimonious.nodes import NodeVisitor
 from stressrnn import StressRNN
 
 from src.logger import delayed_logger
-from src.models import InputPoem, Line, Meter, OutputPoem, SyllableMasks, Clausula
+from src.models import (
+    InputPoem,
+    Line,
+    Meter,
+    OutputPoem,
+    SyllableMasks,
+    Clausula,
+    MeterType,
+)
 
 vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
 
@@ -22,7 +30,7 @@ grammar = Grammar(
 
     meter_schema = meter unstable? feet clausula
 
-    meter = ~r"[А-Яа-я]{1,3}"
+    meter = ( "Гек" / "Пен" / "Ан" / "Аф" / "Дк" / "Тк" / "Ак" / "Я" / "Х" / "Д" / "Л" / "С" )
     unstable = "*"
     feet = ~r"[0-9]+"
     clausula = ( "г" / "д" / "м" / "ж" )
@@ -46,7 +54,9 @@ class MeterVisitor(NodeVisitor):
 
     def visit_meter(self, node, *_):
         self._current_meter = {}
-        self._current_meter["meter"] = node.text
+
+        self._current_meter["meter"] = MeterType.from_str(node.text)
+
         self.meters.append(self._current_meter)
 
     def visit_feet(self, node, *_):

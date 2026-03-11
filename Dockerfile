@@ -10,8 +10,8 @@ COPY requirements.txt .
 
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 
-COPY main.py main.py
-
 COPY src/ src/
 
-COPY tests/ tests/
+COPY main.py main.py
+
+COPY tests.py tests.py

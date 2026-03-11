@@ -3,7 +3,7 @@ import unittest
 from bs4 import BeautifulSoup
 from parameterized import parameterized
 
-from src.models import Line, Meter, Clausula
+from src.models import Line, Meter, Clausula, MeterType, OutputPoem
 from src.parsers import collect_line_text, parse_lines
 
 
@@ -58,7 +58,7 @@ class TestParseLine(unittest.TestCase):
         self.assertEqual(len(line.meters), 1)
         meter = line.meters[0]
         self.assertIsInstance(meter, Meter)
-        self.assertEqual(meter.meter, "Я")
+        self.assertEqual(meter.meter, MeterType.IAMB)
         self.assertEqual(meter.feet, 4)
         self.assertEqual(meter.clausula, Clausula.FEMININE)
         self.assertFalse(meter.unstable)
@@ -75,3 +75,19 @@ class TestParseLine(unittest.TestCase):
             line.syllable_masks.last_in_word_mask,
             [False, True, True, False, True, True, False, False, True],
         )
+
+
+class TestEncoding(unittest.TestCase):
+    def setUp(self):
+        self.xml_path = "data/texts/xix/1830/1830-001.xml"
+
+    def test_data_round_trip(self):
+        with open(self.xml_path, "r", encoding="utf8") as f:
+            xml = f.read()
+
+        poem = OutputPoem(path=self.xml_path, lines=list(parse_lines(xml)))
+
+        encoded = poem.encode()
+        decoded = OutputPoem.decode(encoded)
+
+        self.assertDictEqual(poem.model_dump(), decoded.model_dump())

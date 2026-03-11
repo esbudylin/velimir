@@ -45,31 +45,48 @@ class SyllableMasks(BaseModel):
         )
 
 
-class Clausula(IntEnum):
-    MASCULINE = 0
-    FEMININE = 1
-    DACTYLIC = 2
-    HYPERDACTYLIC = 3
+class CodeIntEnum(IntEnum):
+    def __new__(cls, value: int, code: str):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.code = code
+        return obj
 
     @classmethod
     def from_str(cls, s: str):
-        map = {
-            "м": cls.MASCULINE,
-            "ж": cls.FEMININE,
-            "д": cls.DACTYLIC,
-            "г": cls.HYPERDACTYLIC,
-        }
-        return map[s]
+        for member in cls:
+            if member.code == s:
+                return member
+        raise ValueError(f"{s!r} is not a valid {cls.__name__}")
 
     def to_str(self) -> str:
-        for k, v in self._MAP.items():
-            if v == self:
-                return k
-        raise ValueError(self)
+        return self.code
+
+
+class MeterType(CodeIntEnum):
+    IAMB = (0, "Я")
+    TROCHEE = (1, "Х")
+    DACTYL = (2, "Д")
+    ANAPEST = (3, "Ан")
+    AMPHIBRACH = (4, "Аф")
+    DOLNIK = (5, "Дк")
+    TAKTOVIK = (6, "Тк")
+    AKSTENTNIK = (7, "Ак")
+    LOGAED = (8, "Л")
+    HEXAMETER = (9, "Гек")
+    PAEON = (10, "Пен")
+    SYLLABIC = (11, "С")
+
+
+class Clausula(CodeIntEnum):
+    MASCULINE = (0, "м")
+    FEMININE = (1, "ж")
+    DACTYLIC = (2, "д")
+    HYPERDACTYLIC = (3, "г")
 
 
 class Meter(BaseModel):
-    meter: str
+    meter: MeterType
     feet: int
     clausula: Clausula
     unstable: bool = Field(default=False)
