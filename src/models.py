@@ -108,8 +108,8 @@ class Meter(BaseModel):
 class Line(BaseModel):
     # строка может содержать несколько метров: например, в случае цезурного разделения строки
     meters: list[Meter]
-    # слог, после которого располагается цезура. -1, если цезура отсутствует
-    caesura: int
+    # позиции слогов, после которых располагается цезура
+    caesura: list[int]
     syllable_masks: SyllableMasks
 
     def encode(self):

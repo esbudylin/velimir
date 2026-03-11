@@ -47,7 +47,7 @@ grammar = Grammar(
 class MeterVisitor(NodeVisitor):
     def __init__(self):
         self.meters = []
-        self.caesura = -1
+        self.caesura = []
         self.syllable_accents = []
 
         super().__init__()
@@ -69,13 +69,7 @@ class MeterVisitor(NodeVisitor):
         self._current_meter["unstable"] = True
 
     def visit_caesura(self, *_):
-        if self.caesura != -1:
-            delayed_logger.record()
-            logging.warning("Several caesura breaks are found in a single line")
-
-            return
-
-        self.caesura = len(self.syllable_accents)
+        self.caesura.append(len(self.syllable_accents))
 
     def visit_interval(self, node, *_):
         self.syllable_accents.extend(False for _ in range(int(node.text)))

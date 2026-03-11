@@ -21,6 +21,14 @@ xml_line_with_rhythm = """
 <p class="verse"><line meter="Дк3м 2*4*0"/>Но̀гу на̀ ногу <rhyme-zone/>заложѝв<br/>
 """
 
+xml_line_with_caesura = """
+<line meter="Д3м~Д3ж 0*2*2*0|0*2*2*1"/>сло̀вно скита̀льцы в века̀х, вѐрой скреплѐнные <rhyme-zone/>па̀льцы</p
+"""
+
+xml_line_with_multiple_caesuras = """
+<p class="verse"><line meter="Дк7м 1*2*1|1*2*2|2*2*2*0"/>Велѝчество Со̀лнца велѝкие по̀прища в небеса̀х пробега̀ет легко̀,<br/>
+"""
+
 
 class TestParseLine(unittest.TestCase):
     @parameterized.expand(
@@ -34,12 +42,24 @@ class TestParseLine(unittest.TestCase):
         line = soup.find("line")
         self.assertEqual(collect_line_text(line), text)
 
+    @parameterized.expand(
+        [
+            (xml_line_with_caesura, [7], 15),
+            (xml_line_with_multiple_caesuras, [6, 13], 22),
+        ]
+    )
+    def test_parse_caesuras(self, xml_line, caesuras, syllable_count):
+        result = list(parse_lines(xml_line))
+        self.assertEqual(len(result), 1)
+        line = result[0]
+
+        self.assertEqual(len(line.syllable_masks.poetic_accent_mask), syllable_count)
+        self.assertListEqual(line.caesura, caesuras)
+
     def test_parse_line_with_rhythm(self):
         result = list(parse_lines(xml_line_with_rhythm))
         self.assertEqual(len(result), 1)
         line = result[0]
-
-        self.assertIsInstance(line, Line)
 
         self.assertListEqual(
             line.syllable_masks.poetic_accent_mask,
@@ -63,7 +83,7 @@ class TestParseLine(unittest.TestCase):
         self.assertEqual(meter.clausula, Clausula.FEMININE)
         self.assertFalse(meter.unstable)
 
-        self.assertEqual(line.caesura, -1)
+        self.assertListEqual(line.caesura, [])
 
         # Маски
         self.assertListEqual(
