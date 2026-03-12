@@ -1,5 +1,4 @@
 import logging
-import unicodedata
 from typing import Iterator
 
 from bs4 import BeautifulSoup
@@ -10,16 +9,16 @@ from parsimonious.nodes import NodeVisitor
 import src.accentuator as accentuator
 from src.logger import delayed_logger
 from src.models import (
+    Clausula,
     InputPoem,
     Line,
     Meter,
+    MeterType,
     OutputPoem,
     SyllableMasks,
-    Clausula,
-    MeterType,
 )
 
-vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
+stress_mark_ord = 768
 
 grammar = Grammar(
     """
@@ -118,22 +117,26 @@ def parse_line_meter(meter: str) -> dict:
 
 
 def remove_accent_marks(text: str) -> str:
-    return "".join(
-        c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c)
-    )
+    return "".join(c for c in text if ord(c) != stress_mark_ord)
+
+
+def is_vowel(char):
+    vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
+
+    return char in vowels
 
 
 def extract_accent_mask(text: str) -> list[bool]:
-    stress_mark_ord = 768
-
     result = []
 
-    def accent_test(char):
-        return ord(char) in [stress_mark_ord, ord(accentuator.accent_mark)]
+    def is_accent_mark(char):
+        return char and ord(char) in [stress_mark_ord, ord(accentuator.accent_mark)]
 
     for i, char in enumerate(text):
-        if char in vowels:
-            if i + 1 < len(text) and accent_test(text[i + 1]):
+        next_char = text[i + 1] if i + 1 < len(text) else ""
+
+        if is_vowel(char):
+            if is_accent_mark(next_char):
                 result.append(True)
             else:
                 result.append(False)
@@ -145,9 +148,11 @@ def extract_word_ending_mask(text: str) -> list[bool]:
     result = []
 
     for word in text.split():
-        word_vowels = list(filter(lambda c: c in vowels, word))
-        result += [False] * (len(word_vowels) - 1)
-        result.append(True)
+        word_vowels = list(filter(lambda c: is_vowel(c), word))
+
+        if word_vowels:
+            result += [False] * (len(word_vowels) - 1)
+            result.append(True)
 
     return result
 
@@ -160,9 +165,7 @@ def extract_syllable_masks(poetic_accent_mask: list[bool], line: str) -> Syllabl
 
     cleaned_line = remove_accent_marks(line)
 
-    line_with_linguistic_accents = accentuator.accent_line(
-        cleaned_line,
-    )
+    line_with_linguistic_accents = accentuator.accent_line(cleaned_line)
 
     return SyllableMasks(
         linguistic_accent_mask=extract_accent_mask(line_with_linguistic_accents),

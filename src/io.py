@@ -5,7 +5,7 @@ from typing import Iterator
 import msgpack
 
 from src.models import OutputPoem
-from src.settings import TEXTS_DIR, OUTPUT_FILE
+from src.settings import OUTPUT_FILE, TEXTS_DIR
 
 
 def read_poem_xml(text_path):

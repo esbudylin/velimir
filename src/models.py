@@ -3,7 +3,7 @@ from enum import IntEnum
 import bitarray.util as bu
 
 from bitarray import bitarray
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class InputPoem(BaseModel):
@@ -21,6 +21,17 @@ class SyllableMasks(BaseModel):
     linguistic_accent_mask: list[bool]  # as marked by accentuator
     poetic_accent_mask: list[bool]  # as marked in corpus
     last_in_word_mask: list[bool]
+
+    @model_validator(mode="after")
+    def check_mask_lengths_match(self):
+        l_len = len(self.linguistic_accent_mask)
+        p_len = len(self.poetic_accent_mask)
+        w_len = len(self.last_in_word_mask)
+
+        if l_len != p_len or p_len != w_len:
+            raise ValueError("Masks must have the same length")
+
+        return self
 
     def encode(self):
         def serialize(mask):

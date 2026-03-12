@@ -32,6 +32,20 @@ stress_rnn = StressRNN()
 accent_mark = "'"
 
 
+def read_dict(filename, dic):
+    with open(filename, encoding="cp1251") as file_read:
+        for line in file_read:
+            if line.split():
+                word, acc = line.split()
+            dic[re.sub(r"\(.+$", "", word)] += rf"\x1{word}={acc}"
+    return dic
+
+
+di = defaultdict(str)
+di = read_dict(os.path.join("data", "accent_dicts", "accent1.dic"), di)
+di = read_dict(os.path.join("data", "accent_dicts", "accent.dic"), di)
+
+
 def accent_line(line):
     words = line.split()
     words_rule = accent_line_rules(line).split()
@@ -77,7 +91,7 @@ def should_use_neuro_accent(word, word_by_dict):
     местах, или не поставил совсем и при этом в нем нет буквы ё,
 
     2) словарный акцентуатор поставил и ударение, и
-    букву ё (кроме слов через дефис: например, тёмно-си+ний )
+    букву ё (кроме слов через дефис: например, тёмно-си'ний )
     """
     dictionary_accents = re.findall(accent_mark, word_by_dict)
 
@@ -89,17 +103,8 @@ def should_use_neuro_accent(word, word_by_dict):
     return (
         (not has_dictionary_accent and not has_yo)
         or multiple_dictionary_accents
-        or (has_yo and has_dictionary_accent)
+        or (has_yo and has_dictionary_accent and "-" not in word)
     )
-
-
-def read_dict(filename, dic):
-    with open(filename, encoding="cp1251") as file_read:
-        for line in file_read:
-            if line.split():
-                word, acc = line.split()
-            dic[re.sub(r"\(.+$", "", word)] += rf"\x1{word}={acc}"
-    return dic
 
 
 def normalize(s):
@@ -157,8 +162,3 @@ def accent_line_rules(line):
         if (not re.search(rf"{word}'", line)) and (word != new_word):
             line = re.sub(word, new_word, line)
     return line
-
-
-di = defaultdict(str)
-di = read_dict(os.path.join("data", "accent_dicts", "accent1.dic"), di)
-di = read_dict(os.path.join("data", "accent_dicts", "accent.dic"), di)

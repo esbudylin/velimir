@@ -3,10 +3,13 @@ import unittest
 from bs4 import BeautifulSoup
 from parameterized import parameterized
 
-from src.models import Line, Meter, Clausula, MeterType, OutputPoem
-from src.parsers import collect_line_text, parse_lines
 from src.accentuator import accent_line
-
+from src.models import Clausula, Line, Meter, MeterType, OutputPoem
+from src.parsers import (
+    collect_line_text,
+    extract_syllable_masks,
+    parse_lines,
+)
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
 
@@ -22,8 +25,8 @@ xml_line_with_rhythm = """
 <p class="verse"><line meter="Дк3м 2*4*0"/>Но̀гу на̀ ногу <rhyme-zone/>заложѝв<br/>
 """
 
-xml_line_with_caesura = """
-<line meter="Д3м~Д3ж 0*2*2*0|0*2*2*1"/>сло̀вно скита̀льцы в века̀х, вѐрой скреплѐнные <rhyme-zone/>па̀льцы</p
+xml_line_with_caesura = """<p class="verse">
+<line meter="Д3м~Д3ж 0*2*2*0|0*2*2*1"/>сло̀вно скита̀льцы в века̀х, вѐрой скреплѐнные <rhyme-zone/>па̀льцы</p>
 """
 
 xml_line_with_multiple_caesuras = """
@@ -45,11 +48,11 @@ class TestParseLine(unittest.TestCase):
 
     @parameterized.expand(
         [
-            (xml_line_with_caesura, [7], 15),
-            (xml_line_with_multiple_caesuras, [6, 13], 22),
+            ("single_caesura", xml_line_with_caesura, [7], 15),
+            ("multiple_caesuras", xml_line_with_multiple_caesuras, [6, 13], 22),
         ]
     )
-    def test_parse_caesuras(self, xml_line, caesuras, syllable_count):
+    def test_parse_caesuras(self, name, xml_line, caesuras, syllable_count):
         result = list(parse_lines(xml_line))
         self.assertEqual(len(result), 1)
         line = result[0]
@@ -66,6 +69,40 @@ class TestParseLine(unittest.TestCase):
             line.syllable_masks.poetic_accent_mask,
             [False, False, True, False, False, False, False, True],
         )
+
+    @parameterized.expand(
+        [
+            (
+                "Йо̀шкин кот",
+                [True, False, False],
+                [False, True, True],
+            ),
+            (
+                "куй желѐзо пока",
+                [False, False, True, False, False, False],
+                [True, False, False, True, False, True],
+            ),
+            (
+                "лёгкий",
+                [False, False],
+                [False, True],
+            ),
+            (
+                "в доро'гу",
+                [False, True, False],
+                [False, False, True],
+            ),
+            (
+                "отправля'юсь в доро'гу",
+                [False, False, True, False, False, True, False],
+                [False, False, False, True, False, False, True],
+            ),
+        ]
+    )
+    def test_mask_extraction(self, input, accent_mask, last_in_word_mask):
+        masks = extract_syllable_masks([], input)
+        self.assertListEqual(masks.poetic_accent_mask, accent_mask)
+        self.assertListEqual(masks.last_in_word_mask, last_in_word_mask)
 
     def test_parse_line_with_meter(self):
         result = list(parse_lines(xml_line))
@@ -92,14 +129,9 @@ class TestParseLine(unittest.TestCase):
             [False, True, False, True, False, True, False, True, False],
         )
 
-        self.assertLessEqual(
+        self.assertListEqual(
             line.syllable_masks.last_in_word_mask,
             [False, True, True, False, True, True, False, False, True],
-        )
-
-        self.assertEqual(
-            len(line.syllable_masks.poetic_accent_mask),
-            len(line.syllable_masks.linguistic_accent_mask),
         )
 
 
@@ -120,9 +152,16 @@ class TestEncoding(unittest.TestCase):
 
 
 class TestAccentuator(unittest.TestCase):
-    def test_accent_line(self):
-        line = "Еще вкруг солнцев не вращались"
-
+    @parameterized.expand(
+        [
+            ("Еще вкруг солнцев не вращались", "Ещё вкруг со'лнцев не враща'лись"),
+            ("легкий", "лёгкий"),
+            ("темно-синий", "тёмно-си'ний"),
+            ("ёлка", "ёлка"),
+            ("йошкин", "йо'шкин"),
+        ]
+    )
+    def test_accent_line(self, line, with_accents):
         res = accent_line(line)
 
-        self.assertEqual(res, "Ещё вкруг со'лнцев не враща'лись")
+        self.assertEqual(res, with_accents)

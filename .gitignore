@@ -1,2 +1,4 @@
 data/rnc
 output
+__pycache__
+.venv
