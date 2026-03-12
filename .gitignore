@@ -1,4 +1,4 @@
 data/rnc
-output
 __pycache__
 .venv
+main.log

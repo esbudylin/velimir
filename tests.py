@@ -1,6 +1,5 @@
 import unittest
 
-from bs4 import BeautifulSoup
 from parameterized import parameterized
 
 from src.accentuator import accent_line

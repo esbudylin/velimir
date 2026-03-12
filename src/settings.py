@@ -8,9 +8,7 @@ DATA_FOLDER = "data"
 
 METADATA_TABLE = os.path.join(DATA_FOLDER, "rnc", "tables", "poetic.csv")
 TEXTS_DIR = os.path.join(DATA_FOLDER, "rnc", "texts")
-
-OUTPUT_DIR = "output"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "output.msgpack")
+OUTPUT_FILE = os.path.join(DATA_FOLDER, "poems.msgpack")
 
 
 class InputDialect(csv.unix_dialect):
@@ -18,7 +16,7 @@ class InputDialect(csv.unix_dialect):
 
 
 class LoggingSettings(BaseSettings):
-    filename: str = os.path.join(OUTPUT_DIR, "main.log")
+    filename: str = "main.log"
     encoding: str = "utf-8"
     level: int = logging.INFO
     filemode: str = "w"

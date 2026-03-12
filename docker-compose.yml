@@ -1,11 +1,4 @@
 services:
-  loader:
-    build: .
-    container_name: loader
-    volumes:
-      - ./output:/app/output:Z
-    command: python main.py
-
   tests:
     build: .
     container_name: loader-tests
