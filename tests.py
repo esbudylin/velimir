@@ -5,11 +5,7 @@ from parameterized import parameterized
 
 from src.accentuator import accent_line
 from src.models import Clausula, Line, Meter, MeterType, OutputPoem
-from src.parsers import (
-    collect_line_text,
-    extract_syllable_masks,
-    parse_lines,
-)
+from src.parsers import extract_lines, transform_lines, extract_syllable_masks
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
 
@@ -18,11 +14,6 @@ xml_line_with_date = """<p class="verse">
 
 <p class="date"><noindex>1823<br/>
 Одесса</noindex></p>
-"""
-
-# ритм в поле метра должен иметь приоритет над разметкой ударений
-xml_line_with_rhythm = """
-<p class="verse"><line meter="Дк3м 2*4*0"/>Но̀гу на̀ ногу <rhyme-zone/>заложѝв<br/>
 """
 
 xml_line_with_caesura = """<p class="verse">
@@ -42,9 +33,8 @@ class TestParseLine(unittest.TestCase):
         ]
     )
     def test_collect_text_from_line(self, xml_line, text):
-        soup = BeautifulSoup(xml_line, "xml")
-        line = soup.find("line")
-        self.assertEqual(collect_line_text(line), text)
+        extracted = next(extract_lines(xml_line))
+        self.assertEqual(extracted.text, text)
 
     @parameterized.expand(
         [
@@ -53,22 +43,12 @@ class TestParseLine(unittest.TestCase):
         ]
     )
     def test_parse_caesuras(self, name, xml_line, caesuras, syllable_count):
-        result = list(parse_lines(xml_line))
+        result = list(transform_lines(xml_line))
         self.assertEqual(len(result), 1)
         line = result[0]
 
         self.assertEqual(len(line.syllable_masks.poetic_accent_mask), syllable_count)
         self.assertListEqual(line.caesura, caesuras)
-
-    def test_parse_line_with_rhythm(self):
-        result = list(parse_lines(xml_line_with_rhythm))
-        self.assertEqual(len(result), 1)
-        line = result[0]
-
-        self.assertListEqual(
-            line.syllable_masks.poetic_accent_mask,
-            [False, False, True, False, False, False, False, True],
-        )
 
     @parameterized.expand(
         [
@@ -105,7 +85,7 @@ class TestParseLine(unittest.TestCase):
         self.assertListEqual(masks.last_in_word_mask, last_in_word_mask)
 
     def test_parse_line_with_meter(self):
-        result = list(parse_lines(xml_line))
+        result = list(transform_lines(xml_line))
 
         self.assertEqual(len(result), 1)
         line = result[0]
@@ -143,7 +123,7 @@ class TestEncoding(unittest.TestCase):
         with open(self.xml_path, "r", encoding="utf8") as f:
             xml = f.read()
 
-        poem = OutputPoem(path=self.xml_path, lines=list(parse_lines(xml)))
+        poem = OutputPoem(path=self.xml_path, lines=list(transform_lines(xml)))
 
         encoded = poem.encode()
         decoded = OutputPoem.decode(encoded)

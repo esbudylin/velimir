@@ -17,6 +17,11 @@ class InputPoem(BaseModel):
     path: str
 
 
+class InputLine(BaseModel):
+    meter: str
+    text: str
+
+
 class SyllableMasks(BaseModel):
     linguistic_accent_mask: list[bool]  # as marked by accentuator
     poetic_accent_mask: list[bool]  # as marked in corpus

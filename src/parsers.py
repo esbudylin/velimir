@@ -8,15 +8,7 @@ from parsimonious.nodes import NodeVisitor
 
 import src.accentuator as accentuator
 from src.logger import delayed_logger
-from src.models import (
-    Clausula,
-    InputPoem,
-    Line,
-    Meter,
-    MeterType,
-    OutputPoem,
-    SyllableMasks,
-)
+from src.models import Clausula, Line, Meter, MeterType, SyllableMasks, InputLine
 
 stress_mark_ord = 768
 
@@ -88,11 +80,8 @@ class MeterVisitor(NodeVisitor):
         )
 
 
-def transform_poem(poem: InputPoem, xml_str: str) -> OutputPoem:
-    return OutputPoem(
-        path=poem.path,
-        lines=list(parse_lines(xml_str)),
-    )
+def transform_lines(xml_str: str) -> Iterator[Line]:
+    return parse_lines(extract_lines(xml_str))
 
 
 def parse_line_meter(meter: str) -> dict:
@@ -157,11 +146,13 @@ def extract_word_ending_mask(text: str) -> list[bool]:
     return result
 
 
-def extract_syllable_masks(poetic_accent_mask: list[bool], line: str) -> SyllableMasks:
+def extract_syllable_masks(rhythm_accents: list[bool], line: str) -> SyllableMasks:
+    poetic_accent_mask = extract_accent_mask(line)
+
     if not poetic_accent_mask:
-        # в корпусе не размечен ритм строки
-        # собираем эти данные из размеченных поэтических ударений
-        poetic_accent_mask = extract_accent_mask(line)
+        # Ударения не размечены
+        # Используем разметку ритма вместо них
+        poetic_accent_mask = rhythm_accents
 
     cleaned_line = remove_accent_marks(line)
 
@@ -174,7 +165,7 @@ def extract_syllable_masks(poetic_accent_mask: list[bool], line: str) -> Syllabl
     )
 
 
-def collect_line_text(line_tag):
+def collect_line_text(line_tag) -> str:
     parts = []
     for node in line_tag.next_siblings:
         if node.name == "line":
@@ -184,19 +175,36 @@ def collect_line_text(line_tag):
     return "".join(parts).strip()
 
 
-def parse_lines(xml: str) -> Iterator[Line]:
+def parse_line(line_text: str, parsed_meter: dict) -> Line:
+    meters = [Meter(**meter) for meter in parsed_meter["meters"]]
+
+    syllable_masks = extract_syllable_masks(parsed_meter["syllables"], line_text)
+
+    return Line(
+        meters=meters,
+        syllable_masks=syllable_masks,
+        caesura=parsed_meter["caesura"],
+    )
+
+
+def extract_lines(xml: str) -> Iterator[InputLine]:
     soup = BeautifulSoup(xml, "xml")
 
     for line in soup.find_all("line"):
         if meter := line.get("meter"):
-            if parsed := parse_line_meter(meter.strip()):
-                meters = [Meter(**meter) for meter in parsed["meters"]]
+            text = collect_line_text(line)
 
-                line_text = collect_line_text(line)
-                syllable_masks = extract_syllable_masks(parsed["syllables"], line_text)
+            yield InputLine(text=text, meter=meter.strip())
 
-                yield Line(
-                    meters=meters,
-                    syllable_masks=syllable_masks,
-                    caesura=parsed["caesura"],
+
+def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
+    for line in lines:
+        if parsed_meter := parse_line_meter(line.meter):
+            try:
+                yield parse_line(line.text, parsed_meter)
+            except Exception:
+                delayed_logger.record()
+                logging.error(
+                    "Error while processing line: %s",
+                    line,
                 )
