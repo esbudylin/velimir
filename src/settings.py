@@ -24,6 +24,7 @@ class LoggingSettings(BaseSettings):
     encoding: str = "utf-8"
     level: int = logging.INFO
     filemode: str = "w"
+    format: str = "%(asctime)s [%(levelname)s] %(message)s"
 
     class Config:
         env_prefix = "LOGGING_"

@@ -1,7 +1,7 @@
 import logging
 import random
 from typing import Iterator
-from collections import namedtuple
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
@@ -11,68 +11,66 @@ from torch.utils.data import DataLoader, Dataset
 
 from src.models import OutputPoem
 
-Sample = namedtuple(
-    "Sample",
-    ["x", "poetic_accents", "meter", "unstable"],
-)
-CollatedSample = namedtuple(
-    "CollatedSample",
-    ["x", "poetic_accents", "meter", "unstable", "mask"],
-)
-ForwardedMeter = namedtuple(
-    "FowardedMeter",
-    ["meter", "unstable"],
-)
+
+@dataclass(slots=True)
+class Sample:
+    x: torch.Tensor
+    poetic_accents: torch.Tensor
+    meter: int
+    unstable: int
+
+
+@dataclass(slots=True)
+class CollatedSample:
+    x: torch.Tensor
+    poetic_accents: torch.Tensor
+    meter: torch.Tensor
+    unstable: torch.Tensor
+    mask: torch.Tensor
+
+
+@dataclass(slots=True)
+class ForwardedMeter:
+    meter: torch.Tensor
+    unstable: torch.Tensor
 
 
 class PoetryDataset(Dataset):
-    def __init__(self, poems: list):
-        self.samples = []
+    def __init__(self, poems):
+        self.poems = poems
+        self.index = []
 
-        for poem_data in poems:
-            poem = OutputPoem.decode(poem_data)
-
-            for line in poem.lines:
-                masks = line.syllable_masks
-
-                ling = torch.tensor(
-                    masks.linguistic_accent_mask,
-                    dtype=torch.float32,
-                )
-
-                last = torch.tensor(
-                    masks.last_in_word_mask,
-                    dtype=torch.float32,
-                )
-
-                poetic = torch.tensor(
-                    masks.poetic_accent_mask,
-                    dtype=torch.float32,
-                )
-
-                x = torch.stack([ling, last], dim=1)
-
-                meter = line.meters[0]
-                # caesura = line.caesura[0]
-
-                meter_type = meter.meter
-                unstable = int(meter.unstable)
-
-                self.samples.append(
-                    Sample(
-                        x=x,
-                        poetic_accents=poetic,
-                        meter=meter_type,
-                        unstable=unstable,
-                        # "caesura": caesura,
-                    )
-                )
+        for pi, poem_data in enumerate(poems):
+            _, lines = poem_data
+            for li in range(len(lines)):
+                self.index.append((pi, li))
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.index)
 
     def __getitem__(self, i):
-        return self.samples[i]
+        pi, li = self.index[i]
+
+        poem = OutputPoem.decode(self.poems[pi])
+        line = poem.lines[li]
+        masks = line.syllable_masks
+
+        ling = torch.tensor(masks.linguistic_accent_mask, dtype=torch.float32)
+        last = torch.tensor(masks.last_in_word_mask, dtype=torch.float32)
+        poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
+
+        x = torch.stack([ling, last], dim=1)
+
+        meter = line.meters[0]
+        meter_type = meter.meter
+        unstable = int(meter.unstable)
+
+        return Sample(
+            x=x,
+            poetic_accents=poetic,
+            meter=meter_type,
+            unstable=unstable,
+        )
 
 
 def collate(batch):
