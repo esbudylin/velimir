@@ -4,11 +4,15 @@ import logging
 
 from pydantic_settings import BaseSettings
 
-DATA_FOLDER = "data"
+DATA_DIRECTORY = "data"
 
-METADATA_TABLE = os.path.join(DATA_FOLDER, "rnc", "tables", "poetic.csv")
-TEXTS_DIR = os.path.join(DATA_FOLDER, "rnc", "texts")
-OUTPUT_FILE = os.path.join(DATA_FOLDER, "poems.msgpack")
+METADATA_TABLE = os.path.join(DATA_DIRECTORY, "rnc", "tables", "poetic.csv")
+TEXTS_DIR = os.path.join(DATA_DIRECTORY, "rnc", "texts")
+OUTPUT_FILE = os.path.join(DATA_DIRECTORY, "poems.msgpack")
+MODELS_DIRECTORY = os.path.join(DATA_DIRECTORY, "models")
+
+ACCENT_MODEL = os.path.join(MODELS_DIRECTORY, "accent_model.bin")
+METER_MODEL = os.path.join(MODELS_DIRECTORY, "meter.bin")
 
 
 class InputDialect(csv.unix_dialect):

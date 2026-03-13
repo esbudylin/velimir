@@ -24,10 +24,19 @@ def save_poems_as_msgpack(data: Iterator[OutputPoem]):
             if not chunk:
                 break
 
-            # TODO: rewrite for a flatten data dump?
             serialized_data = msgpack.packb(
                 [poem.encode() for poem in chunk],
                 use_bin_type=True,
             )
 
             f.write(serialized_data)
+
+
+def load_poems_from_msgpack() -> Iterator:
+    with open(OUTPUT_FILE, "rb") as f:
+        unpacker = msgpack.Unpacker(f, raw=False)
+        for batch in unpacker:
+            for poem_data in batch:
+                # We don't serialize data to OutputPoem at this stage,
+                # to optimize for memory usage
+                yield poem_data
