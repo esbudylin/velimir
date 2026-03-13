@@ -1,9 +1,10 @@
 from enum import IntEnum
+from dataclasses import dataclass
 
 import bitarray.util as bu
 
 from bitarray import bitarray
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel
 
 
 class InputPoem(BaseModel):
@@ -22,13 +23,22 @@ class InputLine(BaseModel):
     text: str
 
 
-class SyllableMasks(BaseModel):
-    linguistic_accent_mask: list[bool]  # as marked by accentuator
-    poetic_accent_mask: list[bool]  # as marked in corpus
-    last_in_word_mask: list[bool]
+@dataclass(slots=True)
+class SyllableMasks:
+    linguistic_accent_mask: bitarray
+    poetic_accent_mask: bitarray
+    last_in_word_mask: bitarray
 
-    @model_validator(mode="after")
-    def check_mask_lengths_match(self):
+    def __post_init__(self):
+        if not isinstance(self.linguistic_accent_mask, bitarray):
+            self.linguistic_accent_mask = bitarray(self.linguistic_accent_mask)
+
+        if not isinstance(self.poetic_accent_mask, bitarray):
+            self.poetic_accent_mask = bitarray(self.poetic_accent_mask)
+
+        if not isinstance(self.last_in_word_mask, bitarray):
+            self.last_in_word_mask = bitarray(self.last_in_word_mask)
+
         l_len = len(self.linguistic_accent_mask)
         p_len = len(self.poetic_accent_mask)
         w_len = len(self.last_in_word_mask)
@@ -36,28 +46,19 @@ class SyllableMasks(BaseModel):
         if l_len != p_len or p_len != w_len:
             raise ValueError("Masks must have the same length")
 
-        return self
-
     def encode(self):
-        def serialize(mask):
-            return bu.serialize(bitarray(mask))
-
         return [
-            serialize(self.linguistic_accent_mask),
-            serialize(self.poetic_accent_mask),
-            serialize(self.last_in_word_mask),
+            bu.serialize(self.linguistic_accent_mask),
+            bu.serialize(self.poetic_accent_mask),
+            bu.serialize(self.last_in_word_mask),
         ]
 
     @classmethod
     def decode(cls, data):
-        def deserialize(b):
-            ba = bu.deserialize(b)
-            return ba.tolist()
-
         return cls(
-            linguistic_accent_mask=deserialize(data[0]),
-            poetic_accent_mask=deserialize(data[1]),
-            last_in_word_mask=deserialize(data[2]),
+            linguistic_accent_mask=bu.deserialize(data[0]),
+            poetic_accent_mask=bu.deserialize(data[1]),
+            last_in_word_mask=bu.deserialize(data[2]),
         )
 
 
@@ -101,11 +102,12 @@ class Clausula(CodeIntEnum):
     HYPERDACTYLIC = (3, "г")
 
 
-class Meter(BaseModel):
+@dataclass(slots=True)
+class Meter:
     meter: MeterType
     feet: int
     clausula: Clausula
-    unstable: bool = Field(default=False)
+    unstable: bool = False
 
     def encode(self):
         return [self.meter, self.feet, self.clausula, self.unstable]
@@ -121,7 +123,8 @@ class Meter(BaseModel):
         )
 
 
-class Line(BaseModel):
+@dataclass(slots=True)
+class Line:
     # строка может содержать несколько метров: например, в случае цезурного разделения строки
     meters: list[Meter]
     # позиции слогов, после которых располагается цезура
@@ -146,7 +149,8 @@ class Line(BaseModel):
         )
 
 
-class OutputPoem(BaseModel):
+@dataclass(slots=True)
+class OutputPoem:
     path: str
     lines: list[Line]
 

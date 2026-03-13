@@ -1,6 +1,8 @@
 import unittest
 
 from parameterized import parameterized
+from bitarray import bitarray
+from dataclasses import asdict
 
 from src.accentuator import accent_line
 from src.models import Clausula, Line, Meter, MeterType, OutputPoem
@@ -80,8 +82,8 @@ class TestParseLine(unittest.TestCase):
     )
     def test_mask_extraction(self, input, accent_mask, last_in_word_mask):
         masks = extract_syllable_masks([], input)
-        self.assertListEqual(masks.poetic_accent_mask, accent_mask)
-        self.assertListEqual(masks.last_in_word_mask, last_in_word_mask)
+        self.assertEqual(masks.poetic_accent_mask, bitarray(accent_mask))
+        self.assertEqual(masks.last_in_word_mask, bitarray(last_in_word_mask))
 
     def test_parse_line_with_meter(self):
         result = list(transform_lines(xml_line))
@@ -103,14 +105,14 @@ class TestParseLine(unittest.TestCase):
         self.assertListEqual(line.caesura, [])
 
         # Маски
-        self.assertListEqual(
+        self.assertEqual(
             line.syllable_masks.poetic_accent_mask,
-            [False, True, False, True, False, True, False, True, False],
+            bitarray([False, True, False, True, False, True, False, True, False]),
         )
 
-        self.assertListEqual(
+        self.assertEqual(
             line.syllable_masks.last_in_word_mask,
-            [False, True, True, False, True, True, False, False, True],
+            bitarray([False, True, True, False, True, True, False, False, True]),
         )
 
 
@@ -127,7 +129,7 @@ class TestEncoding(unittest.TestCase):
         encoded = poem.encode()
         decoded = OutputPoem.decode(encoded)
 
-        self.assertDictEqual(poem.model_dump(), decoded.model_dump())
+        self.assertDictEqual(asdict(poem), asdict(decoded))
 
 
 class TestAccentuator(unittest.TestCase):
