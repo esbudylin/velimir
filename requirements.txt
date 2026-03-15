@@ -8,6 +8,3 @@ msgpack==1.0.6
 stressrnn @ git+https://github.com/dbklim/StressRNN.git
 numpy<1.24
 bitarray==3.8.0
-# dev dependencies
-parameterized==0.9.0
-torch==2.1.0
