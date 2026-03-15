@@ -11,8 +11,11 @@ TEXTS_DIR = os.path.join(DATA_DIRECTORY, "rnc", "texts")
 OUTPUT_FILE = os.path.join(DATA_DIRECTORY, "poems.msgpack")
 MODELS_DIRECTORY = os.path.join(DATA_DIRECTORY, "models")
 
-ACCENT_MODEL = os.path.join(MODELS_DIRECTORY, "accent_model.bin")
-METER_MODEL = os.path.join(MODELS_DIRECTORY, "meter.bin")
+ACCENT_MODEL = os.path.join(MODELS_DIRECTORY, "accent")
+METER_MODEL = os.path.join(MODELS_DIRECTORY, "meter")
+
+ACCENT_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "accent-test")
+METER_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "meter-test")
 
 
 class InputDialect(csv.unix_dialect):

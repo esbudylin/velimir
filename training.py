@@ -2,9 +2,17 @@ import logging
 import argparse
 from itertools import islice
 
+import torch
+
 from src.io import load_poems_from_msgpack
 from src.ml import split_poems, train_models, validate_models
-from src.settings import LoggingSettings, ACCENT_MODEL, METER_MODEL
+from src.settings import (
+    LoggingSettings,
+    ACCENT_MODEL,
+    METER_MODEL,
+    ACCENT_TEST_MODEL,
+    METER_TEST_MODEL,
+)
 
 
 def main(test_run: bool = False):
@@ -29,10 +37,14 @@ def main(test_run: bool = False):
 
     logging.info("\n".join(f"{k}={v}" for k, v in validation_results.items()))
 
-    if not test_run:
-        logging.info("Saving trained models...")
-        accent_model.save(ACCENT_MODEL)
-        meter_model.save(METER_MODEL)
+    logging.info("Saving trained models...")
+
+    if test_run:
+        torch.save(accent_model.state_dict(), ACCENT_TEST_MODEL)
+        torch.save(meter_model.state_dict(), METER_TEST_MODEL)
+    else:
+        torch.save(accent_model.state_dict(), ACCENT_MODEL)
+        torch.save(meter_model.state_dict(), METER_MODEL)
 
 
 if __name__ == "__main__":
