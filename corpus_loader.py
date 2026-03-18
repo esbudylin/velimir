@@ -2,15 +2,17 @@ import csv
 import logging
 from typing import Iterator
 
+from src.accentuator import build_accent_dict
 from src.logger import delayed_logger
 from src.models import InputPoem, OutputPoem
 from src.settings import (
     METADATA_TABLE,
     InputDialect,
     LoggingSettings,
+    ACCENT_DICT_PATHS,
 )
 from src.parsers import transform_lines
-from src.io import read_poem_xml, save_poems_as_msgpack
+from src.io import read_poem_xml, save_poems_as_msgpack, read_accent_dicts
 
 
 def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
@@ -34,6 +36,7 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
 
 def main():
     logging.basicConfig(**LoggingSettings().model_dump())
+    build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
 
     with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:
         input_reader = csv.DictReader(csv_file, dialect=InputDialect)

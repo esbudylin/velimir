@@ -40,3 +40,10 @@ def load_poems_from_msgpack() -> Iterator:
                 # We don't serialize data to OutputPoem at this stage,
                 # to optimize for memory usage
                 yield poem_data
+
+
+def read_accent_dicts(filenames):
+    for filename in filenames:
+        with open(filename, encoding="cp1251") as file_read:
+            for line in file_read:
+                yield line

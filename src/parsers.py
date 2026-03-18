@@ -7,10 +7,9 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
 import src.accentuator as accentuator
+from src.accent_utils import extract_accent_mask, is_vowel, remove_accent_marks
 from src.logger import delayed_logger
-from src.models import Clausula, Line, Meter, MeterType, SyllableMasks, InputLine
-
-stress_mark_ord = 768
+from src.models import Clausula, InputLine, Line, Meter, MeterType, SyllableMasks
 
 grammar = Grammar(
     """
@@ -105,34 +104,6 @@ def parse_line_meter(meter: str) -> dict:
     return vis.collect_data()
 
 
-def remove_accent_marks(text: str) -> str:
-    return "".join(c for c in text if ord(c) != stress_mark_ord)
-
-
-def is_vowel(char):
-    vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
-
-    return char in vowels
-
-
-def extract_accent_mask(text: str) -> list[bool]:
-    result = []
-
-    def is_accent_mark(char):
-        return char and ord(char) in [stress_mark_ord, ord(accentuator.accent_mark)]
-
-    for i, char in enumerate(text):
-        next_char = text[i + 1] if i + 1 < len(text) else ""
-
-        if is_vowel(char):
-            if is_accent_mark(next_char):
-                result.append(True)
-            else:
-                result.append(False)
-
-    return result
-
-
 def extract_word_ending_mask(text: str) -> list[bool]:
     result = []
 
@@ -146,20 +117,21 @@ def extract_word_ending_mask(text: str) -> list[bool]:
     return result
 
 
-def extract_syllable_masks(rhythm_accents: list[bool], line: str) -> SyllableMasks:
+def extract_syllable_masks(
+    line: str,
+    rhythm_accents: list[bool] = None,
+) -> SyllableMasks:
     poetic_accent_mask = extract_accent_mask(line)
 
     if not poetic_accent_mask:
         # Ударения не размечены
         # Используем разметку ритма вместо них
-        poetic_accent_mask = rhythm_accents
+        poetic_accent_mask = rhythm_accents or []
 
     cleaned_line = remove_accent_marks(line)
 
-    line_with_linguistic_accents = accentuator.accent_line(cleaned_line)
-
     return SyllableMasks(
-        linguistic_accent_mask=extract_accent_mask(line_with_linguistic_accents),
+        linguistic_accent_mask=accentuator.accent_line(cleaned_line),
         poetic_accent_mask=poetic_accent_mask,
         last_in_word_mask=extract_word_ending_mask(cleaned_line),
     )
@@ -178,7 +150,7 @@ def collect_line_text(line_tag) -> str:
 def parse_line(line_text: str, parsed_meter: dict) -> Line:
     meters = [Meter(**meter) for meter in parsed_meter["meters"]]
 
-    syllable_masks = extract_syllable_masks(parsed_meter["syllables"], line_text)
+    syllable_masks = extract_syllable_masks(line_text, parsed_meter["syllables"])
 
     return Line(
         meters=meters,
