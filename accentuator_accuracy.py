@@ -1,24 +1,32 @@
 # Собирает данные о точности акцентуатора,
-# основываясь на текстах акцентников, размеченных в корпусе.
+# основываясь на текстах акцентников и тактовиков, размеченных в корпусе.
 # NB: В акцентниках размечены реальные ударения, а не икты.
 
 import csv
+import re
 import logging
 import time
 from typing import Iterator
+from collections import Counter
 
+from src.accentuator import build_accent_dict
+from src.io import read_accent_dicts, read_poem_xml
 from src.logger import delayed_logger
 from src.models import InputPoem, SyllableMasks
-from src.settings import METADATA_TABLE, InputDialect, LoggingSettings
-from src.parsers import extract_lines, extract_syllable_masks
-from src.io import read_poem_xml
+from src.parsers import extract_lines, extract_syllable_masks, is_vowel
+from src.settings import (
+    ACCENT_DICT_PATHS,
+    METADATA_TABLE,
+    InputDialect,
+    LoggingSettings,
+)
 
 
 def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
     for row in csv_reader:
         poem = InputPoem(**row)
 
-        if "Ак" not in poem.meter:
+        if not ("Ак" in poem.meter or "Тк" in poem.meter):
             continue
 
         delayed_logger.create(
@@ -28,15 +36,16 @@ def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
         xml_str = read_poem_xml(poem.path)
 
         for line in extract_lines(xml_str):
-            if "Ак" not in line.meter:
-                continue
-            yield line.text
+            if "Ак" in line.meter or "Тк" in line.meter:
+                yield line.text
 
 
 def calc_accent_diff(lines: Iterator[str]) -> tuple[int, int, float]:
     total_lines = 0
     total_words = 0
     total_diff = 0
+
+    diffed_words = Counter()
 
     for line in lines:
         try:
@@ -48,6 +57,11 @@ def calc_accent_diff(lines: Iterator[str]) -> tuple[int, int, float]:
             continue
 
         diff_indexes = accent_diff_word_indexes(sm)
+
+        line_words = list(filter(lambda w: sum(map(is_vowel, w)), line.split()))
+        for di in diff_indexes:
+            diffed_words[line_words[di]] += 1
+
         word_count = sum(sm.last_in_word_mask)
         if word_count:
             total_diff += len(diff_indexes) / word_count
@@ -55,6 +69,9 @@ def calc_accent_diff(lines: Iterator[str]) -> tuple[int, int, float]:
             total_words += word_count
 
     avg_diff = total_diff / total_lines if total_lines else 0
+
+    for k, count in sorted(diffed_words.items(), key=lambda i: -i[1]):
+        logging.info("%s : %d", k, count)
 
     return total_lines, total_words, avg_diff
 
@@ -91,6 +108,8 @@ def accent_diff_word_indexes(masks: SyllableMasks) -> list[int]:
 
 def main():
     logging.basicConfig(**LoggingSettings().model_dump())
+    build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
+
     start_time = time.time()
 
     with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:

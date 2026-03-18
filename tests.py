@@ -1,12 +1,19 @@
 import unittest
-
-from parameterized import parameterized
-from bitarray import bitarray
 from dataclasses import asdict
 
-from src.accentuator import accent_line
+from bitarray import bitarray
+from parameterized import parameterized
+
+from src.accentuator import accent_line, build_accent_dict, accent_word
+from src.accent_utils import extract_neuro_accents
+from src.io import read_accent_dicts
 from src.models import Clausula, Line, Meter, MeterType, OutputPoem
-from src.parsers import extract_lines, transform_lines, extract_syllable_masks
+from src.parsers import (
+    extract_lines,
+    extract_syllable_masks,
+    transform_lines,
+)
+from src.settings import ACCENT_DICT_PATHS
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
 
@@ -64,24 +71,19 @@ class TestParseLine(unittest.TestCase):
                 [True, False, False, True, False, True],
             ),
             (
-                "лёгкий",
-                [False, False],
-                [False, True],
-            ),
-            (
-                "в доро'гу",
+                "в доро+гу",
                 [False, True, False],
                 [False, False, True],
             ),
             (
-                "отправля'юсь в доро'гу",
+                "отправля+юсь в доро+гу",
                 [False, False, True, False, False, True, False],
                 [False, False, False, True, False, False, True],
             ),
         ]
     )
     def test_mask_extraction(self, input, accent_mask, last_in_word_mask):
-        masks = extract_syllable_masks([], input)
+        masks = extract_syllable_masks(input)
         self.assertEqual(masks.poetic_accent_mask, bitarray(accent_mask))
         self.assertEqual(masks.last_in_word_mask, bitarray(last_in_word_mask))
 
@@ -133,16 +135,32 @@ class TestEncoding(unittest.TestCase):
 
 
 class TestAccentuator(unittest.TestCase):
+    def setUpClass():
+        build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
+
     @parameterized.expand(
         [
-            ("Еще вкруг солнцев не вращались", "Ещё вкруг со'лнцев не враща'лись"),
-            ("легкий", "лёгкий"),
-            ("темно-синий", "тёмно-си'ний"),
-            ("ёлка", "ёлка"),
-            ("йошкин", "йо'шкин"),
+            ("Еще вкруг солнцев не вращались", "010100010"),
+            ("Ваше Величество, мы прибыли ко дворцу", "1001000100001"),
+            ("йошкин кот", "100"),
         ]
     )
     def test_accent_line(self, line, with_accents):
-        res = accent_line(line)
+        res = bitarray(accent_line(line))
 
-        self.assertEqual(res, with_accents)
+        self.assertEqual(res, bitarray(with_accents))
+
+    @parameterized.expand(
+        [
+            ("легкий", "10"),
+            ("темно-синий", "1010"),
+            ("ёлка", "10"),
+            ("еще", "01"),
+            ("Еще", "01"),
+            ("какой-нибудь", "0101"),
+        ]
+    )
+    def test_accent_word(self, word, with_accents):
+        res = bitarray(accent_word(word, extract_neuro_accents(word)[0]))
+
+        self.assertEqual(res, bitarray(with_accents))

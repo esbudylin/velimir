@@ -17,6 +17,12 @@ METER_MODEL = os.path.join(MODELS_DIRECTORY, "meter")
 ACCENT_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "accent-test")
 METER_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "meter-test")
 
+ACCENT_DICT_DIR = os.path.join(DATA_DIRECTORY, "accent_dicts")
+ACCENT_DICT_PATHS = [
+    os.path.join(ACCENT_DICT_DIR, "accent.dic"),
+    os.path.join(ACCENT_DICT_DIR, "accent1.dic"),
+]
+
 
 class InputDialect(csv.unix_dialect):
     delimiter = ";"
