@@ -68,9 +68,15 @@ class MeterVisitor(NodeVisitor):
         return visited_children or node
 
     def collect_data(self):
-        # TODO: стоит ли определять положение цезуры для строк, в
-        # которых не был размечен ритм?
-        # Это возможно сделать исходя из схемы метра
+        # Определяем положение цезуры для строк, в
+        # которых не был размечен ритм, исходя из схемы метра
+        if len(self.meters) > 1 and not self.caesura:
+            try:
+                self.caesura = extract_caesura(self.meters)
+            except ValueError as e:
+                # Невозможно разметить цезуру из-за нерегулярного метра (например, дольника)
+                delayed_logger.record()
+                logging.error(e)
 
         return dict(
             meters=self.meters,
@@ -166,6 +172,11 @@ def extract_lines(xml: str) -> Iterator[InputLine]:
         if meter := line.get("meter"):
             text = collect_line_text(line)
 
+            if not text:
+                delayed_logger.record()
+                logging.error(f"Cannot collect text from line {line}")
+                continue
+
             yield InputLine(text=text, meter=meter.strip())
 
 
@@ -180,3 +191,54 @@ def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
                     "Error while processing line: %s",
                     line,
                 )
+
+
+def match_foot_syllables_from_meter(meter: MeterType) -> int:
+    match meter:
+        case MeterType.IAMB | MeterType.TROCHEE:
+            return 2
+        case MeterType.ANAPEST | MeterType.AMPHIBRACH | MeterType.DACTYL:
+            return 3
+        case _:
+            raise ValueError(f"Can't match feet syllables from meter: {meter}")
+
+
+def stress_position_in_foot(meter: MeterType) -> int:
+    match meter:
+        case MeterType.IAMB:
+            return 1
+        case MeterType.TROCHEE:
+            return 0
+        case MeterType.DACTYL:
+            return 0
+        case MeterType.ANAPEST:
+            return 2
+        case MeterType.AMPHIBRACH:
+            return 1
+        case _:
+            raise ValueError(f"Unsupported meter for stress offset: {meter}")
+
+
+def find_final_foot_size(meter: MeterType, clausula: Clausula) -> int:
+    stress_pos = stress_position_in_foot(meter)
+
+    return stress_pos + 1 + clausula
+
+
+def extract_caesura(meters: list[dict]) -> list[int]:
+    meter_pairs = list(zip(meters, meters[1:]))
+    last_caesura_position = 0
+
+    res = []
+
+    for meter, _ in meter_pairs:
+        feet = meter["feet"]
+
+        foot_syllables = match_foot_syllables_from_meter(meter["meter"])
+        final_foot_size = find_final_foot_size(meter["meter"], meter["clausula"])
+
+        last_caesura_position += foot_syllables * (feet - 1) + final_foot_size
+
+        res.append(last_caesura_position)
+
+    return res

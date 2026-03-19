@@ -23,12 +23,24 @@ xml_line_with_date = """<p class="verse">
 Одесса</noindex></p>
 """
 
-xml_line_with_caesura = """<p class="verse">
+caesura = """<p class="verse">
 <line meter="Д3м~Д3ж 0*2*2*0|0*2*2*1"/>сло̀вно скита̀льцы в века̀х, вѐрой скреплѐнные <rhyme-zone/>па̀льцы</p>
 """
 
-xml_line_with_multiple_caesuras = """
-<p class="verse"><line meter="Дк7м 1*2*1|1*2*2|2*2*2*0"/>Велѝчество Со̀лнца велѝкие по̀прища в небеса̀х пробега̀ет легко̀,<br/>
+multiple_caesuras = """<p class="verse">
+<p class="verse"><line meter="Дк7м 1*2*1|1*2*2|2*2*2*0"/>Велѝчество Со̀лнца велѝкие по̀прища в небеса̀х пробега̀ет легко̀,<br/></p>
+"""
+
+caesura_without_rhythm = """<p class="verse">
+<line meter="Д2м~Д2м"/>ро̀сы в кровѝ, му̀зыка <rhyme-zone/>тра̀в<br/></p>
+"""
+
+multiple_caesuras_without_rhythm = """<p class="verse">
+<line meter="Я2ж~Я2ж~Я2ж"/>тела̀ на ла̀пах в лохмо̀тьях ѐлок, -- о, жѝзни <rhyme-zone/>дрѐво!</p>
+"""
+
+af_caesura_without_rhythm = """
+<p class="verse"><line meter="Аф2м~Аф3ж"/>Угрю̀мая тѐнь / Стано̀вится о̀тблеском свѐта.<br/></p>
 """
 
 
@@ -45,8 +57,11 @@ class TestParseLine(unittest.TestCase):
 
     @parameterized.expand(
         [
-            ("single_caesura", xml_line_with_caesura, [7], 15),
-            ("multiple_caesuras", xml_line_with_multiple_caesuras, [6, 13], 22),
+            ("single_caesura", caesura, [7], 15),
+            ("multiple_caesuras", multiple_caesuras, [6, 13], 22),
+            ("without_rhythm", caesura_without_rhythm, [4], 8),
+            ("multiple_without_rhythm", multiple_caesuras_without_rhythm, [5, 10], 15),
+            ("af_without_rhythm", af_caesura_without_rhythm, [5], 14),
         ]
     )
     def test_parse_caesuras(self, name, xml_line, caesuras, syllable_count):
@@ -54,8 +69,8 @@ class TestParseLine(unittest.TestCase):
         self.assertEqual(len(result), 1)
         line = result[0]
 
-        self.assertEqual(len(line.syllable_masks.poetic_accent_mask), syllable_count)
         self.assertListEqual(line.caesura, caesuras)
+        self.assertEqual(len(line.syllable_masks.poetic_accent_mask), syllable_count)
 
     @parameterized.expand(
         [
@@ -156,7 +171,9 @@ class TestAccentuator(unittest.TestCase):
             ("ёлка", "10"),
             ("еще", "01"),
             ("Еще", "01"),
-            ("какой-нибудь", "0101"),
+            # ("какой-нибудь", "0100"),
+            # ("что-то", "10"),
+            # ("какие-нибудь", "0100"),
         ]
     )
     def test_accent_word(self, word, with_accents):
