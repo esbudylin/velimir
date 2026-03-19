@@ -135,7 +135,8 @@ def accent_word_by_dict(word: str, accent_entry: AccentEntry) -> list[bool]:
     )
 
     for accent in all_accents:
-        mask[accent - 1] = True
+        accent_pos = min(len(mask) - 1, accent - 1)
+        mask[accent_pos] = True
 
     return mask
 

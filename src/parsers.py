@@ -123,6 +123,16 @@ def extract_word_ending_mask(text: str) -> list[bool]:
     return result
 
 
+def clean_line(s: str) -> str:
+    # non-breaking spaces
+    s = s.replace("\xa0", " ")
+
+    # tabs
+    s = s.replace("\t", " ")
+
+    return s
+
+
 def extract_syllable_masks(
     line: str,
     rhythm_accents: list[bool] = None,
@@ -134,7 +144,7 @@ def extract_syllable_masks(
         # Используем разметку ритма вместо них
         poetic_accent_mask = rhythm_accents or []
 
-    cleaned_line = remove_accent_marks(line)
+    cleaned_line = clean_line(remove_accent_marks(line))
 
     return SyllableMasks(
         linguistic_accent_mask=accentuator.accent_line(cleaned_line),
