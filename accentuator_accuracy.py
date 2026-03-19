@@ -3,17 +3,23 @@
 # NB: В акцентниках размечены реальные ударения, а не икты.
 
 import csv
-import re
 import logging
 import time
 from typing import Iterator
 from collections import Counter
 
+import src.old_accentuator as old_accentuator
+import src.accentuator as accentuator
 from src.accentuator import build_accent_dict
 from src.io import read_accent_dicts, read_poem_xml
 from src.logger import delayed_logger
 from src.models import InputPoem, SyllableMasks
-from src.parsers import extract_lines, extract_syllable_masks, is_vowel
+from src.parsers import (
+    extract_lines,
+    extract_syllable_masks,
+    is_vowel,
+    extract_accent_mask,
+)
 from src.settings import (
     ACCENT_DICT_PATHS,
     METADATA_TABLE,
@@ -40,7 +46,7 @@ def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
                 yield line.text
 
 
-def calc_accent_diff(lines: Iterator[str]) -> tuple[int, int, float]:
+def calc_accent_diff(lines: Iterator[str], accent_line_fn) -> Counter:
     total_lines = 0
     total_words = 0
     total_diff = 0
@@ -49,7 +55,7 @@ def calc_accent_diff(lines: Iterator[str]) -> tuple[int, int, float]:
 
     for line in lines:
         try:
-            sm = extract_syllable_masks([], line)
+            sm = extract_syllable_masks(line, accent_line_fn=accent_line_fn)
         except Exception as e:
             delayed_logger.record()
             logging.error("error while processing line %s", line)
@@ -70,10 +76,11 @@ def calc_accent_diff(lines: Iterator[str]) -> tuple[int, int, float]:
 
     avg_diff = total_diff / total_lines if total_lines else 0
 
-    for k, count in sorted(diffed_words.items(), key=lambda i: -i[1]):
-        logging.info("%s : %d", k, count)
+    print(f"Total lines {total_lines}")
+    print(f"Total words {total_words}")
+    print(f"Diff {avg_diff:.4f}")
 
-    return total_lines, total_words, avg_diff
+    return diffed_words
 
 
 def accent_diff_word_indexes(masks: SyllableMasks) -> list[int]:
@@ -112,16 +119,17 @@ def main():
 
     start_time = time.time()
 
+    def old_accent_line(line: str):
+        return extract_accent_mask(old_accentuator.accent_line(line), "'")
+
     with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:
         input_reader = csv.DictReader(csv_file, dialect=InputDialect)
-        ak_lines = extract_ak_lines(input_reader)
-        total_lines, total_words, diff = calc_accent_diff(ak_lines)
+        ak_lines = list(extract_ak_lines(input_reader))
+        old_accentuator_counter = calc_accent_diff(ak_lines, old_accent_line)
+        new_accentuator_counter = calc_accent_diff(ak_lines, accentuator.accent_line)
 
+    logging.info(new_accentuator_counter - old_accentuator_counter)
     total_time = time.time() - start_time
-    print(f"Total lines {total_lines}")
-    print(f"Total words {total_words}")
-    print(f"Diff {diff:.4f}")
-
     print(f"Total time {total_time:.2f} seconds")
 
 
