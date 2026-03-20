@@ -1,102 +1,105 @@
-import random
 import logging
+import random
 from dataclasses import dataclass
-from itertools import islice
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from src.models import OutputPoem, Line
+from src.models import OutputPoem
 
 
 @dataclass(slots=True)
 class Sample:
     x: torch.Tensor
     poetic_accents: torch.Tensor
-    meter: torch.Tensor
-    unstable: torch.Tensor
+    meta: torch.Tensor  # meter, caesuras, unstable
 
 
 class PoetryDataset(Dataset):
     def __init__(self, poems: list):
-        self.chunks: list[list[Line]] = []
+        logging.info("Loading poetry dataset")
+
+        self.samples: list[Sample] = []
         for poem_data in poems:
             poem = OutputPoem.decode(poem_data)
-            lines_it = iter(poem.lines)
-
-            # Делим большие стихотворения на части
-            while chunk := list(islice(lines_it, 8)):
-                self.chunks.append(chunk)
-
-    def __len__(self):
-        return len(self.chunks)
-
-    def __getitem__(self, idx):
-        chunk = self.chunks[idx]
-
-        x_line_tensors = []
-        poetic_acc_tensors = []
-        meters = []
-        unstable = []
-
-        for line in chunk:
-            masks = line.syllable_masks
-
-            x_line_tensors.append(
-                torch.stack(
+            for line in poem.lines:
+                masks = line.syllable_masks
+                x = torch.stack(
                     [
-                        torch.tensor(
-                            masks.linguistic_accent_mask,
-                            dtype=torch.float32,
-                        ),
-                        torch.tensor(
-                            masks.last_in_word_mask,
-                            dtype=torch.float32,
-                        ),
+                        torch.tensor(masks.linguistic_accent_mask, dtype=torch.float32),
+                        torch.tensor(masks.last_in_word_mask, dtype=torch.float32),
                     ],
                     dim=1,
                 )
-            )
+                poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
 
-            poetic_acc_tensors.append(
-                torch.as_tensor(masks.poetic_accent_mask, dtype=torch.float32)
-            )
+                meter = self._fixed_size_tensor(
+                    [int(m.meter) for m in line.meters],
+                    size=3,
+                )
 
-            # TODO: handle caesura here
-            m = line.meters[0]
-            meters.append(m.meter)
-            unstable.append(m.unstable)
+                caesura = self._fixed_size_tensor(
+                    line.caesura,
+                    size=2,
+                )
 
-        return Sample(
-            x=pad_sequence(
-                x_line_tensors,
-                padding_value=-1,
-                batch_first=True,
-            ),
-            poetic_accents=pad_sequence(
-                poetic_acc_tensors,
-                padding_value=-1,
-                batch_first=True,
-            ),
-            meter=torch.tensor(meters),
-            unstable=torch.tensor(unstable),
-        )
+                unstable_flag = any(m.unstable for m in line.meters)
+                if unstable_flag:
+                    unstable = torch.tensor([1], dtype=torch.float32)
+                else:
+                    unstable = torch.tensor([0], dtype=torch.float32)
+
+                meta = torch.cat([meter, caesura, unstable])
+
+                self.samples.append(Sample(x=x, poetic_accents=poetic, meta=meta))
+
+        logging.info("Dataset loading finished")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx]
+
+    @staticmethod
+    def _fixed_size_tensor(values, size, dtype=torch.float32, padding_value=-1):
+        values = list(values)
+        if len(values) < size:
+            values += [padding_value] * (size - len(values))
+        else:
+            values = values[:size]
+        return torch.tensor(values, dtype=dtype)
+
+
+def collate(batch: list[Sample]):
+    x = [b.x for b in batch]
+    poetic = [b.poetic_accents for b in batch]
+    meta = [b.meta for b in batch]
+
+    x = pad_sequence(x, batch_first=True)
+    poetic = pad_sequence(poetic, batch_first=True)
+    meta = torch.stack(meta)
+
+    return Sample(x=x, poetic_accents=poetic, meta=meta)
 
 
 class AccentModel(nn.Module):
     def __init__(self):
         super().__init__()
-        hidden = 32
+
+        hidden = 128
 
         self.encoder = nn.LSTM(
             input_size=2,
             hidden_size=hidden,
-            bidirectional=True,
             batch_first=True,
+            bidirectional=True,
             num_layers=2,
         )
+
         self.head = nn.Sequential(
             nn.Linear(hidden * 2, hidden),
             nn.ReLU(),
@@ -104,79 +107,97 @@ class AccentModel(nn.Module):
             nn.Linear(hidden, 1),
         )
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x):
         h, _ = self.encoder(x)
+
         logits = self.head(h).squeeze(-1)
+
         return logits
 
 
+def train_accent(model, loader, optimizer, device):
+    model.train()
+    total_loss = 0
+
+    for batch in loader:
+        # move tensors to GPU
+        x = batch.x.to(device, non_blocking=True)
+        y = batch.poetic_accents.to(device, non_blocking=True)
+        mask = y != -1
+
+        optimizer.zero_grad()
+        logits = model(x)
+        loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
 class MeterModel(nn.Module):
-    def __init__(self, hidden=128, num_meter=12):
+    def __init__(self):
         super().__init__()
 
-        input_size = 2
+        input_size = 1
+        hidden_size = 64
 
         self.encoder = nn.LSTM(
-            input_size,
-            hidden,
+            input_size=input_size,
+            hidden_size=hidden_size,
             batch_first=True,
             bidirectional=True,
         )
-
-        enc = hidden * 2
-
-        self.meter_head = nn.Linear(enc, num_meter)
-        self.unstable_head = nn.Linear(enc, 1)
+        self.fc = nn.Linear(hidden_size * 2, 6)
 
     def forward(self, x):
-        h, _ = self.encoder(x)
-        pooled = h.mean(dim=1)
-        meter = self.meter_head(pooled)
-        unstable = self.unstable_head(pooled).squeeze(-1)
-        return ForwardedMeter(meter=meter, unstable=unstable)
+        out, _ = self.encoder(x)
+        pooled = out.mean(dim=1)
+        output = self.fc(pooled)
+        return output
 
 
-def train_accent(model, dataset, n_epoch, device):
-    loader = DataLoader(
-        dataset,
-        batch_size=256,
-        shuffle=True,
-        collate_fn=lambda a: a,
-    )
-
+def train_meter(model, loader, optimizer, device):
     model.train()
+    total_loss = 0
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-2)
+    for batch in loader:
+        x = batch.poetic_accents.to(device, non_blocking=True)
+        # add feature dimension
+        x = x.unsqueeze(-1)
 
-    for iter in range(1, n_epoch + 1):
-        current_loss = 0
+        meter_target = batch.meta.to(device, non_blocking=True)
 
-        for batch in loader:
-            batch_loss = torch.tensor(0.0, device=device)
+        optimizer.zero_grad()
 
-            for sample in batch:
-                x = sample.x.to(device, non_blocking=True)
-                y = sample.poetic_accents.to(device, non_blocking=True)
-                mask = y != -1
-                output = model(x)
+        logits = model(x)  # (batch, meta_size)
 
-                loss = torch.nn.functional.binary_cross_entropy_with_logits(
-                    output[mask],
-                    y[mask],
-                )
-                batch_loss += loss
+        meter_part = logits[:, :3]
+        caesura_part = logits[:, 3:5]
+        unstable_part = logits[:, 5]
 
-            # optimize parameters
-            batch_loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 3)
-            optimizer.step()
-            optimizer.zero_grad()
-
-            current_loss += batch_loss.item() / len(batch)
-
-        logging.info(
-            f"Accent Model: epoch {iter} ({iter / n_epoch:.0%}): \t average batch loss = {current_loss / len(loader)}"
+        meter_loss = F.mse_loss(
+            meter_part,
+            meter_target[:, :3],
         )
+        caesura_loss = F.mse_loss(
+            caesura_part,
+            meter_target[:, 3:5],
+        )
+        unstable_loss = F.binary_cross_entropy_with_logits(
+            unstable_part,
+            meter_target[:, 5],
+        )
+
+        loss = meter_loss + caesura_loss + unstable_loss
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        loss.backward()
+
+        optimizer.step()
+        total_loss += loss.item()
+
+    return total_loss / len(loader)
 
 
 def split_poems(
@@ -201,9 +222,9 @@ def validate_models(
     accent_model,
     meter_model,
     poems: list[OutputPoem],
-    batch_size: int = 128,
+    batch_size: int = 32,
 ):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = next(accent_model.parameters()).device
 
     dataset = PoetryDataset(poems)
 
@@ -211,7 +232,7 @@ def validate_models(
         dataset,
         batch_size=batch_size,
         shuffle=False,
-        collate_fn=lambda a: a,
+        collate_fn=collate,
     )
 
     accent_model.eval()
@@ -220,43 +241,105 @@ def validate_models(
     total_acccent_correct = 0
     accent_total = 0
 
-    for batch in loader:
-        for sample in batch:
-            x = sample.x.to(device)
+    meter_correct = 0
+    meter_total = 0
 
-            poetic_target = sample.poetic_accents.to(device)
-            # meter_target = sample.meter.to(device)
-            # unstable_target = batch.unstable.to(device)
-            # caesura_target = batch["caesura"].to(device)
+    unstable_correct = 0
+    unstable_total = 0
 
-            # Accent prediction
+    caesura_correct = 0
+    caesura_total = 0
+
+    with torch.no_grad():
+        for batch in loader:
+            x = batch.x.to(device)
+
+            poetic_target = batch.poetic_accents.to(device)
+            meta_target = batch.meta.to(device)  # (B, 6)
+
+            # =====================
+            # Accent
+            # =====================
             accent_logits = accent_model(x)
             accent_pred = (torch.sigmoid(accent_logits) > 0.5).float()
 
-            accent_false = ((accent_pred == 1) & (poetic_target == 0)).sum().item()
-            accent_correct = ((poetic_target == 1) & (accent_pred == 1)).sum().item()
+            mask = poetic_target != -1
+            total_acccent_correct += (
+                (accent_pred[mask] == poetic_target[mask]).sum().item()
+            )
+            accent_total += mask.sum().item()
 
-            total_acccent_correct += accent_correct - accent_false
-            accent_total += (poetic_target > 0).sum().item()
+            # =====================
+            # Meter input
+            # =====================
+            accent_pred = accent_pred.masked_fill(~mask, -1).unsqueeze(-1)
+            meter_pred = meter_model(accent_pred)
+
+            pred_meter = meter_pred[:, :3]
+            pred_caesura = meter_pred[:, 3:5]
+            pred_unstable = meter_pred[:, 5]
+
+            target_meter = meta_target[:, :3]
+            target_caesura = meta_target[:, 3:5]
+            target_unstable = meta_target[:, 5]
+
+            # =====================
+            # Meter
+            # =====================
+            meter_correct += (pred_meter.round() == target_meter).sum().item()
+            meter_total += torch.numel(target_meter)
+
+            # =====================
+            # Caesura (integer positions)
+            # =====================
+            caesura_correct += (pred_caesura.round() == target_caesura).sum().item()
+            caesura_total += torch.numel(target_caesura)
+
+            # =====================
+            # Unstable (binary)
+            # =====================
+            unstable_pred = (torch.sigmoid(pred_unstable) > 0.5).float()
+            unstable_correct += (unstable_pred == target_unstable).sum().item()
+            unstable_total += torch.numel(target_unstable)
 
     return {
-        "accent_accuracy": total_acccent_correct / accent_total,
-        # "meter_accuracy": meter_correct / meter_total,
-        # "unstable_accuracy": unstable_correct / unstable_total,
-        # "caesura_accuracy": caesura_correct / caesura_total,
+        "accent_accuracy": total_acccent_correct / accent_total if accent_total else 0,
+        "meter_accuracy": meter_correct / meter_total if meter_total else 0,
+        "caesura_accuracy": caesura_correct / caesura_total if caesura_total else 0,
+        "unstable_accuracy": unstable_correct / unstable_total if unstable_total else 0,
     }
 
 
-def train_models(poems, epochs=6):
+def train_models(
+    poems,
+    epochs=6,
+    batch_size=32,
+    num_workers=4,
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device %s for training", device)
 
     dataset = PoetryDataset(poems)
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=collate,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
 
     accent_model = AccentModel().to(device)
+    meter_model = MeterModel().to(device)
 
-    train_accent(accent_model, dataset, epochs, device)
+    accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=2e-4)
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=1e-4)
 
-    accent_model.eval()
+    for epoch in range(epochs):
+        accent_loss = train_accent(accent_model, loader, accent_optimizer, device)
+        meter_loss = train_meter(meter_model, loader, meter_optimizer, device)
+        logging.info(
+            f"Epoch {epoch} accent_loss={accent_loss:.4f} meter_loss={meter_loss:.4f}"
+        )
 
-    return accent_model, accent_model
+    return accent_model, meter_model
