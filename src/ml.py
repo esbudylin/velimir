@@ -141,6 +141,8 @@ def train_accent(model, loader, optimizer, device):
             continue
 
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
         optimizer.step()
         total_loss += loss.item()
 
@@ -208,6 +210,7 @@ def train_meter(model, loader, optimizer, device):
             continue
 
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
         optimizer.step()
         total_loss += loss.item()
@@ -218,7 +221,7 @@ def train_meter(model, loader, optimizer, device):
 def train_models(
     poems,
     epochs=8,
-    batch_size=16,
+    batch_size=32,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
