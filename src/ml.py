@@ -79,8 +79,16 @@ def collate(batch: list[Sample]):
     poetic = [b.poetic_accents for b in batch]
     meta = [b.meta for b in batch]
 
-    x = pad_sequence(x, batch_first=True)
-    poetic = pad_sequence(poetic, batch_first=True)
+    x = pad_sequence(
+        x,
+        batch_first=True,
+        padding_value=-1,
+    )
+    poetic = pad_sequence(
+        poetic,
+        batch_first=True,
+        padding_value=-1,
+    )
     meta = torch.stack(meta)
 
     return Sample(x=x, poetic_accents=poetic, meta=meta)
@@ -129,7 +137,6 @@ def train_accent(model, loader, optimizer, device):
         logits = model(x)
         loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         total_loss += loss.item()
 
@@ -191,7 +198,6 @@ def train_meter(model, loader, optimizer, device):
         )
 
         loss = meter_loss + caesura_loss + unstable_loss
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         loss.backward()
 
         optimizer.step()
@@ -207,8 +213,8 @@ def split_poems(
 ) -> tuple[list, list]:
     poems_l = list(poems)
 
-    random.seed(seed)
-    random.shuffle(poems_l)
+    rng = random.Random(42)
+    rng.shuffle(poems_l)
 
     split = int(len(poems_l) * (1 - test_ratio))
 
@@ -218,102 +224,10 @@ def split_poems(
     return train_poems, test_poems
 
 
-def validate_models(
-    accent_model,
-    meter_model,
-    poems: list[OutputPoem],
-    batch_size: int = 32,
-):
-    device = next(accent_model.parameters()).device
-
-    dataset = PoetryDataset(poems)
-
-    loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=collate,
-    )
-
-    accent_model.eval()
-    meter_model.eval()
-
-    total_acccent_correct = 0
-    accent_total = 0
-
-    meter_correct = 0
-    meter_total = 0
-
-    unstable_correct = 0
-    unstable_total = 0
-
-    caesura_correct = 0
-    caesura_total = 0
-
-    with torch.no_grad():
-        for batch in loader:
-            x = batch.x.to(device)
-
-            poetic_target = batch.poetic_accents.to(device)
-            meta_target = batch.meta.to(device)  # (B, 6)
-
-            # =====================
-            # Accent
-            # =====================
-            accent_logits = accent_model(x)
-            accent_pred = (torch.sigmoid(accent_logits) > 0.5).float()
-
-            mask = poetic_target != -1
-            total_acccent_correct += (
-                (accent_pred[mask] == poetic_target[mask]).sum().item()
-            )
-            accent_total += mask.sum().item()
-
-            # =====================
-            # Meter input
-            # =====================
-            accent_pred = accent_pred.masked_fill(~mask, -1).unsqueeze(-1)
-            meter_pred = meter_model(accent_pred)
-
-            pred_meter = meter_pred[:, :3]
-            pred_caesura = meter_pred[:, 3:5]
-            pred_unstable = meter_pred[:, 5]
-
-            target_meter = meta_target[:, :3]
-            target_caesura = meta_target[:, 3:5]
-            target_unstable = meta_target[:, 5]
-
-            # =====================
-            # Meter
-            # =====================
-            meter_correct += (pred_meter.round() == target_meter).sum().item()
-            meter_total += torch.numel(target_meter)
-
-            # =====================
-            # Caesura (integer positions)
-            # =====================
-            caesura_correct += (pred_caesura.round() == target_caesura).sum().item()
-            caesura_total += torch.numel(target_caesura)
-
-            # =====================
-            # Unstable (binary)
-            # =====================
-            unstable_pred = (torch.sigmoid(pred_unstable) > 0.5).float()
-            unstable_correct += (unstable_pred == target_unstable).sum().item()
-            unstable_total += torch.numel(target_unstable)
-
-    return {
-        "accent_accuracy": total_acccent_correct / accent_total if accent_total else 0,
-        "meter_accuracy": meter_correct / meter_total if meter_total else 0,
-        "caesura_accuracy": caesura_correct / caesura_total if caesura_total else 0,
-        "unstable_accuracy": unstable_correct / unstable_total if unstable_total else 0,
-    }
-
-
 def train_models(
     poems,
     epochs=6,
-    batch_size=32,
+    batch_size=16,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -333,7 +247,7 @@ def train_models(
     meter_model = MeterModel().to(device)
 
     accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=2e-4)
-    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=1e-4)
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
 
     for epoch in range(epochs):
         accent_loss = train_accent(accent_model, loader, accent_optimizer, device)

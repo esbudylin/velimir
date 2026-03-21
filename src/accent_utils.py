@@ -7,7 +7,7 @@ accent_mark = "+"
 stress_mark_ord = 768
 
 
-def extract_accent_mask(text: str, accent_mark="+") -> list[bool]:
+def extract_accent_mask(text: str) -> list[bool]:
     result = []
 
     def is_accent_mark(char):

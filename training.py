@@ -5,7 +5,8 @@ from itertools import islice
 import torch
 
 from src.io import load_poems_from_msgpack
-from src.ml import split_poems, train_models, validate_models
+from src.ml import split_poems, train_models
+from src.model_validation import validate_models
 from src.settings import (
     LoggingSettings,
     ACCENT_MODEL,
