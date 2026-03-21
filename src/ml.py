@@ -164,11 +164,15 @@ class MeterModel(nn.Module):
         )
         self.fc = nn.Linear(hidden_size * 2, 6)
 
-    def forward(self, x):
+    def forward(self, x, mask):
         out, _ = self.encoder(x)
-        pooled = out.mean(dim=1)
-        output = self.fc(pooled)
-        return output
+
+        mask = mask.unsqueeze(-1)
+        out = out * mask
+
+        pooled = out.sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+
+        return self.fc(pooled)
 
 
 def train_meter(model, loader, optimizer, device):
@@ -177,6 +181,8 @@ def train_meter(model, loader, optimizer, device):
 
     for batch in loader:
         x = batch.poetic_accents.to(device, non_blocking=True)
+        mask = (x != -1).float()
+
         # add feature dimension
         x = x.unsqueeze(-1)
 
@@ -184,7 +190,7 @@ def train_meter(model, loader, optimizer, device):
 
         optimizer.zero_grad()
 
-        logits = model(x)  # (batch, meta_size)
+        logits = model(x, mask)  # (batch, meta_size)
 
         meter_part = logits[:, :3]
         caesura_part = logits[:, 3:5]
@@ -220,7 +226,7 @@ def train_meter(model, loader, optimizer, device):
 
 def train_models(
     poems,
-    epochs=8,
+    epochs=6,
     batch_size=32,
     num_workers=4,
 ):
@@ -241,7 +247,7 @@ def train_models(
     meter_model = MeterModel().to(device)
 
     accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=2e-4)
-    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=4e-4)
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=5e-5)
 
     for epoch in range(epochs):
         accent_loss = train_accent(accent_model, loader, accent_optimizer, device)
