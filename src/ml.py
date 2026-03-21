@@ -135,7 +135,11 @@ def train_accent(model, loader, optimizer, device):
         optimizer.zero_grad()
         logits = model(x)
         loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
-        loss = torch.nan_to_num(loss, nan=0.0, posinf=10.0, neginf=0.0)
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            logging.error("Accent model: skipping invalid batch")
+            continue
+
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
@@ -198,7 +202,11 @@ def train_meter(model, loader, optimizer, device):
         )
 
         loss = meter_loss + caesura_loss + unstable_loss
-        loss = torch.nan_to_num(loss, nan=0.0, posinf=10.0, neginf=0.0)
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            logging.error("Meter model: skipping invalid batch")
+            continue
+
         loss.backward()
 
         optimizer.step()
