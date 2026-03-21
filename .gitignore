@@ -2,3 +2,5 @@ data/rnc
 __pycache__
 .venv
 main.log
+data/models/accent-test
+data/models/meter-test
