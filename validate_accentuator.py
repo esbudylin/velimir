@@ -9,15 +9,13 @@ from typing import Iterator
 from collections import Counter
 
 import src.accentuator as accentuator
-from src.accentuator import build_accent_dict
 from src.io import read_accent_dicts, read_poem_xml
 from src.logger import delayed_logger
-from src.models import InputPoem, SyllableMasks
+from src.domain_models import InputPoem, SyllableMasks
 from src.parsers import (
     extract_lines,
     extract_syllable_masks,
     is_vowel,
-    extract_accent_mask,
 )
 from src.settings import (
     ACCENT_DICT_PATHS,
@@ -114,7 +112,7 @@ def accent_diff_word_indexes(masks: SyllableMasks) -> list[int]:
 
 def main():
     logging.basicConfig(**LoggingSettings().model_dump())
-    build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
+    accentuator.build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
 
     start_time = time.time()
 

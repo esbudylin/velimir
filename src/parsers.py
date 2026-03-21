@@ -7,9 +7,15 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
 import src.accentuator as accentuator
-from src.accent_utils import extract_accent_mask, is_vowel, remove_accent_marks
 from src.logger import delayed_logger
-from src.models import Clausula, InputLine, Line, Meter, MeterType, SyllableMasks
+from src.domain_models import (
+    Clausula,
+    InputLine,
+    Line,
+    Meter,
+    MeterType,
+    SyllableMasks,
+)
 
 grammar = Grammar(
     """
@@ -114,7 +120,7 @@ def extract_word_ending_mask(text: str) -> list[bool]:
     result = []
 
     for word in text.split():
-        word_vowels = list(filter(lambda c: is_vowel(c), word))
+        word_vowels = list(filter(lambda c: accentuator.is_vowel(c), word))
 
         if word_vowels:
             result += [False] * (len(word_vowels) - 1)
@@ -137,14 +143,14 @@ def extract_syllable_masks(
     line: str,
     rhythm_accents: list[bool] = None,
 ) -> SyllableMasks:
-    poetic_accent_mask = extract_accent_mask(line)
+    poetic_accent_mask = accentuator.extract_accent_mask(line)
 
     if not poetic_accent_mask:
         # Ударения не размечены
         # Используем разметку ритма вместо них
         poetic_accent_mask = rhythm_accents or []
 
-    cleaned_line = clean_line(remove_accent_marks(line))
+    cleaned_line = clean_line(accentuator.remove_accent_marks(line))
 
     return SyllableMasks(
         linguistic_accent_mask=accentuator.accent_line(cleaned_line),

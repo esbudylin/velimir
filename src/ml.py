@@ -1,5 +1,4 @@
 import logging
-import random
 from dataclasses import dataclass
 
 import torch
@@ -8,7 +7,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from src.models import OutputPoem
+from src.domain_models import OutputPoem
 
 
 @dataclass(slots=True)
@@ -136,6 +135,7 @@ def train_accent(model, loader, optimizer, device):
         optimizer.zero_grad()
         logits = model(x)
         loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
+        loss = torch.nan_to_num(loss, nan=0.0, posinf=10.0, neginf=0.0)
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
@@ -198,6 +198,7 @@ def train_meter(model, loader, optimizer, device):
         )
 
         loss = meter_loss + caesura_loss + unstable_loss
+        loss = torch.nan_to_num(loss, nan=0.0, posinf=10.0, neginf=0.0)
         loss.backward()
 
         optimizer.step()
@@ -206,27 +207,9 @@ def train_meter(model, loader, optimizer, device):
     return total_loss / len(loader)
 
 
-def split_poems(
-    poems,
-    test_ratio: float = 0.05,
-    seed: int = 42,
-) -> tuple[list, list]:
-    poems_l = list(poems)
-
-    rng = random.Random(42)
-    rng.shuffle(poems_l)
-
-    split = int(len(poems_l) * (1 - test_ratio))
-
-    train_poems = poems_l[:split]
-    test_poems = poems_l[split:]
-
-    return train_poems, test_poems
-
-
 def train_models(
     poems,
-    epochs=6,
+    epochs=8,
     batch_size=16,
     num_workers=4,
 ):
@@ -247,7 +230,7 @@ def train_models(
     meter_model = MeterModel().to(device)
 
     accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=2e-4)
-    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=4e-4)
 
     for epoch in range(epochs):
         accent_loss = train_accent(accent_model, loader, accent_optimizer, device)

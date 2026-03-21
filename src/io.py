@@ -4,7 +4,7 @@ from typing import Iterator
 
 import msgpack
 
-from src.models import OutputPoem
+from src.domain_models import OutputPoem
 from src.settings import OUTPUT_FILE, TEXTS_DIR
 
 

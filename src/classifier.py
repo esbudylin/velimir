@@ -6,10 +6,9 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 import src.accentuator as accentuator
-import src.accent_utils as accent_utils
 import src.parsers as parsers
 from src.ml import AccentModel, MeterModel
-from src.models import Clausula, Meter, MeterType
+from src.domain_models import Clausula, Meter, MeterType
 from src.settings import ACCENT_MODEL, METER_MODEL
 
 
@@ -70,6 +69,31 @@ def detect_meter(model, device, accent_pred):
     pred_unstable = pred[:, 5]
 
     return pred_meter, pred_caesura, pred_unstable
+
+
+def extract_meter_accent_mask(
+    meter_position: int,
+    caesuras: list[int],
+    line_accent_mask: list[bool],
+) -> list[bool]:
+    if not caesuras:
+        return line_accent_mask
+
+    match meter_position:
+        case 0:
+            return line_accent_mask[: caesuras[0]]
+        case 1:
+            return line_accent_mask[caesuras[0] : caesuras[1]]
+        case 2:
+            return line_accent_mask[caesuras[1] : caesuras[2]]
+
+
+def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
+    last_syllables_without_accent = itertools.takewhile(
+        lambda n: not n,
+        reversed(meter_accent_mask),
+    )
+    return Clausula(len(list(last_syllables_without_accent)))
 
 
 def process_lines(lines: list[str]) -> list[ProcessedLine]:
@@ -151,28 +175,3 @@ def process_lines(lines: list[str]) -> list[ProcessedLine]:
         )
 
     return res
-
-
-def extract_meter_accent_mask(
-    meter_position: int,
-    caesuras: list[int],
-    line_accent_mask: list[bool],
-) -> list[bool]:
-    if not caesuras:
-        return line_accent_mask
-
-    match meter_position:
-        case 0:
-            return line_accent_mask[: caesuras[0]]
-        case 1:
-            return line_accent_mask[caesuras[0] : caesuras[1]]
-        case 2:
-            return line_accent_mask[caesuras[1] : caesuras[2]]
-
-
-def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
-    last_syllables_without_accent = itertools.takewhile(
-        lambda n: not n,
-        reversed(meter_accent_mask),
-    )
-    return Clausula(len(list(last_syllables_without_accent)))

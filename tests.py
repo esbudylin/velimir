@@ -6,7 +6,7 @@ from parameterized import parameterized
 
 from src.accentuator import accent_line, build_accent_dict
 from src.io import read_accent_dicts
-from src.models import Clausula, Line, Meter, MeterType, OutputPoem
+from src.domain_models import Clausula, Line, Meter, MeterType, OutputPoem
 from src.parsers import (
     extract_lines,
     extract_syllable_masks,

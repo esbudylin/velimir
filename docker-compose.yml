@@ -1,5 +1,0 @@
-services:
-  tests:
-    build: .
-    container_name: loader-tests
-    command: python -m unittest tests

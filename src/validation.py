@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.ml import PoetryDataset, collate
-from src.models import OutputPoem, MeterType
+from src.domain_models import OutputPoem, MeterType
 
 
 def update_meter_confustion(meter_confusion, pred_meter, target_meter):

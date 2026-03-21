@@ -4,7 +4,7 @@ from typing import Iterator
 
 from src.accentuator import build_accent_dict
 from src.logger import delayed_logger
-from src.models import InputPoem, OutputPoem
+from src.domain_models import InputPoem, OutputPoem
 from src.settings import (
     METADATA_TABLE,
     InputDialect,

@@ -1,12 +1,13 @@
 import logging
+import random
 import argparse
 from itertools import islice
 
 import torch
 
 from src.io import load_poems_from_msgpack
-from src.ml import split_poems, train_models
-from src.model_validation import validate_models
+from src.ml import train_models
+from src.validation import validate_models
 from src.settings import (
     LoggingSettings,
     ACCENT_MODEL,
@@ -14,6 +15,24 @@ from src.settings import (
     ACCENT_TEST_MODEL,
     METER_TEST_MODEL,
 )
+
+
+def split_poems(
+    poems,
+    test_ratio: float = 0.05,
+    seed: int = 42,
+) -> tuple[list, list]:
+    poems_l = list(poems)
+
+    rng = random.Random(42)
+    rng.shuffle(poems_l)
+
+    split = int(len(poems_l) * (1 - test_ratio))
+
+    train_poems = poems_l[:split]
+    test_poems = poems_l[split:]
+
+    return train_poems, test_poems
 
 
 def main(test_run: bool = False):
