@@ -164,13 +164,16 @@ class MeterModel(nn.Module):
         )
         self.fc = nn.Linear(hidden_size * 2, 6)
 
-    def forward(self, x, mask):
+    def forward(self, x):
+        mask = (x != -1).squeeze(-1)  # (B, T)
+
+        x = x.masked_fill(~mask.unsqueeze(-1), 0.0)
+
         out, _ = self.encoder(x)
 
-        mask = mask.unsqueeze(-1)
-        out = out * mask
+        out = out * mask.unsqueeze(-1)
 
-        pooled = out.sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+        pooled = out.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp(min=1)
 
         return self.fc(pooled)
 
@@ -181,8 +184,6 @@ def train_meter(model, loader, optimizer, device):
 
     for batch in loader:
         x = batch.poetic_accents.to(device, non_blocking=True)
-        mask = (x != -1).float()
-
         # add feature dimension
         x = x.unsqueeze(-1)
 
@@ -190,7 +191,7 @@ def train_meter(model, loader, optimizer, device):
 
         optimizer.zero_grad()
 
-        logits = model(x, mask)  # (batch, meta_size)
+        logits = model(x)  # (batch, meta_size)
 
         meter_part = logits[:, :3]
         caesura_part = logits[:, 3:5]

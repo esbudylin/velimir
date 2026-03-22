@@ -55,7 +55,8 @@ def main(test_run: bool = False):
     accent_model, meter_model = train_models(training_set)
     validation_results = validate_models(accent_model, meter_model, test_set)
 
-    logging.info("\n".join(f"{k}={v}" for k, v in validation_results.items()))
+    for k, v in validation_results.items():
+        logging.info("%s=%f", k, v)
 
     logging.info("Saving trained models...")
 

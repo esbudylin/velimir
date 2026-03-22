@@ -29,11 +29,11 @@ def log_meter_confusion(meter_confusion):
                 if m != -1:
                     res.append(MeterType(m).to_str())
                 else:
-                    res.append(str(m))
+                    res.append("0")
 
             return "".join(res)
 
-        for (target, pred), count in meter_confusion.most_common(40):
+        for (target, pred), count in meter_confusion.most_common(10):
             logging.info(
                 "Target %s → Pred %s | count=%d",
                 meters_to_str(target),
