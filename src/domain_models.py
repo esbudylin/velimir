@@ -46,6 +46,9 @@ class SyllableMasks:
         p_len = len(self.poetic_accent_mask)
         w_len = len(self.last_in_word_mask)
 
+        if not l_len or not p_len or not w_len:
+            raise ValueError("Masks are empty")
+
         if l_len != p_len or p_len != w_len:
             raise ValueError("Masks must have the same length")
 
