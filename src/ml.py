@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from src.domain_models import OutputPoem
+from src.domain_models import OutputPoem, SyllableDistances
 
 
 @dataclass(slots=True)
@@ -15,6 +15,7 @@ class Sample:
     x: torch.Tensor
     poetic_accents: torch.Tensor
     meta: torch.Tensor  # meter, caesuras, unstable
+    syllable_distances: torch.Tensor  # anacrusa, min dist, max dist, mean dist
 
 
 class PoetryDataset(Dataset):
@@ -26,6 +27,11 @@ class PoetryDataset(Dataset):
             poem = OutputPoem.decode(poem_data)
             for line in poem.lines:
                 masks = line.syllable_masks
+
+                if not masks.poetic_accent_mask:
+                    logging.error("Empty line in text %s. Skipping...", poem.path)
+                    continue
+
                 x = torch.stack(
                     [
                         torch.tensor(masks.linguistic_accent_mask, dtype=torch.float32),
@@ -53,7 +59,19 @@ class PoetryDataset(Dataset):
 
                 meta = torch.cat([meter, caesura, unstable])
 
-                self.samples.append(Sample(x=x, poetic_accents=poetic, meta=meta))
+                syllable_distances = torch.tensor(
+                    SyllableDistances(masks.poetic_accent_mask).to_array(),
+                    dtype=torch.float32,
+                )
+
+                self.samples.append(
+                    Sample(
+                        x=x,
+                        poetic_accents=poetic,
+                        meta=meta,
+                        syllable_distances=syllable_distances,
+                    )
+                )
 
         logging.info("Dataset loading finished")
 
@@ -77,6 +95,7 @@ def collate(batch: list[Sample]):
     x = [b.x for b in batch]
     poetic = [b.poetic_accents for b in batch]
     meta = [b.meta for b in batch]
+    syllable_distances = [b.syllable_distances for b in batch]
 
     x = pad_sequence(
         x,
@@ -89,8 +108,14 @@ def collate(batch: list[Sample]):
         padding_value=-1,
     )
     meta = torch.stack(meta)
+    syllable_distances = torch.stack(syllable_distances)
 
-    return Sample(x=x, poetic_accents=poetic, meta=meta)
+    return Sample(
+        x=x,
+        poetic_accents=poetic,
+        meta=meta,
+        syllable_distances=syllable_distances,
+    )
 
 
 class AccentModel(nn.Module):
@@ -154,6 +179,9 @@ class MeterModel(nn.Module):
         super().__init__()
 
         input_size = 1
+        syllable_distances_size = 4
+        meta_size = 6
+
         hidden_size = 64
 
         self.encoder = nn.LSTM(
@@ -162,9 +190,9 @@ class MeterModel(nn.Module):
             batch_first=True,
             bidirectional=True,
         )
-        self.fc = nn.Linear(hidden_size * 2, 6)
+        self.fc = nn.Linear(hidden_size * 2 + syllable_distances_size, meta_size)
 
-    def forward(self, x):
+    def forward(self, x, syllable_distances):
         mask = (x != -1).squeeze(-1)  # (B, T)
 
         x = x.masked_fill(~mask.unsqueeze(-1), 0.0)
@@ -174,6 +202,7 @@ class MeterModel(nn.Module):
         out = out * mask.unsqueeze(-1)
 
         pooled = out.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp(min=1)
+        pooled = torch.cat([pooled, syllable_distances], dim=1)
 
         return self.fc(pooled)
 
@@ -191,7 +220,7 @@ def train_meter(model, loader, optimizer, device):
 
         optimizer.zero_grad()
 
-        logits = model(x)  # (batch, meta_size)
+        logits = model(x, batch.syllable_distances)  # (batch, meta_size)
 
         meter_part = logits[:, :3]
         caesura_part = logits[:, 3:5]
@@ -227,7 +256,7 @@ def train_meter(model, loader, optimizer, device):
 
 def train_models(
     poems,
-    epochs=6,
+    epochs=9,
     batch_size=32,
     num_workers=4,
 ):

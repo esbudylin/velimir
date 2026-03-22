@@ -1,3 +1,6 @@
+import itertools
+import statistics
+from functools import reduce
 from enum import IntEnum
 from dataclasses import dataclass
 
@@ -168,3 +171,33 @@ class OutputPoem:
             path=path,
             lines=[Line.decode(line) for line in lines_data],
         )
+
+
+@dataclass(slots=True)
+class SyllableDistances:
+    anacrusa: int
+    min_dist: int
+    max_dist: int
+    mean_dist: float
+
+    def __init__(self, poetic_accent_mask: bitarray):
+        groups = [(k, list(g)) for k, g in itertools.groupby(poetic_accent_mask)]
+        groups = groups[:-1]  # отсекаем клаузулу
+
+        distances = []
+
+        # Для односложных строчек
+        self.anacrusa = 0
+
+        for i, (has_accent, group) in enumerate(groups):
+            if i == 0:  # анакруса
+                self.anacrusa = 0 if has_accent else len(group)
+            elif not has_accent:  # группа безударных слогов
+                distances.append(len(group))
+
+        self.min_dist = min(distances or [0])
+        self.max_dist = max(distances or [0])
+        self.mean_dist = statistics.mean(distances or [0])
+
+    def to_array(self) -> list:
+        return [self.anacrusa, self.min_dist, self.max_dist, self.mean_dist]

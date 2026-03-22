@@ -6,7 +6,14 @@ from parameterized import parameterized
 
 from src.accentuator import accent_line, build_accent_dict
 from src.io import read_accent_dicts
-from src.domain_models import Clausula, Line, Meter, MeterType, OutputPoem
+from src.domain_models import (
+    Clausula,
+    Line,
+    Meter,
+    MeterType,
+    OutputPoem,
+    SyllableDistances,
+)
 from src.parsers import (
     extract_lines,
     extract_syllable_masks,
@@ -180,3 +187,20 @@ class TestAccentuator(unittest.TestCase):
         res = bitarray(accent_line(word))
 
         self.assertEqual(res, bitarray(with_accents))
+
+
+class TestSyllableDistances(unittest.TestCase):
+    # анакруса и клаузула не должны учитываться при подсчёте статистики
+    @parameterized.expand(
+        [
+            ("010010010", [1, 2, 2, 2]),
+            ("1010100", [0, 1, 1, 1]),
+            ("00101001000", [2, 1, 2, 1.5]),
+            ("01", [1, 0, 0, 0]),
+            ("1", [0, 0, 0, 0]),
+        ]
+    )
+    def test_syllable_distances(self, mask, expected):
+        poetic_accent_mask = bitarray(mask)
+        res = SyllableDistances(poetic_accent_mask).to_array()
+        self.assertListEqual(res, expected)
