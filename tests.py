@@ -35,7 +35,7 @@ caesura = """<p class="verse">
 <line meter="Д3м~Д3ж 0*2*2*0|0*2*2*1"/>сло̀вно скита̀льцы в века̀х, вѐрой скреплѐнные <rhyme-zone/>па̀льцы</p>
 """
 
-multiple_caesuras = """<p class="verse">
+multiple_caesuras = """
 <p class="verse"><line meter="Дк7м 1*2*1|1*2*2|2*2*2*0"/>Велѝчество Со̀лнца велѝкие по̀прища в небеса̀х пробега̀ет легко̀,<br/></p>
 """
 

@@ -191,7 +191,7 @@ class SyllableDistances:
     max_dist: int
     mean_dist: float
 
-    def __init__(self, poetic_accent_mask: bitarray):
+    def __init__(self, poetic_accent_mask):
         groups = [(k, list(g)) for k, g in itertools.groupby(poetic_accent_mask)]
         groups = groups[:-1]  # отсекаем клаузулу
 

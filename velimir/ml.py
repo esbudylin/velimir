@@ -192,12 +192,12 @@ class MeterModel(nn.Module):
         )
         self.fc = nn.Linear(hidden_size * 2 + syllable_distances_size, meta_size)
 
-    def forward(self, x, syllable_distances):
-        mask = (x != -1).squeeze(-1)  # (B, T)
+    def forward(self, poetic_accents, syllable_distances):
+        mask = (poetic_accents != -1).squeeze(-1)  # (B, T)
 
-        x = x.masked_fill(~mask.unsqueeze(-1), 0.0)
+        poetic_accents = poetic_accents.masked_fill(~mask.unsqueeze(-1), 0.0)
 
-        out, _ = self.encoder(x)
+        out, _ = self.encoder(poetic_accents)
 
         out = out * mask.unsqueeze(-1)
 
@@ -212,15 +212,15 @@ def train_meter(model, loader, optimizer, device):
     total_loss = 0
 
     for batch in loader:
-        x = batch.poetic_accents.to(device, non_blocking=True)
+        poetic_accents = batch.poetic_accents.to(device, non_blocking=True)
         # add feature dimension
-        x = x.unsqueeze(-1)
+        poetic_accents = poetic_accents.unsqueeze(-1)
 
         meter_target = batch.meta.to(device, non_blocking=True)
 
         optimizer.zero_grad()
 
-        logits = model(x, batch.syllable_distances)  # (batch, meta_size)
+        logits = model(poetic_accents, batch.syllable_distances)  # (batch, meta_size)
 
         meter_part = logits[:, :3]
         caesura_part = logits[:, 3:5]
