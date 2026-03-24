@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from src.domain_models import OutputPoem, SyllableDistances
+from .domain_models import OutputPoem, SyllableDistances
 
 
 @dataclass(slots=True)

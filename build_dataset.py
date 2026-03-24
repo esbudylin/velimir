@@ -2,17 +2,17 @@ import csv
 import logging
 from typing import Iterator
 
-from src.accentuator import build_accent_dict
-from src.logger import delayed_logger
-from src.domain_models import InputPoem, OutputPoem
-from src.settings import (
+from velimir.accentuator import build_accent_dict
+from velimir.logger import delayed_logger
+from velimir.domain_models import InputPoem, OutputPoem
+from velimir.settings import (
     METADATA_TABLE,
     InputDialect,
     LoggingSettings,
     ACCENT_DICT_PATHS,
 )
-from src.parsers import transform_lines
-from src.io import read_poem_xml, save_poems_as_msgpack, read_accent_dicts
+from velimir.parsers import transform_lines
+from velimir.io import read_poem_xml, save_poems_as_msgpack, read_accent_dicts
 
 
 def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:

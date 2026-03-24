@@ -8,16 +8,15 @@ import time
 from typing import Iterator
 from collections import Counter
 
-import src.accentuator as accentuator
-from src.io import read_accent_dicts, read_poem_xml
-from src.logger import delayed_logger
-from src.domain_models import InputPoem, SyllableMasks
-from src.parsers import (
+import velimir.accentuator as accentuator
+from velimir.io import read_accent_dicts, read_poem_xml
+from velimir.logger import delayed_logger
+from velimir.domain_models import InputPoem, SyllableMasks
+from velimir.parsers import (
     extract_lines,
     extract_syllable_masks,
-    is_vowel,
 )
-from src.settings import (
+from velimir.settings import (
     ACCENT_DICT_PATHS,
     METADATA_TABLE,
     InputDialect,
@@ -61,7 +60,12 @@ def calc_accent_diff(lines: Iterator[str], accent_line_fn) -> Counter:
 
         diff_indexes = accent_diff_word_indexes(sm)
 
-        line_words = list(filter(lambda w: sum(map(is_vowel, w)), line.split()))
+        line_words = list(
+            filter(
+                lambda w: sum(map(accentuator.is_vowel, w)),
+                line.split(),
+            )
+        )
         for di in diff_indexes:
             diffed_words[line_words[di]] += 1
 

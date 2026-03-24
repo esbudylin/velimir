@@ -5,11 +5,11 @@ from dataclasses import dataclass
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-import src.accentuator as accentuator
-import src.parsers as parsers
-from src.ml import AccentModel, MeterModel
-from src.domain_models import Clausula, Meter, MeterType
-from src.settings import ACCENT_MODEL, METER_MODEL
+from . import accentuator
+from . import parsers
+from .ml import AccentModel, MeterModel
+from .domain_models import Clausula, Meter, MeterType
+from .settings import ACCENT_MODEL, METER_MODEL
 
 
 @dataclass

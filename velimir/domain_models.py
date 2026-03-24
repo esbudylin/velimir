@@ -1,6 +1,5 @@
 import itertools
 import statistics
-from functools import reduce
 from enum import IntEnum
 from dataclasses import dataclass
 

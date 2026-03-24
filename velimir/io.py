@@ -4,8 +4,8 @@ from typing import Iterator
 
 import msgpack
 
-from src.domain_models import OutputPoem
-from src.settings import OUTPUT_FILE, TEXTS_DIR
+from .domain_models import OutputPoem
+from .settings import OUTPUT_FILE, TEXTS_DIR
 
 
 def read_poem_xml(text_path):

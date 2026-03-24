@@ -5,10 +5,10 @@ from itertools import islice
 
 import torch
 
-from src.io import load_poems_from_msgpack
-from src.ml import train_models
-from src.validation import validate_models
-from src.settings import (
+from velimir.io import load_poems_from_msgpack
+from velimir.ml import train_models
+from velimir.validation import validate_models
+from velimir.settings import (
     LoggingSettings,
     ACCENT_MODEL,
     METER_MODEL,

@@ -6,9 +6,9 @@ from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
-import src.accentuator as accentuator
-from src.logger import delayed_logger
-from src.domain_models import (
+from . import accentuator
+from .logger import delayed_logger
+from .domain_models import (
     Clausula,
     InputLine,
     Line,

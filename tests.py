@@ -4,9 +4,9 @@ from dataclasses import asdict
 from bitarray import bitarray
 from parameterized import parameterized
 
-from src.accentuator import accent_line, build_accent_dict
-from src.classifier import ProcessedLine
-from src.domain_models import (
+from velimir.accentuator import accent_line, build_accent_dict
+from velimir.identifier import ProcessedLine
+from velimir.domain_models import (
     Clausula,
     Line,
     Meter,
@@ -14,13 +14,13 @@ from src.domain_models import (
     OutputPoem,
     SyllableDistances,
 )
-from src.io import read_accent_dicts
-from src.parsers import (
+from velimir.io import read_accent_dicts
+from velimir.parsers import (
     extract_lines,
     extract_syllable_masks,
     transform_lines,
 )
-from src.settings import ACCENT_DICT_PATHS
+from velimir.settings import ACCENT_DICT_PATHS
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
 
