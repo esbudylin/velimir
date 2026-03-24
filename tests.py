@@ -5,7 +5,7 @@ from bitarray import bitarray
 from parameterized import parameterized
 
 from src.accentuator import accent_line, build_accent_dict
-from src.io import read_accent_dicts
+from src.classifier import ProcessedLine
 from src.domain_models import (
     Clausula,
     Line,
@@ -14,6 +14,7 @@ from src.domain_models import (
     OutputPoem,
     SyllableDistances,
 )
+from src.io import read_accent_dicts
 from src.parsers import (
     extract_lines,
     extract_syllable_masks,
@@ -204,3 +205,26 @@ class TestSyllableDistances(unittest.TestCase):
         poetic_accent_mask = bitarray(mask)
         res = SyllableDistances(poetic_accent_mask).to_array()
         self.assertListEqual(res, expected)
+
+
+class TestProcessedLine(unittest.TestCase):
+    def setUp(self):
+        self.regular_line = ProcessedLine(
+            caesura=[],
+            meters=[Meter(MeterType.IAMB, 4, Clausula.FEMININE)],
+            poetic_accent_mask=list(bitarray("010101010")),
+        )
+
+        self.line_with_caesura = ProcessedLine(
+            caesura=[7],
+            meters=[
+                Meter(MeterType.DACTYL, 3, Clausula.MASCULINE),
+                Meter(MeterType.DACTYL, 3, Clausula.FEMININE),
+            ],
+            poetic_accent_mask=list(bitarray("100100110010010")),
+        )
+
+    def test_line_to_string(self):
+        self.assertEqual(self.regular_line.to_str(), "Я4ж 1*1*1*1*1")
+
+        self.assertEqual(self.line_with_caesura.to_str(), "Д3м~Д3ж 0*2*2*0|0*2*2*1")

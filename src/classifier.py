@@ -18,6 +18,44 @@ class ProcessedLine:
     caesura: list[int]
     poetic_accent_mask: list[bool]
 
+    def to_str(self):
+        meter_repr = "~".join(m.to_str() for m in self.meters)
+        accent_repr = self._mask_to_string(self.poetic_accent_mask, self.caesura)
+
+        return f"{meter_repr} {accent_repr}"
+
+    @staticmethod
+    def _mask_to_string(mask: list[bool], caesura: list[int]):
+        caesura_mark = "|"
+        acccent_mark = "*"
+
+        def ms(mask):
+            res = ""
+            accentless_syllables = 0
+
+            for i, has_accent in enumerate(mask):
+                if has_accent:
+                    res += str(accentless_syllables)
+                    accentless_syllables = 0
+
+                    res += acccent_mark
+                else:
+                    accentless_syllables += 1
+
+            res += str(accentless_syllables)
+
+            return res
+
+        match caesura:
+            case []:
+                return ms(mask)
+            case [ca]:
+                return caesura_mark.join(map(ms, (mask[:ca], mask[ca:])))
+            case [ca, cb]:
+                return caesura_mark.join(map(ms, (mask[:ca], mask[ca:cb], mask[cb:])))
+            case _:
+                raise ValueError("Invalid caesura sequence length")
+
 
 def load_model(accent_type, model_path, device):
     model = accent_type().to(device)
@@ -98,7 +136,7 @@ def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
 
 def process_lines(lines: list[str]) -> list[ProcessedLine]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logging.info(f"Using device: {device}")
+    logging.info("Using device: %s", device)
 
     accent_model = load_model(AccentModel, ACCENT_MODEL, device)
     meter_model = load_model(MeterModel, METER_MODEL, device)

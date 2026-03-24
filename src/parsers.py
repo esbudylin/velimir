@@ -221,16 +221,12 @@ def match_foot_syllables_from_meter(meter: MeterType) -> int:
 
 def stress_position_in_foot(meter: MeterType) -> int:
     match meter:
-        case MeterType.IAMB:
+        case MeterType.TROCHEE | MeterType.DACTYL:
+            return 0
+        case MeterType.IAMB | MeterType.AMPHIBRACH:
             return 1
-        case MeterType.TROCHEE:
-            return 0
-        case MeterType.DACTYL:
-            return 0
         case MeterType.ANAPEST:
             return 2
-        case MeterType.AMPHIBRACH:
-            return 1
         case _:
             raise ValueError(f"Unsupported meter for stress offset: {meter}")
 

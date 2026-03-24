@@ -115,6 +115,15 @@ class Meter:
     clausula: Clausula
     unstable: bool = False
 
+    def to_str(self):
+        li = [
+            self.meter.to_str(),
+            "" if not self.unstable else "*",
+            str(self.feet),
+            self.clausula.to_str(),
+        ]
+        return "".join(li)
+
     def encode(self):
         return [self.meter, self.feet, self.clausula, self.unstable]
 
