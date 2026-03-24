@@ -84,23 +84,23 @@ class TestParseLine(unittest.TestCase):
         [
             (
                 "Йо̀шкин кот",
-                [True, False, False],
-                [False, True, True],
+                "100",
+                "011",
             ),
             (
                 "куй желѐзо пока",
-                [False, False, True, False, False, False],
-                [True, False, False, True, False, True],
+                "001000",
+                "100101",
             ),
             (
                 "в доро+гу",
-                [False, True, False],
-                [False, False, True],
+                "010",
+                "001",
             ),
             (
                 "отправля+юсь в доро+гу",
-                [False, False, True, False, False, True, False],
-                [False, False, False, True, False, False, True],
+                "0010010",
+                "0001001",
             ),
         ]
     )
@@ -131,12 +131,12 @@ class TestParseLine(unittest.TestCase):
         # Маски
         self.assertEqual(
             line.syllable_masks.poetic_accent_mask,
-            bitarray([False, True, False, True, False, True, False, True, False]),
+            bitarray("010101010"),
         )
 
         self.assertEqual(
             line.syllable_masks.last_in_word_mask,
-            bitarray([False, True, True, False, True, True, False, False, True]),
+            bitarray("011011001"),
         )
 
 
