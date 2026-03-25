@@ -64,13 +64,13 @@ def put_accents(line: str, mask: list[bool]):
     return res
 
 
-def format_verse(lines: list[str], processed_lines: list[ProcessedLine]) -> str:
+def format_verse(lines: list[str], processed_lines: list[ProcessedLine | None]) -> str:
     parts = ['<p class="verse">']
 
     for line, processed in zip(lines, processed_lines):
-        meter_str = processed.to_str()
-        accented_line = put_accents(line, processed.poetic_accent_mask)
-        parts.append(f'<line meter="{meter_str}"/>{accented_line}<br/>')
+        meter = processed.to_str() if processed else "???"
+        accline = put_accents(line, processed.poetic_accent_mask) if processed else line
+        parts.append(f'<line meter="{meter}"/>{accline}<br/>')
 
     parts.append("</p>")
     return "\n".join(parts)

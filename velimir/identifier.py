@@ -154,7 +154,34 @@ def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
     return Clausula(len(list(last_syllables_without_accent)))
 
 
-def process_lines(lines: list[str]) -> list[ProcessedLine]:
+def process_line(meta, pmask) -> ProcessedLine:
+    meter_codes, caesura_positions, unstable = meta
+    meter_types = []
+    line_meters = []
+
+    for code in meter_codes:
+        meter_types.append(MeterType(code))
+
+    for i, meter_type in enumerate(meter_types):
+        meter_mask = extract_meter_accent_mask(i, caesura_positions, pmask)
+
+        line_meters.append(
+            Meter(
+                meter=meter_type,
+                feet=len([i for i in meter_mask if i]),
+                clausula=extract_clausula(meter_mask),
+                unstable=unstable,
+            )
+        )
+
+    return ProcessedLine(
+        caesura=caesura_positions,
+        meters=line_meters,
+        poetic_accent_mask=pmask,
+    )
+
+
+def process_lines(lines: list[str]) -> list[ProcessedLine | None]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device: %s", device)
 
@@ -190,31 +217,12 @@ def process_lines(lines: list[str]) -> list[ProcessedLine]:
 
     res = []
     for i, (meta, pmask) in enumerate(zip(meters_list, poetic_accent_masks_list)):
-        meter_codes, caesura_positions, unstable = meta
-        meter_types = []
-        line_meters = []
-
-        for code in meter_codes:
-            meter_types.append(MeterType(code))
-
-        for i, meter_type in enumerate(meter_types):
-            meter_mask = extract_meter_accent_mask(i, caesura_positions, pmask)
-
-            line_meters.append(
-                Meter(
-                    meter=meter_type,
-                    feet=len([i for i in meter_mask if i]),
-                    clausula=extract_clausula(meter_mask),
-                    unstable=unstable,
-                )
-            )
-
-        res.append(
-            ProcessedLine(
-                caesura=caesura_positions,
-                meters=line_meters,
-                poetic_accent_mask=pmask,
-            )
-        )
+        try:
+            pl = process_line(meta, pmask)
+            res.append(pl)
+        except Exception as e:
+            logging.error("Failed to process line: %s", lines[i])
+            logging.exception(e)
+            res.append(None)
 
     return res
