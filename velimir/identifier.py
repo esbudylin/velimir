@@ -194,23 +194,8 @@ def process_lines(lines: list[str]) -> list[ProcessedLine]:
         meter_types = []
         line_meters = []
 
-        if len(meter_codes) != len(caesura_positions) + 1:
-            logging.error(
-                "Mismatch between meters (%d) and caesuras (%d). Line %s",
-                len(meter_codes),
-                len(caesura_positions),
-                lines[i],
-            )
-            continue
-
         for code in meter_codes:
-            try:
-                meter_types.append(MeterType(code))
-            except ValueError:
-                logging.error(
-                    "Unable to process meter code %d. Line %s", code, lines[i]
-                )
-                continue
+            meter_types.append(MeterType(code))
 
         for i, meter_type in enumerate(meter_types):
             meter_mask = extract_meter_accent_mask(i, caesura_positions, pmask)

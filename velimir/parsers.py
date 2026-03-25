@@ -19,7 +19,7 @@ from .domain_models import (
 
 grammar = Grammar(
     """
-    expr = meter_schema ( "~" meter_schema )* ( " " rhythm_schema )?
+    expr = meter_schema ( "~" meter_schema )* ( ws rhythm_schema )?
 
     meter_schema = meter unstable? feet clausula
 
@@ -33,6 +33,8 @@ grammar = Grammar(
     interval = ~r"[0-9]"
     accent = "*"
     caesura = "|"
+
+    ws = ~r"\s+" 
     """
 )
 
@@ -44,6 +46,23 @@ class MeterVisitor(NodeVisitor):
         self.syllable_accents = []
 
         super().__init__()
+
+    def visit_expr(self, node, visited_children):
+        # Определяем положение цезуры для строк, в
+        # которых не был размечен ритм, исходя из схемы метра
+        if len(self.meters) > 1 and not self.caesura:
+            try:
+                self.caesura = extract_caesura(self.meters)
+            except ValueError as e:
+                # Невозможно разметить цезуру из-за нерегулярного метра (например, дольника)
+                delayed_logger.record()
+                logging.error(e)
+
+        return dict(
+            meters=self.meters,
+            caesura=self.caesura,
+            syllables=self.syllable_accents,
+        )
 
     def visit_meter(self, node, *_):
         self._current_meter = {}
@@ -73,23 +92,6 @@ class MeterVisitor(NodeVisitor):
     def generic_visit(self, node, visited_children):
         return visited_children or node
 
-    def collect_data(self):
-        # Определяем положение цезуры для строк, в
-        # которых не был размечен ритм, исходя из схемы метра
-        if len(self.meters) > 1 and not self.caesura:
-            try:
-                self.caesura = extract_caesura(self.meters)
-            except ValueError as e:
-                # Невозможно разметить цезуру из-за нерегулярного метра (например, дольника)
-                delayed_logger.record()
-                logging.error(e)
-
-        return dict(
-            meters=self.meters,
-            caesura=self.caesura,
-            syllables=self.syllable_accents,
-        )
-
 
 def transform_lines(xml_str: str) -> Iterator[Line]:
     return parse_lines(extract_lines(xml_str))
@@ -110,10 +112,7 @@ def parse_line_meter(meter: str) -> dict:
             logging.error("Can't parse the line meter: %s Continuing...", meter)
             return {}
 
-    vis = MeterVisitor()
-    vis.visit(tree)
-
-    return vis.collect_data()
+    return MeterVisitor().visit(tree)
 
 
 def extract_word_ending_mask(text: str) -> list[bool]:

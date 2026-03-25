@@ -1,8 +1,10 @@
-import sys
 import logging
+import sys
 
-from velimir.identifier import process_lines, ProcessedLine
-from velimir.settings import LoggingSettings
+from velimir.accentuator import build_accent_dict
+from velimir.identifier import ProcessedLine, process_lines
+from velimir.io import read_accent_dicts
+from velimir.settings import ACCENT_DICT_PATHS, LoggingSettings
 
 
 def read_verses_from_stdin() -> list[list[str]]:
@@ -60,6 +62,7 @@ def format_verse(lines: list[str], processed_lines: list[ProcessedLine]) -> str:
 
 
 def main():
+    build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
     logging.basicConfig(**LoggingSettings().model_dump())
 
     verses = read_verses_from_stdin()
