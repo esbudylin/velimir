@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from velimir.accentuator import build_accent_dict
+from velimir.accentuator import build_accent_dict, is_vowel, stress_mark_ord
 from velimir.identifier import ProcessedLine, process_lines
 from velimir.io import read_accent_dicts
 from velimir.settings import ACCENT_DICT_PATHS, LoggingSettings
@@ -50,12 +50,27 @@ def unflatten(processed: list[ProcessedLine], lengths: list[int]):
     return res
 
 
+def put_accents(line: str, mask: list[bool]):
+    res = ""
+    vowel_pos = 0
+
+    for c in line:
+        res += c
+        if is_vowel(c):
+            if mask[vowel_pos]:
+                res += chr(stress_mark_ord)
+            vowel_pos += 1
+
+    return res
+
+
 def format_verse(lines: list[str], processed_lines: list[ProcessedLine]) -> str:
     parts = ['<p class="verse">']
 
     for line, processed in zip(lines, processed_lines):
         meter_str = processed.to_str()
-        parts.append(f'<line meter="{meter_str}"/>{line}<br/>')
+        accented_line = put_accents(line, processed.poetic_accent_mask)
+        parts.append(f'<line meter="{meter_str}"/>{accented_line}<br/>')
 
     parts.append("</p>")
     return "\n".join(parts)
