@@ -93,8 +93,20 @@ class MeterVisitor(NodeVisitor):
         return visited_children or node
 
 
-def transform_lines(xml_str: str) -> Iterator[Line]:
-    return parse_lines(extract_lines(xml_str))
+def transform_poem(xml: str) -> dict:
+    soup = BeautifulSoup(xml, "xml")
+
+    lines = []
+    stanza_breaks = []
+
+    for verse in soup.find_all("p", class_="verse"):
+        stanza_breaks.append(len(lines))
+        lines.extend(parse_lines(extract_lines(verse)))
+
+    return dict(
+        lines=lines,
+        stanza_breaks=stanza_breaks,
+    )
 
 
 def parse_line_meter(meter: str) -> dict:
@@ -180,9 +192,7 @@ def parse_line(line_text: str, parsed_meter: dict) -> Line:
     )
 
 
-def extract_lines(xml: str) -> Iterator[InputLine]:
-    soup = BeautifulSoup(xml, "xml")
-
+def extract_lines(soup) -> Iterator[InputLine]:
     for line in soup.find_all("line"):
         if meter := line.get("meter"):
             text = collect_line_text(line)

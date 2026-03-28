@@ -2,9 +2,8 @@ import logging
 from collections import Counter
 
 import torch
-from torch.utils.data import DataLoader
 
-from .ml import PoetryDataset, collate
+from .ml_loader import get_loader
 from .domain_models import OutputPoem, MeterType
 
 
@@ -52,14 +51,7 @@ def validate_models(
 ):
     device = next(accent_model.parameters()).device
 
-    dataset = PoetryDataset(poems)
-
-    loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=collate,
-    )
+    loader = get_loader(poems, batch_size=batch_size, shuffle=False)
 
     accent_model.eval()
     meter_model.eval()
@@ -80,7 +72,7 @@ def validate_models(
 
     with torch.no_grad():
         for batch in loader:
-            x = batch.x.to(device)
+            accent_input = batch.accent_input.to(device)
 
             poetic_target = batch.poetic_accents.to(device)
             meta_target = batch.meta.to(device)  # (B, 6)
@@ -88,7 +80,7 @@ def validate_models(
             # =====================
             # Accent
             # =====================
-            accent_logits = accent_model(x)
+            accent_logits = accent_model(accent_input)
             accent_pred = (torch.sigmoid(accent_logits) > 0.5).float()
 
             mask = poetic_target != -1

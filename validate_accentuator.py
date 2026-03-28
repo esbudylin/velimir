@@ -5,17 +5,16 @@
 import csv
 import logging
 import time
-from typing import Iterator
 from collections import Counter
+from typing import Iterator
+
+from bs4 import BeautifulSoup
 
 import velimir.accentuator as accentuator
+from velimir.domain_models import InputPoem, SyllableMasks
 from velimir.io import read_accent_dicts, read_poem_xml
 from velimir.logger import delayed_logger
-from velimir.domain_models import InputPoem, SyllableMasks
-from velimir.parsers import (
-    extract_lines,
-    extract_syllable_masks,
-)
+from velimir.parsers import extract_lines, extract_syllable_masks
 from velimir.settings import (
     ACCENT_DICT_PATHS,
     METADATA_TABLE,
@@ -36,8 +35,9 @@ def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
         )
 
         xml_str = read_poem_xml(poem.path)
+        soup = BeautifulSoup(xml_str, "xml")
 
-        for line in extract_lines(xml_str):
+        for line in extract_lines(soup):
             if "Ак" in line.meter or "Тк" in line.meter:
                 yield line.text
 
@@ -123,9 +123,11 @@ def main():
     with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:
         input_reader = csv.DictReader(csv_file, dialect=InputDialect)
         ak_lines = list(extract_ak_lines(input_reader))
-        accentuator_counter = calc_accent_diff(ak_lines, accentuator.accent_line)
+        accent_diff = calc_accent_diff(ak_lines, accentuator.accent_line)
 
-    logging.info(accentuator_counter)
+    for word, count in accent_diff.most_common(40):
+        logging.info("%s | count=%d", word, count)
+
     total_time = time.time() - start_time
     print(f"Total time {total_time:.2f} seconds")
 

@@ -1,121 +1,10 @@
 import logging
-from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, Dataset
 
-from .domain_models import OutputPoem, SyllableDistances
-
-
-@dataclass(slots=True)
-class Sample:
-    x: torch.Tensor
-    poetic_accents: torch.Tensor
-    meta: torch.Tensor  # meter, caesuras, unstable
-    syllable_distances: torch.Tensor  # anacrusa, min dist, max dist, mean dist
-
-
-class PoetryDataset(Dataset):
-    def __init__(self, poems: list):
-        logging.info("Loading poetry dataset")
-
-        self.samples: list[Sample] = []
-        for poem_data in poems:
-            poem = OutputPoem.decode(poem_data)
-            for line in poem.lines:
-                masks = line.syllable_masks
-
-                if not masks.poetic_accent_mask:
-                    logging.error("Empty line in text %s. Skipping...", poem.path)
-                    continue
-
-                x = torch.stack(
-                    [
-                        torch.tensor(masks.linguistic_accent_mask, dtype=torch.float32),
-                        torch.tensor(masks.last_in_word_mask, dtype=torch.float32),
-                    ],
-                    dim=1,
-                )
-                poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
-
-                meter = self._fixed_size_tensor(
-                    [int(m.meter) for m in line.meters],
-                    size=3,
-                )
-
-                caesura = self._fixed_size_tensor(
-                    line.caesura,
-                    size=2,
-                )
-
-                unstable_flag = any(m.unstable for m in line.meters)
-                if unstable_flag:
-                    unstable = torch.tensor([1], dtype=torch.float32)
-                else:
-                    unstable = torch.tensor([0], dtype=torch.float32)
-
-                meta = torch.cat([meter, caesura, unstable])
-
-                syllable_distances = torch.tensor(
-                    SyllableDistances(masks.poetic_accent_mask).to_array(),
-                    dtype=torch.float32,
-                )
-
-                self.samples.append(
-                    Sample(
-                        x=x,
-                        poetic_accents=poetic,
-                        meta=meta,
-                        syllable_distances=syllable_distances,
-                    )
-                )
-
-        logging.info("Dataset loading finished")
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        return self.samples[idx]
-
-    @staticmethod
-    def _fixed_size_tensor(values, size, dtype=torch.float32, padding_value=-1):
-        values = list(values)
-        if len(values) < size:
-            values += [padding_value] * (size - len(values))
-        else:
-            values = values[:size]
-        return torch.tensor(values, dtype=dtype)
-
-
-def collate(batch: list[Sample]):
-    x = [b.x for b in batch]
-    poetic = [b.poetic_accents for b in batch]
-    meta = [b.meta for b in batch]
-    syllable_distances = [b.syllable_distances for b in batch]
-
-    x = pad_sequence(
-        x,
-        batch_first=True,
-        padding_value=-1,
-    )
-    poetic = pad_sequence(
-        poetic,
-        batch_first=True,
-        padding_value=-1,
-    )
-    meta = torch.stack(meta)
-    syllable_distances = torch.stack(syllable_distances)
-
-    return Sample(
-        x=x,
-        poetic_accents=poetic,
-        meta=meta,
-        syllable_distances=syllable_distances,
-    )
+from .ml_loader import get_loader
 
 
 class AccentModel(nn.Module):
@@ -125,7 +14,7 @@ class AccentModel(nn.Module):
         hidden = 128
 
         self.encoder = nn.LSTM(
-            input_size=2,
+            input_size=3,
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,
@@ -153,7 +42,7 @@ def train_accent(model, loader, optimizer, device):
 
     for batch in loader:
         # move tensors to GPU
-        x = batch.x.to(device, non_blocking=True)
+        x = batch.accent_input.to(device, non_blocking=True)
         y = batch.poetic_accents.to(device, non_blocking=True)
         mask = y != -1
 
@@ -263,14 +152,12 @@ def train_models(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device %s for training", device)
 
-    dataset = PoetryDataset(poems)
-    loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
+    loader = get_loader(
+        poems,
         shuffle=True,
-        collate_fn=collate,
         num_workers=num_workers,
         pin_memory=True,
+        batch_size=batch_size,
     )
 
     accent_model = AccentModel().to(device)

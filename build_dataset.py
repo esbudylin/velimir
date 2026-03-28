@@ -11,7 +11,7 @@ from velimir.settings import (
     LoggingSettings,
     ACCENT_DICT_PATHS,
 )
-from velimir.parsers import transform_lines
+from velimir.parsers import transform_poem
 from velimir.io import read_poem_xml, save_poems_as_msgpack, read_accent_dicts
 
 
@@ -26,8 +26,8 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
         xml_str = read_poem_xml(poem.path)
 
         try:
-            transformed_poem = transform_lines(xml_str)
-            yield OutputPoem(path=poem.path, lines=list(transformed_poem))
+            transformed_poem = transform_poem(xml_str)
+            yield OutputPoem(path=poem.path, **transformed_poem)
         except Exception as error:
             delayed_logger.record()
             logging.exception(error)

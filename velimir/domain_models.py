@@ -145,6 +145,10 @@ class Line:
     caesura: list[int]
     syllable_masks: SyllableMasks
 
+    def length(self):
+        # маски - равной длины, здесь можно использовать любую маску
+        return len(self.syllable_masks.linguistic_accent_mask)
+
     def encode(self):
         return [
             self.caesura,
@@ -167,20 +171,31 @@ class Line:
 class OutputPoem:
     path: str
     lines: list[Line]
+    # разбивка на строфы: позиция первой строки для каждой строфы
+    stanza_breaks: list[int]
+
+    def __post_init__(self):
+        if not self.stanza_breaks:
+            raise ValueError("Attempted to record a poem without stanza breaks")
+
+        if not self.lines:
+            raise ValueError("Attempted to record a poem without lines")
 
     def encode(self):
         return [
             self.path,
             [line.encode() for line in self.lines],
+            self.stanza_breaks,
         ]
 
     @classmethod
     def decode(cls, data):
-        path, lines_data = data
+        path, lines_data, stanza_breaks = data
 
         return cls(
             path=path,
             lines=[Line.decode(line) for line in lines_data],
+            stanza_breaks=stanza_breaks,
         )
 
 

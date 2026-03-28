@@ -2,10 +2,10 @@ import unittest
 from dataclasses import asdict
 
 from bitarray import bitarray
+from bs4 import BeautifulSoup
 from parameterized import parameterized
 
 from velimir.accentuator import accent_line, build_accent_dict
-from velimir.identifier import ProcessedLine
 from velimir.domain_models import (
     Clausula,
     Line,
@@ -14,11 +14,12 @@ from velimir.domain_models import (
     OutputPoem,
     SyllableDistances,
 )
+from velimir.identifier import ProcessedLine
 from velimir.io import read_accent_dicts
 from velimir.parsers import (
     extract_lines,
     extract_syllable_masks,
-    transform_lines,
+    transform_poem,
 )
 from velimir.settings import ACCENT_DICT_PATHS
 
@@ -51,6 +52,16 @@ af_caesura_without_rhythm = """
 <p class="verse"><line meter="Аф2м~Аф3ж"/>Угрю̀мая тѐнь / Стано̀вится о̀тблеском свѐта.<br/></p>
 """
 
+multiple_stanzas = """
+<html>
+<p class="verse"><line meter="Я4ж"/>Как хо̀роша̀ в красѐ <rhyme-zone/>свящѐнной<br/>
+<line meter="Я4м"/>Твоѐй высо̀кой мы̀сли <rhyme-zone/>я̀!</p>
+
+<p class="verse"><line meter="Я4ж"/>Она̀, земны̀м незрѝма <rhyme-zone/>о̀ком,<br/>
+<line meter="Я4м"/>И ра̀злила̀сь на <rhyme-zone/>по̀лотнѐ.</p>
+</html>
+"""
+
 
 class TestParseLine(unittest.TestCase):
     @parameterized.expand(
@@ -60,7 +71,8 @@ class TestParseLine(unittest.TestCase):
         ]
     )
     def test_collect_text_from_line(self, xml_line, text):
-        extracted = next(extract_lines(xml_line))
+        soup = BeautifulSoup(xml_line, "xml")
+        extracted = next(extract_lines(soup))
         self.assertEqual(extracted.text, text)
 
     @parameterized.expand(
@@ -73,7 +85,7 @@ class TestParseLine(unittest.TestCase):
         ]
     )
     def test_parse_caesuras(self, name, xml_line, caesuras, syllable_count):
-        result = list(transform_lines(xml_line))
+        result = transform_poem(xml_line)["lines"]
         self.assertEqual(len(result), 1)
         line = result[0]
 
@@ -109,8 +121,16 @@ class TestParseLine(unittest.TestCase):
         self.assertEqual(masks.poetic_accent_mask, bitarray(accent_mask))
         self.assertEqual(masks.last_in_word_mask, bitarray(last_in_word_mask))
 
+    def test_stanza_breaks(self):
+        result = transform_poem(multiple_stanzas)
+
+        self.assertEqual(len(result["lines"]), 4)
+
+        self.assertIn("stanza_breaks", result)
+        self.assertListEqual(result["stanza_breaks"], [0, 2])
+
     def test_parse_line_with_meter(self):
-        result = list(transform_lines(xml_line))
+        result = transform_poem(xml_line)["lines"]
 
         self.assertEqual(len(result), 1)
         line = result[0]
@@ -148,7 +168,7 @@ class TestEncoding(unittest.TestCase):
         with open(self.xml_path, "r", encoding="utf8") as f:
             xml = f.read()
 
-        poem = OutputPoem(path=self.xml_path, lines=list(transform_lines(xml)))
+        poem = OutputPoem(path=self.xml_path, **transform_poem(xml))
 
         encoded = poem.encode()
         decoded = OutputPoem.decode(encoded)

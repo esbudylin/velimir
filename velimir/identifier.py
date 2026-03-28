@@ -7,8 +7,8 @@ from torch.nn.utils.rnn import pad_sequence
 
 from . import accentuator
 from . import parsers
-from .ml import AccentModel, MeterModel, SyllableDistances
-from .domain_models import Clausula, Meter, MeterType
+from .ml import AccentModel, MeterModel
+from .domain_models import Clausula, Meter, MeterType, SyllableDistances
 from .settings import ACCENT_MODEL, METER_MODEL
 
 
