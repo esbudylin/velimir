@@ -100,8 +100,12 @@ def transform_poem(xml: str) -> dict:
     stanza_breaks = []
 
     for verse in soup.find_all("p", class_="verse"):
-        stanza_breaks.append(len(lines))
-        lines.extend(parse_lines(extract_lines(verse)))
+        if stanza := parse_lines(extract_lines(verse)):
+            stanza_breaks.append(len(lines))
+            lines.extend(stanza)
+        else:
+            delayed_logger.record()
+            logging.warning("Skipping empty stanza")
 
     return dict(
         lines=lines,
