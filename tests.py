@@ -11,7 +11,7 @@ from velimir.domain_models import (
     Line,
     Meter,
     MeterType,
-    OutputPoem,
+    Poem,
     SyllableDistances,
 )
 from velimir.identifier import ProcessedLine
@@ -168,10 +168,10 @@ class TestEncoding(unittest.TestCase):
         with open(self.xml_path, "r", encoding="utf8") as f:
             xml = f.read()
 
-        poem = OutputPoem(path=self.xml_path, **transform_poem(xml))
+        poem = Poem(path=self.xml_path, **transform_poem(xml))
 
         encoded = poem.encode()
-        decoded = OutputPoem.decode(encoded)
+        decoded = Poem.decode(encoded)
 
         self.assertDictEqual(asdict(poem), asdict(decoded))
 

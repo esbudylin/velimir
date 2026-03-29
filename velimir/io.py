@@ -4,7 +4,7 @@ from typing import Iterator
 
 import msgpack
 
-from .domain_models import OutputPoem
+from .domain_models import Poem
 from .settings import OUTPUT_FILE, TEXTS_DIR
 
 
@@ -15,7 +15,7 @@ def read_poem_xml(text_path):
         return f.read()
 
 
-def save_poems_as_msgpack(data: Iterator[OutputPoem]):
+def save_poems_as_msgpack(data: Iterator[Poem]):
     batch_size = 500
 
     with open(OUTPUT_FILE, "wb") as f:

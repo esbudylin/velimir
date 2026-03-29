@@ -4,7 +4,7 @@ from typing import Iterator
 
 from velimir.accentuator import build_accent_dict
 from velimir.logger import delayed_logger
-from velimir.domain_models import InputPoem, OutputPoem
+from velimir.domain_models import InputPoem, Poem
 from velimir.settings import (
     METADATA_TABLE,
     InputDialect,
@@ -15,7 +15,7 @@ from velimir.parsers import transform_poem
 from velimir.io import read_poem_xml, save_poems_as_msgpack, read_accent_dicts
 
 
-def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
+def transform_data(csv_reader: csv.DictReader) -> Iterator[Poem]:
     for row in csv_reader:
         poem = InputPoem(**row)
 
@@ -27,7 +27,7 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[OutputPoem]:
 
         try:
             transformed_poem = transform_poem(xml_str)
-            yield OutputPoem(path=poem.path, **transformed_poem)
+            yield Poem(path=poem.path, **transformed_poem)
         except Exception as error:
             delayed_logger.record()
             logging.exception(error)

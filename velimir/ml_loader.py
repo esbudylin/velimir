@@ -5,7 +5,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from .domain_models import OutputPoem, SyllableDistances
+from .domain_models import Poem, SyllableDistances
 
 
 def get_loader(poems, **kwargs):
@@ -27,7 +27,7 @@ class PoetryDataset(Dataset):
 
         self.samples: list[Sample] = []
         for poem_data in poems:
-            poem = OutputPoem.decode(poem_data)
+            poem = Poem.decode(poem_data)
 
             stanza_stats = compute_mean_ling_accents_per_stanza(poem)
             current_stanza = 0
@@ -134,7 +134,7 @@ def collate(batch: list[Sample]):
     )
 
 
-def compute_mean_ling_accents_per_stanza(poem: OutputPoem):
+def compute_mean_ling_accents_per_stanza(poem: Poem):
     stanzas = []
 
     stanza_breaks = poem.stanza_breaks

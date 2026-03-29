@@ -168,7 +168,7 @@ class Line:
 
 
 @dataclass(slots=True)
-class OutputPoem:
+class Poem:
     path: str
     lines: list[Line]
     # разбивка на строфы: позиция первой строки для каждой строфы

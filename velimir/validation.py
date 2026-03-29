@@ -4,7 +4,7 @@ from collections import Counter
 import torch
 
 from .ml_loader import get_loader
-from .domain_models import OutputPoem, MeterType
+from .domain_models import Poem, MeterType
 
 
 def update_meter_confustion(meter_confusion, pred_meter, target_meter):
@@ -46,7 +46,7 @@ def log_meter_confusion(meter_confusion):
 def validate_models(
     accent_model,
     meter_model,
-    poems: list[OutputPoem],
+    poems: list[Poem],
     batch_size: int = 16,
 ):
     device = next(accent_model.parameters()).device
