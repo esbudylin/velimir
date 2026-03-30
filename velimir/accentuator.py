@@ -23,6 +23,7 @@ SOFTWARE.
 """
 
 import re
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterator
@@ -50,45 +51,80 @@ class AccentEntry:
 accent_dict: defaultdict[str, list[AccentEntry]] = defaultdict(list)
 
 
-def parse_dict_entry(word: str, accent: str) -> tuple[str, AccentEntry]:
-    base = re.sub(r"\(.+$", "", word)
+def parse_word_entry(word: str) -> tuple[str, set[str]]:
+    base = word
+    endings = [""]
 
-    endings_match = re.findall(r"\(((.*|)+)\)", word)
-    if endings_match:
-        endings = endings_match[0][0].split("|")
-    else:
-        endings = [""]
+    lpar = word.find("(")
 
-    accents = []
-    secondary_accents = []
-    yos = []
-    no_accent = False
+    if lpar != -1:
+        base = word[:lpar]
+        rpar = word.find(")", lpar)
 
-    accent_p = accent.removesuffix("!")
+        if rpar == -1 or rpar + 1 != len(word):
+            raise ValueError("Can't parse word entry")
+
+        endings_str = word[lpar + 1 : rpar]
+        endings = endings_str.split("|")
+
+    return base, set(endings)
+
+
+def parse_accent_entry(accent: str) -> dict:
     secondary_accent_mark = "`"
     yo_mark = '"'
 
-    for accent_entry in re.split("[,;]", accent_p):
+    accents = []
+    secondary_accents = []
+    yo = []
+    no_accent = False
+    capitalized = accent.endswith("!")
+
+    for accent_entry in accent.rstrip("!").split(","):
         if not accent_entry:
             continue
 
-        pos, symbol = re.findall(r"(\d+)(.*)", accent_entry)[0]
-        if int(pos) == 0:
+        sep = 0
+        for c in accent_entry:
+            if not c.isdigit():
+                break
+            sep += 1
+
+        if not sep:
+            raise ValueError("Accent position is not specified")
+
+        accent_pos = int(accent_entry[:sep])
+        symbol = accent_entry[sep:]
+
+        if len(symbol) > 1:
+            raise ValueError(f"Too many symbols: {accent_entry}")
+
+        if accent_pos == 0:
             no_accent = True
         elif symbol == secondary_accent_mark:
-            secondary_accents.append(int(pos))
-        if symbol == yo_mark:
-            yos.append(int(pos))
+            secondary_accents.append(accent_pos)
+        elif symbol == yo_mark:
+            yo.append(accent_pos)
+        elif symbol == "":
+            accents.append(accent_pos)
         else:
-            accents.append(int(pos))
+            raise ValueError(f"Invalid accent symbol: {symbol!r}")
 
-    entry = AccentEntry(
-        endings=set(endings),
-        capitalized=accent.endswith("!"),
+    return dict(
         accents=accents,
         secondary_accents=secondary_accents,
-        yo=yos,
+        yo=yo,
+        capitalized=capitalized,
         no_accent=no_accent,
+    )
+
+
+def parse_dict_entry(word: str, accent: str) -> tuple[str, AccentEntry]:
+    base, endings = parse_word_entry(word)
+
+    entry = AccentEntry(
+        endings=endings,
+        **parse_accent_entry(accent),
     )
 
     return base, entry
@@ -101,8 +137,16 @@ def build_accent_dict(rows: Iterator[str]):
 
         if split := row.split():
             word, accent = split
-            base, entry = parse_dict_entry(word, accent)
-            accent_dict[base].append(entry)
+            try:
+                base, entry = parse_dict_entry(word, accent)
+                accent_dict[base].append(entry)
+            except Exception as e:
+                logging.warning(
+                    "Error while parsing dict entry %s %s: %s",
+                    word,
+                    accent,
+                    e,
+                )
 
 
 def accent_line(line: str) -> list[bool]:

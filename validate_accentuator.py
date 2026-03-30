@@ -4,6 +4,7 @@
 
 import csv
 import logging
+import re
 import time
 from collections import Counter
 from typing import Iterator
@@ -60,14 +61,15 @@ def calc_accent_diff(lines: Iterator[str], accent_line_fn) -> Counter:
 
         diff_indexes = accent_diff_word_indexes(sm)
 
+        line_stripped = re.sub(r"[^А-яЁё\s-]+", "", line)
         line_words = list(
             filter(
                 lambda w: sum(map(accentuator.is_vowel, w)),
-                line.split(),
+                line_stripped.split(),
             )
         )
         for di in diff_indexes:
-            diffed_words[line_words[di]] += 1
+            diffed_words[line_words[di].lower()] += 1
 
         word_count = sum(sm.last_in_word_mask)
         if word_count:
