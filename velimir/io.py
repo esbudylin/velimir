@@ -44,6 +44,6 @@ def load_poems_from_msgpack() -> Iterator:
 
 def read_accent_dicts(filenames):
     for filename in filenames:
-        with open(filename, encoding="cp1251") as file_read:
+        with open(filename, encoding="utf8") as file_read:
             for line in file_read:
                 yield line
