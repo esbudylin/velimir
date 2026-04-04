@@ -1,4 +1,5 @@
 import logging
+from functools import cache
 from typing import Iterator
 
 from bs4 import BeautifulSoup
@@ -7,7 +8,6 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
 from . import accentuator
-from .logger import delayed_logger
 from .domain_models import (
     Clausula,
     InputLine,
@@ -16,6 +16,7 @@ from .domain_models import (
     MeterType,
     SyllableMasks,
 )
+from .logger import delayed_logger
 
 grammar = Grammar(
     """
@@ -113,6 +114,7 @@ def transform_poem(xml: str) -> dict:
     )
 
 
+@cache
 def parse_line_meter(meter: str) -> dict:
     try:
         tree = grammar.parse(meter)
