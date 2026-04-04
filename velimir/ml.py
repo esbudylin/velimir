@@ -71,27 +71,39 @@ class MeterModel(nn.Module):
         syllable_distances_size = 4
         meta_size = 6
 
-        hidden_size = 64
+        hidden = 64
 
         self.encoder = nn.LSTM(
             input_size=input_size,
-            hidden_size=hidden_size,
+            hidden_size=hidden,
             batch_first=True,
             bidirectional=True,
         )
-        self.fc = nn.Linear(hidden_size * 2 + syllable_distances_size, meta_size)
+        self.fc = nn.Sequential(
+            nn.Linear(hidden * 2, hidden),  # + syllable_distances_size,
+            nn.ReLU(),
+            nn.Linear(hidden, meta_size),
+        )
+        self.attn = nn.Linear(hidden * 2, 1)
 
     def forward(self, poetic_accents, syllable_distances):
-        mask = (poetic_accents != -1).squeeze(-1)  # (B, T)
+        mask = (poetic_accents != -1).squeeze(-1)
 
-        poetic_accents = poetic_accents.masked_fill(~mask.unsqueeze(-1), 0.0)
+        lengths = mask.sum(dim=1).cpu()
+        x = poetic_accents.masked_fill(~mask.unsqueeze(-1), 0.0)
 
-        out, _ = self.encoder(poetic_accents)
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x, lengths, batch_first=True, enforce_sorted=False
+        )
 
-        out = out * mask.unsqueeze(-1)
+        out, _ = self.encoder(packed)
+        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
 
-        pooled = out.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp(min=1)
-        pooled = torch.cat([pooled, syllable_distances], dim=1)
+        scores = self.attn(out).squeeze(-1)
+        scores = scores.masked_fill(~mask, -1e9)
+
+        weights = torch.softmax(scores, dim=1)
+        pooled = (out * weights.unsqueeze(-1)).sum(dim=1)
 
         return self.fc(pooled)
 
@@ -167,7 +179,7 @@ def train_models(
     meter_model = MeterModel().to(device)
 
     accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=2e-4)
-    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=5e-5)
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=2e-4)
 
     for epoch in range(epochs):
         accent_loss = train_accent(accent_model, loader, accent_optimizer, device)
