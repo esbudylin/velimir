@@ -68,7 +68,6 @@ class MeterModel(nn.Module):
         super().__init__()
 
         input_size = 1
-        syllable_distances_size = 4
         meta_size = 6
 
         hidden = 64
@@ -80,23 +79,20 @@ class MeterModel(nn.Module):
             bidirectional=True,
         )
         self.fc = nn.Sequential(
-            nn.Linear(hidden * 2 + syllable_distances_size, hidden),
+            nn.Linear(hidden * 2, hidden),
             nn.ReLU(),
             nn.Linear(hidden, meta_size),
         )
         self.attn = nn.Linear(hidden * 2, 1)
 
-    def forward(self, poetic_accents, syllable_distances):
+    def forward(self, poetic_accents):
         mask = (poetic_accents != -1).squeeze(-1)
 
         lengths = mask.sum(dim=1).cpu()
         x = poetic_accents.masked_fill(~mask.unsqueeze(-1), 0.0)
 
         packed = nn.utils.rnn.pack_padded_sequence(
-            x,
-            lengths,
-            batch_first=True,
-            enforce_sorted=False
+            x, lengths, batch_first=True, enforce_sorted=False
         )
 
         out, _ = self.encoder(packed)
@@ -107,9 +103,8 @@ class MeterModel(nn.Module):
 
         weights = torch.softmax(scores, dim=1)
         pooled = (out * weights.unsqueeze(-1)).sum(dim=1)
-        combined = torch.cat([pooled, syllable_distances], dim=1)
 
-        return self.fc(combined)
+        return self.fc(pooled)
 
 
 def train_meter(model, loader, optimizer, device):
@@ -125,10 +120,7 @@ def train_meter(model, loader, optimizer, device):
 
         optimizer.zero_grad()
 
-        logits = model(
-            poetic_accents,
-            batch.syllable_distances.to(device, non_blocking=True),
-        )  # (batch, meta_size)
+        logits = model(poetic_accents)  # (batch, meta_size)
 
         meter_part = logits[:, :3]
         caesura_part = logits[:, 3:5]

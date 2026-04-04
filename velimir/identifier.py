@@ -6,7 +6,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 from . import accentuator, parsers
-from .domain_models import Clausula, Meter, MeterType, SyllableDistances
+from .domain_models import Clausula, Meter, MeterType
 from .io import load_models
 from .ml_loader import compute_mean_ling_accents_per_stanza
 
@@ -111,31 +111,11 @@ def detect_poetic_accents(
     return pred.masked_fill(~mask, -1).unsqueeze(-1)
 
 
-def accent_predictions_to_distances(pred):
-    results = []
-
-    pred = pred.squeeze(-1)
-
-    for seq in pred:
-        valid = seq[seq != -1]
-        accent_pred = valid.bool().cpu().tolist()
-
-        distances = SyllableDistances(accent_pred).to_array()
-        results.append(distances)
-
-    return results
-
-
 def detect_meter(model, device, accent_pred):
     accent_pred = accent_pred.to(device)
 
-    syllable_distances = torch.tensor(
-        accent_predictions_to_distances(accent_pred),
-        dtype=torch.float32,
-    )
-
     with torch.no_grad():
-        pred = model(accent_pred, syllable_distances)
+        pred = model(accent_pred)
 
     pred_meter = pred[:, :3]
     pred_caesura = pred[:, 3:5]

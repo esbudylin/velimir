@@ -12,9 +12,7 @@ from velimir.domain_models import (
     Meter,
     MeterType,
     Poem,
-    SyllableDistances,
 )
-from velimir.identifier import ProcessedLine
 from velimir.io import read_accent_dicts
 from velimir.parsers import (
     extract_lines,
@@ -220,43 +218,3 @@ class TestAccentuator(unittest.TestCase):
         res = bitarray(accent_line(word))
 
         self.assertEqual(res, bitarray(with_accents))
-
-
-class TestSyllableDistances(unittest.TestCase):
-    # анакруса и клаузула не должны учитываться при подсчёте статистики
-    @parameterized.expand(
-        [
-            ("010010010", [1, 2, 2, 2]),
-            ("1010100", [0, 1, 1, 1]),
-            ("00101001000", [2, 1, 2, 1.5]),
-            ("01", [1, 0, 0, 0]),
-            ("1", [0, 0, 0, 0]),
-        ]
-    )
-    def test_syllable_distances(self, mask, expected):
-        poetic_accent_mask = bitarray(mask)
-        res = SyllableDistances(poetic_accent_mask).to_array()
-        self.assertListEqual(res, expected)
-
-
-class TestProcessedLine(unittest.TestCase):
-    def setUp(self):
-        self.regular_line = ProcessedLine(
-            caesura=[],
-            meters=[Meter(MeterType.IAMB, 4, Clausula.FEMININE)],
-            poetic_accent_mask=list(bitarray("010101010")),
-        )
-
-        self.line_with_caesura = ProcessedLine(
-            caesura=[7],
-            meters=[
-                Meter(MeterType.DACTYL, 3, Clausula.MASCULINE),
-                Meter(MeterType.DACTYL, 3, Clausula.FEMININE),
-            ],
-            poetic_accent_mask=list(bitarray("100100110010010")),
-        )
-
-    def test_line_to_string(self):
-        self.assertEqual(self.regular_line.to_str(), "Я4ж 1*1*1*1*1")
-
-        self.assertEqual(self.line_with_caesura.to_str(), "Д3м~Д3ж 0*2*2*0|0*2*2*1")

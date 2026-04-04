@@ -5,7 +5,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from .domain_models import Poem, SyllableDistances
+from .domain_models import Poem
 
 
 def get_loader(poems, **kwargs):
@@ -18,7 +18,6 @@ class Sample:
     accent_input: torch.Tensor
     poetic_accents: torch.Tensor
     meta: torch.Tensor  # meter, caesuras, unstable
-    syllable_distances: torch.Tensor  # anacrusa, min dist, max dist, mean dist
 
 
 class PoetryDataset(Dataset):
@@ -78,17 +77,11 @@ class PoetryDataset(Dataset):
 
                 meta = torch.cat([meter, caesura, unstable])
 
-                syllable_distances = torch.tensor(
-                    SyllableDistances(masks.poetic_accent_mask).to_array(),
-                    dtype=torch.float32,
-                )
-
                 self.samples.append(
                     Sample(
                         accent_input=accent_input,
                         poetic_accents=poetic,
                         meta=meta,
-                        syllable_distances=syllable_distances,
                     )
                 )
 
@@ -114,7 +107,6 @@ def collate(batch: list[Sample]):
     accent_input = [b.accent_input for b in batch]
     poetic = [b.poetic_accents for b in batch]
     meta = [b.meta for b in batch]
-    syllable_distances = [b.syllable_distances for b in batch]
 
     accent_input = pad_sequence(
         accent_input,
@@ -127,13 +119,11 @@ def collate(batch: list[Sample]):
         padding_value=-1,
     )
     meta = torch.stack(meta)
-    syllable_distances = torch.stack(syllable_distances)
 
     return Sample(
         accent_input=accent_input,
         poetic_accents=poetic,
         meta=meta,
-        syllable_distances=syllable_distances,
     )
 
 
