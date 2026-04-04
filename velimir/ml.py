@@ -149,7 +149,7 @@ def train_meter(model, loader, optimizer, device):
 def train_models(
     poems,
     epochs=9,
-    batch_size=32,
+    batch_size=128,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
