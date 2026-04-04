@@ -80,7 +80,7 @@ class MeterModel(nn.Module):
             bidirectional=True,
         )
         self.fc = nn.Sequential(
-            nn.Linear(hidden * 2, hidden),  # + syllable_distances_size,
+            nn.Linear(hidden * 2 + syllable_distances_size, hidden),
             nn.ReLU(),
             nn.Linear(hidden, meta_size),
         )
@@ -93,7 +93,10 @@ class MeterModel(nn.Module):
         x = poetic_accents.masked_fill(~mask.unsqueeze(-1), 0.0)
 
         packed = nn.utils.rnn.pack_padded_sequence(
-            x, lengths, batch_first=True, enforce_sorted=False
+            x,
+            lengths,
+            batch_first=True,
+            enforce_sorted=False
         )
 
         out, _ = self.encoder(packed)
@@ -104,8 +107,9 @@ class MeterModel(nn.Module):
 
         weights = torch.softmax(scores, dim=1)
         pooled = (out * weights.unsqueeze(-1)).sum(dim=1)
+        combined = torch.cat([pooled, syllable_distances], dim=1)
 
-        return self.fc(pooled)
+        return self.fc(combined)
 
 
 def train_meter(model, loader, optimizer, device):
