@@ -93,7 +93,7 @@ def validate_models(
             # Meter input
             # =====================
             accent_pred = accent_pred.masked_fill(~mask, -1).unsqueeze(-1)
-            meter_pred = meter_model(accent_pred, batch.syllable_distances)
+            meter_pred = meter_model(accent_pred, batch.syllable_distances.to(device))
 
             pred_meter = meter_pred[:, :3]
             pred_caesura = meter_pred[:, 3:5]

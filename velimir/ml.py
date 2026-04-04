@@ -109,7 +109,10 @@ def train_meter(model, loader, optimizer, device):
 
         optimizer.zero_grad()
 
-        logits = model(poetic_accents, batch.syllable_distances)  # (batch, meta_size)
+        logits = model(
+            poetic_accents,
+            batch.syllable_distances.to(device, non_blocking=True),
+        )  # (batch, meta_size)
 
         meter_part = logits[:, :3]
         caesura_part = logits[:, 3:5]
