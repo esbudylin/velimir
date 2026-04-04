@@ -2,10 +2,12 @@ import os
 from itertools import islice
 from typing import Iterator
 
+import torch
 import msgpack
 
 from .domain_models import Poem
-from .settings import OUTPUT_FILE, TEXTS_DIR
+from .settings import OUTPUT_FILE, TEXTS_DIR, ACCENT_MODEL, METER_MODEL
+from .ml import AccentModel, MeterModel
 
 
 def read_poem_xml(text_path):
@@ -47,3 +49,18 @@ def read_accent_dicts(filenames):
         with open(filename, encoding="utf8") as file_read:
             for line in file_read:
                 yield line
+
+
+def load_model(accent_type, model_path, device):
+    model = accent_type().to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
+
+    return model
+
+
+def load_models(device):
+    accent_model = load_model(AccentModel, ACCENT_MODEL, device)
+    meter_model = load_model(MeterModel, METER_MODEL, device)
+
+    return accent_model, meter_model

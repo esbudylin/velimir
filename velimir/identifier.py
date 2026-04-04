@@ -7,9 +7,8 @@ from torch.nn.utils.rnn import pad_sequence
 
 from . import accentuator
 from . import parsers
-from .ml import AccentModel, MeterModel
 from .domain_models import Clausula, Meter, MeterType, SyllableDistances
-from .settings import ACCENT_MODEL, METER_MODEL
+from .io import load_models
 
 
 @dataclass
@@ -55,14 +54,6 @@ class ProcessedLine:
                 return caesura_mark.join(map(ms, (mask[:ca], mask[ca:cb], mask[cb:])))
             case _:
                 raise ValueError("Invalid caesura sequence length")
-
-
-def load_model(accent_type, model_path, device):
-    model = accent_type().to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()
-
-    return model
 
 
 def detect_poetic_accents(model, device, lines: list[str]):

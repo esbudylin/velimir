@@ -5,7 +5,7 @@ from itertools import islice
 
 import torch
 
-from velimir.io import load_poems_from_msgpack
+from velimir.io import load_poems_from_msgpack, load_models
 from velimir.ml import train_models
 from velimir.validation import validate_models
 from velimir.settings import (
@@ -35,9 +35,22 @@ def split_poems(
     return train_poems, test_poems
 
 
-def main(test_run: bool = False):
-    logging.basicConfig(**LoggingSettings().model_dump())
+def validate():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info("Using device: %s", device)
 
+    accent_model, meter_model = load_models(device)
+
+    poems = load_poems_from_msgpack()
+    _, test_set = split_poems(poems)
+
+    validation_results = validate_models(accent_model, meter_model, test_set)
+
+    for k, v in validation_results.items():
+        logging.info("%s=%f", k, v)
+
+
+def train(test_run: bool = False):
     logging.info("Loading poems from msgpack")
     poems = load_poems_from_msgpack()
 
@@ -53,10 +66,6 @@ def main(test_run: bool = False):
 
     logging.info("Training is starting...")
     accent_model, meter_model = train_models(training_set)
-    validation_results = validate_models(accent_model, meter_model, test_set)
-
-    for k, v in validation_results.items():
-        logging.info("%s=%f", k, v)
 
     logging.info("Saving trained models...")
 
@@ -75,6 +84,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Run training on a small subset of data for testing purposes",
     )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Perform model validation on test data",
+    )
     args = parser.parse_args()
 
-    main(test_run=args.test_run)
+    logging.basicConfig(**LoggingSettings().model_dump())
+
+    if args.validate:
+        validate()
+    else:
+        train(test_run=args.test_run)
