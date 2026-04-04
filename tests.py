@@ -62,6 +62,13 @@ multiple_stanzas = """
 </html>
 """
 
+with_empty_stanza = """
+<html>
+<p class="verse">«Чарли-Варли пас корову…»</p>
+<p class="verse"><line meter="Х4ж"/>Ча̀рли-Ва̀рли па̀с <rhyme-zone/>коро̀ву<br></br></p>
+</html>
+"""
+
 
 class TestParseLine(unittest.TestCase):
     @parameterized.expand(
@@ -128,6 +135,11 @@ class TestParseLine(unittest.TestCase):
 
         self.assertIn("stanza_breaks", result)
         self.assertListEqual(result["stanza_breaks"], [0, 2])
+
+    def test_empty_stanza(self):
+        result = transform_poem(with_empty_stanza)
+        self.assertEqual(len(result["lines"]), 1)
+        self.assertListEqual(result["stanza_breaks"], [0])
 
     def test_parse_line_with_meter(self):
         result = transform_poem(xml_line)["lines"]
