@@ -29,7 +29,10 @@ class PoetryDataset(Dataset):
         for poem_data in poems:
             poem = Poem.decode(poem_data)
 
-            stanza_stats = compute_mean_ling_accents_per_stanza(poem)
+            stanza_stats = compute_mean_ling_accents_per_stanza(
+                poem.stanza_breaks,
+                [li.syllable_masks.linguistic_accent_mask for li in poem.lines],
+            )
             current_stanza = 0
 
             for i, line in enumerate(poem.lines):
@@ -134,15 +137,19 @@ def collate(batch: list[Sample]):
     )
 
 
-def compute_mean_ling_accents_per_stanza(poem: Poem):
+def compute_mean_ling_accents_per_stanza(
+    stanza_breaks: list[int],
+    ling_accent_masks,
+):
     stanzas = []
 
-    stanza_breaks = poem.stanza_breaks
-    lines = poem.lines
-
     for i, start in enumerate(stanza_breaks):
-        end = stanza_breaks[i + 1] if i + 1 < len(stanza_breaks) else len(lines)
-        stanzas.append(lines[start:end])
+        end = (
+            stanza_breaks[i + 1]
+            if i + 1 < len(stanza_breaks)
+            else len(ling_accent_masks)
+        )
+        stanzas.append(ling_accent_masks[start:end])
 
     res = []
 
@@ -150,13 +157,13 @@ def compute_mean_ling_accents_per_stanza(poem: Poem):
         if not stanza:
             continue
 
-        max_len = max(line.length() for line in stanza)
+        max_len = max(len(line) for line in stanza)
 
         sums = [0] * max_len
         counts = [0] * max_len
 
         for line in stanza:
-            for i, val in enumerate(line.syllable_masks.linguistic_accent_mask):
+            for i, val in enumerate(line):
                 sums[i] += val
                 counts[i] += 1
 

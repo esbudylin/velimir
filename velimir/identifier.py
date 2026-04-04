@@ -1,14 +1,14 @@
-import logging
 import itertools
+import logging
 from dataclasses import dataclass
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from . import accentuator
-from . import parsers
+from . import accentuator, parsers
 from .domain_models import Clausula, Meter, MeterType, SyllableDistances
 from .io import load_models
+from .ml_loader import compute_mean_ling_accents_per_stanza
 
 
 @dataclass
@@ -56,16 +56,40 @@ class ProcessedLine:
                 raise ValueError("Invalid caesura sequence length")
 
 
-def detect_poetic_accents(model, device, lines: list[str]):
+# TODO: remove code duplication with ml_loader
+def detect_poetic_accents(
+    model,
+    device,
+    lines: list[str],
+    stanza_breaks: list[int],
+):
     xs = []
-    for line in lines:
-        line_with_linguistic_accents = accentuator.accent_line(line)
+    ling_accent_masks = [accentuator.accent_line(li) for li in lines]
+
+    stanza_stats = compute_mean_ling_accents_per_stanza(
+        stanza_breaks,
+        ling_accent_masks,
+    )
+    current_stanza = 0
+
+    for i, (ling_accent_mask, line) in enumerate(zip(ling_accent_masks, lines)):
+        if (
+            len(stanza_breaks) != current_stanza + 1
+            and i == stanza_breaks[current_stanza + 1]
+        ):
+            current_stanza += 1
+
+        stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
 
         xs.append(
             torch.stack(
                 [
                     torch.tensor(
-                        line_with_linguistic_accents,
+                        stanza_stat,
+                        dtype=torch.float32,
+                    ),
+                    torch.tensor(
+                        ling_accent_mask,
                         dtype=torch.float32,
                     ),
                     torch.tensor(
@@ -172,17 +196,20 @@ def process_line(meta, pmask) -> ProcessedLine:
     )
 
 
-def process_lines(lines: list[str]) -> list[ProcessedLine | None]:
+def process_lines(
+    lines: list[str],
+    stanza_breaks: list[int],
+) -> list[ProcessedLine | None]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device: %s", device)
 
-    accent_model = load_model(AccentModel, ACCENT_MODEL, device)
-    meter_model = load_model(MeterModel, METER_MODEL, device)
+    accent_model, meter_model = load_models(device)
 
     poetic_accent_masks = detect_poetic_accents(
         accent_model,
         device,
         lines,
+        stanza_breaks,
     )
     meter_preds, caesura_preds, unstable_preds = detect_meter(
         meter_model,

@@ -29,23 +29,28 @@ def read_verses_from_stdin() -> list[list[str]]:
 
 def flatten_verses(verses: list[list[str]]):
     flat = []
-    lengths = []
+    stanza_breaks = []
 
     for verse in verses:
+        stanza_breaks.append(len(flat))
         flat.extend(verse)
-        lengths.append(len(verse))
 
-    return flat, lengths
+    return flat, stanza_breaks
 
 
-def unflatten(processed: list[ProcessedLine], lengths: list[int]):
+def unflatten(processed: list[ProcessedLine], stanza_breaks: list[int]):
     """Split flat processed lines back into verses."""
     res = []
-    idx = 0
+    current_stanza = []
 
-    for length in lengths:
-        res.append(processed[idx : idx + length])
-        idx += length
+    for i, line in enumerate(processed):
+        if i in stanza_breaks and current_stanza:
+            res.append(current_stanza)
+            current_stanza = []
+        current_stanza.append(line)
+
+    if current_stanza:
+        res.append(current_stanza)
 
     return res
 
@@ -86,9 +91,9 @@ def main():
         logging.error("No input provided")
         sys.exit(1)
 
-    flat_lines, lengths = flatten_verses(verses)
+    flat_lines, stanza_breaks = flatten_verses(verses)
 
-    processed_flat = process_lines(flat_lines)
+    processed_flat = process_lines(flat_lines, stanza_breaks)
 
     if len(processed_flat) != len(flat_lines):
         logging.error(
@@ -98,7 +103,7 @@ def main():
         )
         sys.exit(1)
 
-    processed_verses = unflatten(processed_flat, lengths)
+    processed_verses = unflatten(processed_flat, stanza_breaks)
 
     for verse_lines, verse_processed in zip(verses, processed_verses):
         print(format_verse(verse_lines, verse_processed))
