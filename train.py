@@ -1,20 +1,21 @@
+import argparse
 import logging
 import random
-import argparse
 from itertools import islice
 
 import torch
 
-from velimir.io import load_poems_from_msgpack, load_models
+from velimir.domain_models import Poem
+from velimir.io import load_models, load_poems_from_msgpack
 from velimir.ml import train_models
-from velimir.validation import validate_models
 from velimir.settings import (
-    LoggingSettings,
     ACCENT_MODEL,
-    METER_MODEL,
     ACCENT_TEST_MODEL,
+    METER_MODEL,
     METER_TEST_MODEL,
+    LoggingSettings,
 )
+from velimir.validation import validate_models
 
 
 def split_poems(
@@ -62,7 +63,7 @@ def train(test_run: bool = False):
         )
         poems = islice(poems, testing_subset)
 
-    training_set, test_set = split_poems(poems)
+    training_set, _ = split_poems(poems)
 
     logging.info("Training is starting...")
     accent_model, meter_model = train_models(training_set)

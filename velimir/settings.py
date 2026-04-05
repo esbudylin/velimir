@@ -22,6 +22,7 @@ ACCENT_DICT_PATHS = [
     os.path.join(ACCENT_DICT_DIR, n)
     for n in ["accent.dic", "accent1.dic", "accent2.dic"]
 ]
+PREDICTION_DB_PATH = os.path.join(DATA_DIRECTORY, "predictions.db")
 
 
 class InputDialect(csv.unix_dialect):
