@@ -1,4 +1,5 @@
 import logging
+import random
 from dataclasses import dataclass
 
 import torch
@@ -162,3 +163,21 @@ def compute_mean_ling_accents_per_stanza(
         res.append(mean)
 
     return res
+
+
+def split_poems(
+    poems,
+    test_ratio: float = 0.05,
+    seed: int = 42,
+) -> tuple[list, list]:
+    poems_l = list(poems)
+
+    rng = random.Random(42)
+    rng.shuffle(poems_l)
+
+    split = int(len(poems_l) * (1 - test_ratio))
+
+    train_poems = poems_l[:split]
+    test_poems = poems_l[split:]
+
+    return train_poems, test_poems
