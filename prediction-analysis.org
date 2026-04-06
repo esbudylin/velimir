@@ -3,7 +3,7 @@
 Собираем данные.
 
 #+begin_src sh
-  python train.py --validate
+  python validate_models.py
 #+end_src
 
 #+RESULTS:
@@ -15,13 +15,13 @@
 #+end_src
 
 #+RESULTS:
-| 2026-04-05 20:12:00 | 575 [INFO] Using device: cpu          |
-| 2026-04-05 20:12:04 | 794 [INFO] Loading poetry dataset     |
-| 2026-04-05 20:12:07 | 999 [INFO] Dataset loading finished   |
-| 2026-04-05 20:13:20 | 198 [INFO] accent_accuracy=0.985116   |
-| 2026-04-05 20:13:20 | 198 [INFO] meter_accuracy=0.973385    |
-| 2026-04-05 20:13:20 | 199 [INFO] caesura_accuracy=0.992509  |
-| 2026-04-05 20:13:20 | 200 [INFO] unstable_accuracy=0.999266 |
+| 2026-04-06 18:07:42 | 512 [INFO] Using device: cpu          |
+| 2026-04-06 18:07:46 | 842 [INFO] Loading poetry dataset     |
+| 2026-04-06 18:07:50 | 292 [INFO] Dataset loading finished   |
+| 2026-04-06 18:09:18 | 780 [INFO] accent_accuracy=0.985116   |
+| 2026-04-06 18:09:18 | 780 [INFO] meter_accuracy=0.973385    |
+| 2026-04-06 18:09:18 | 780 [INFO] caesura_accuracy=0.992509  |
+| 2026-04-06 18:09:18 | 780 [INFO] unstable_accuracy=0.999266 |
 
 Для каждого метра собираем соотношение попаданий при правильно
 предсказанном ритме, ошибочно предсказанном ритме и общее соотношение

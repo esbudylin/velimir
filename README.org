@@ -12,7 +12,6 @@ Velimir exposes several scripts as its interface. To use them, clone
 the repository and run the scripts directly from the command line.
 
 ** Entry points
-The entry points are
 + ~markup.py~
 
   Accepts a poem from standard input as plain text and emits XML
@@ -95,7 +94,7 @@ depend on the original corpus files: ~build_dataset.py~ and
 ~validate_accentuator.py~.
 
 The directory [[file:data/accent_dicts]] includes files ~accent.dic~ and
-~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_accent]] repo. There were
-minor changes made to ~accent1.dic~ file. The file ~accent2.dic~ was
-created entirely for this project.
+~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_accent]] repo. Minor changes
+were made to ~accent1.dic~. The file ~accent2.dic~ was created
+entirely for this project.
 
