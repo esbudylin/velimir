@@ -69,6 +69,16 @@ def put_accents(line: str, mask: list[bool]):
     return res
 
 
+def emit_result(verses, processed_verses):
+    print('<?xml version="1.0" encoding="utf-8"?>')
+    print("<body>")
+
+    for verse_lines, verse_processed in zip(verses, processed_verses):
+        print(format_verse(verse_lines, verse_processed))
+
+    print("</body>")
+
+
 def format_verse(lines: list[str], processed_lines: list[ProcessedLine | None]) -> str:
     parts = ['<p class="verse">']
 
@@ -104,9 +114,7 @@ def main():
         sys.exit(1)
 
     processed_verses = unflatten(processed_flat, stanza_breaks)
-
-    for verse_lines, verse_processed in zip(verses, processed_verses):
-        print(format_verse(verse_lines, verse_processed))
+    emit_result(verses, processed_verses)
 
 
 if __name__ == "__main__":
