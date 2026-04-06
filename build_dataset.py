@@ -1,3 +1,4 @@
+# Builds training dataset from the corpus files.
 import csv
 import logging
 from typing import Iterator
