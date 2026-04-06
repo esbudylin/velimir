@@ -1,0 +1,101 @@
+* ВЕЛИМИР
+/Версификационный лингвистический идентификатор метра и ритма/
+
+Velimir is an ML-based tool for detecting rhythm and meter in Russian
+poetry.
+
+** Usage
+You will need Python 3.10 to run the project. The python dependencies
+are listed in ~requirements.txt~.
+
+Velimir exposes several scripts as its interface. To use them, clone
+the repository and run the scripts directly from the command line.
+
+** Entry points
+The entry points are
++ ~markup.py~
+
+  Accepts a poem from standard input as plain text and emits XML
+  markup of the poem to the standard output. The XML schema of the
+  output is similar to the one internally used by the Russian National
+  Corpus.
+
+  ~markup.py~ is only a lean frontend, so if you want to emit data in a
+  different format, you may want to replace this script
+  entirely. However, if instead you want to parse the markup output,
+  you may find [[file:velimir/parsers.py]] useful.
+
+  # TODO: Add more documentation on input/output formats
+
+  Despite using ML models for meter and rhythm detection, the script
+  does not require a GPU and should perform well on any modern CPU.
+  
+  Example
+  #+begin_src sh
+    python markup.py < input_poem.txt > output_poem.xml
+  #+end_src
+
+  Example of output for a poem by Mikhail Aizenberg (the text was not presented in the training dataset).
+  #+begin_src xml
+    <?xml version="1.0" encoding="utf-8"?>
+    <body>
+    <p class="verse">
+    <line meter="Х4м 0*1*1*1*0"/>Зна̀я, что̀ навѐрняка̀<br/>
+    <line meter="Х4ж 0*1*1*1*1"/>о̀бновля̀ются̀ не ско̀ро<br/>
+    <line meter="Х4м 0*1*1*1*0"/>вы̀зревшѝе жѐмчуга̀<br/>
+    <line meter="Х4ж 0*1*1*1*1"/>в чрѐве чу̀дища̀ морско̀го,<br/>
+    </p>
+    <p class="verse">
+    <line meter="Х4м 0*1*1*1*0"/>вѝдишь прѐжниѐ следы̀<br/>
+    <line meter="Х4ж 0*1*1*1*1"/>в чу̀ть замѐтном блѐске му̀тном —<br/>
+    <line meter="Х4м 0*1*1*1*0"/>по̀таѐнныѐ ходы̀,<br/>
+    <line meter="Х4ж 0*1*1*1*1"/>вы̀стланны̀е пѐрламу̀тром.<br/>
+    </p>
+    </body>
+  #+end_src
+
++ ~train.py~
+
+  Trains the models. The resulting models are saved to the
+  [[file:data/models/]] directory.
+
+  Training can be resource-intensive. The models presented in the
+  repository were trained on a GPU with 24 GB VRAM.
+
+  Use the flag ~--test-run~ to run the training on a small data subset
+  (100 poems) - the intended use case is quick sanity checks.
+  
++ ~validate_models.py~
+
+  Collects data on model accuracy. The data are collected from 5000
+  poems from the original dataset, which were excluded from the
+  training data. The collected data are dumped to
+  [[file:data/predictions.db]] as a SQLite database. The repository
+  includes an org-babel [[file:prediction-analysis.org][notebook]] with analytical queries to the database.
+  
+To run the test suite for the project, use
+#+begin_src sh
+  python -m unittest tests
+#+end_src
+
+#+RESULTS:
+
+** Data sources
+Velimir's models were trained on the data extracted from the poetic
+corpus of the Russian National Corpus ([[https://ruscorpora.ru]]). The
+data are included in the repository as [[file:data/poems.msgpack]]. Note
+that although the code and models are open source, the data themselves
+are proprietary and used under fair use conditions.
+
+Note that the ~poems.msgpack~ only includes binary metadata (meter
+formulas and accent positions) extracted from the corpus. The original
+corpus files are not included in the repository due to copyright
+constraints. However, the repository still contains scripts that
+depend on the original corpus files: ~build_dataset.py~ and
+~validate_accentuator.py~.
+
+The directory [[file:data/accent_dicts]] includes files ~accent.dic~ and
+~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_accent]] repo. There were
+minor changes made to ~accent1.dic~ file. The file ~accent2.dic~ was
+created entirely for this project.
+
