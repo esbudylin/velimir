@@ -110,3 +110,41 @@
 |-----------------+---------------+----------------------+--------|
 |               0 |             0 |    0.999266137704537 | 137527 |
 |               1 |             0 | 0.000733862295463133 |    101 |
+
+Ошибки при определении дактиля:
+#+begin_src sqlite
+  SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
+  FROM predictions
+  WHERE meter_target = 'Д00' AND meter_target <> meter_pred
+  GROUP BY meter_pred, accent_ok
+  ORDER BY cnt DESC
+  LIMIT 5
+#+end_src
+
+#+RESULTS:
+| meter_pred | accent_ok | cnt |
+|------------+-----------+-----|
+| Аф00       |         1 | 727 |
+| Дк00       |         0 | 213 |
+| Я00        |         0 | 118 |
+| Тк00       |         0 |  71 |
+| Х00        |         0 |  58 |
+
+Ошибки при определении гекзаметра:
+#+begin_src sqlite
+  SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
+  FROM predictions
+  WHERE meter_target = 'Гек00' AND meter_target <> meter_pred
+  GROUP BY meter_pred, accent_ok
+  ORDER BY cnt DESC
+  LIMIT 5
+#+end_src
+
+#+RESULTS:
+| meter_pred | accent_ok | cnt |
+|------------+-----------+-----|
+| Аф00       |         1 | 421 |
+| Л00        |         1 |  20 |
+| Тк00       |         0 |  18 |
+| Ак00       |         0 |  15 |
+| Дк00       |         0 |  12 |
