@@ -34,7 +34,7 @@ the repository and run the scripts directly from the command line.
     python markup.py < input_poem.txt > output_poem.xml
   #+end_src
 
-  Example of output for a poem by Mikhail Aizenberg (the text was not presented in the training dataset).
+  Example of output for a poem by Mikhail Aizenberg (the text was not present in the training dataset).
   #+begin_src xml
     <?xml version="1.0" encoding="utf-8"?>
     <body>
