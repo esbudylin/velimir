@@ -202,6 +202,8 @@ def should_use_neuro_accent(word: str, accent: AccentEntry) -> bool:
 
     2) словарный акцентуатор поставил и ударение, и
     букву ё (кроме слов через дефис: например, тёмно-си'ний )
+
+    См. https://trudy.ruslang.ru/ru/archive/2022-3/181-190
     """
     if accent.no_accent:
         return False
