@@ -112,7 +112,7 @@ class Meter:
     meter: MeterType
     feet: int
     clausula: Clausula
-    unstable: bool = False
+    unstable: bool = False  # метр с перебоем
 
     def to_str(self):
         li = [
