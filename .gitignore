@@ -4,3 +4,4 @@ __pycache__
 main.log
 data/models/accent-test
 data/models/meter-test
+data/predictions.db

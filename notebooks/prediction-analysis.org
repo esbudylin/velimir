@@ -1,0 +1,271 @@
+#+PROPERTY: header-args :dir ..
+#+PROPERTY: header-args:sqlite :db data/predictions.db :colnames yes :readonly yes
+
+Собираем данные.
+#+begin_src sh
+  python validate_models.py
+#+end_src
+
+#+RESULTS:
+
+Лог сборки данных.
+#+begin_src sh
+  cat main.log
+#+end_src
+
+#+RESULTS:
+| 2026-04-07 11:41:28 | 120 [INFO] Using device: cpu          |
+| 2026-04-07 11:41:32 | 367 [INFO] Loading poetry dataset     |
+| 2026-04-07 11:41:35 | 624 [INFO] Dataset loading finished   |
+| 2026-04-07 11:42:53 | 229 [INFO] accent_accuracy=0.985116   |
+| 2026-04-07 11:42:53 | 229 [INFO] meter_accuracy=0.973385    |
+| 2026-04-07 11:42:53 | 230 [INFO] caesura_accuracy=0.992509  |
+| 2026-04-07 11:42:53 | 231 [INFO] unstable_accuracy=0.999266 |
+
+Процент попаданий для предсказаний метра и ритма
+
+NB: числа точности в логе выше, т.к. при логировании используется
+расчёт по токенам, а не сравнение формул целиком.  Например, при
+расчёте по токенам учитывается схожесть между ритмическими формулами
+"0101" и "1001". SQL-запрос учитывает только полные совпадения.
+#+begin_src sqlite
+  SELECT
+    ROUND(AVG(accent_target == accent_pred), 3) as accent_ok,
+    ROUND(AVG(meter_target == meter_pred), 3) as meter_ok,
+    ROUND(AVG(caesura_target == caesura_pred), 3) as caesura_ok
+  FROM predictions
+#+end_src
+
+#+RESULTS:
+| accent_ok | meter_ok | caesura_ok |
+|-----------+----------+------------|
+|     0.933 |    0.927 |      0.986 |
+
+Процент попаданий метра и ритма, распределённый по наиболее частым метрам
+#+name: accuracy_per_meter
+#+begin_src sqlite
+  SELECT * FROM (
+  SELECT RTRIM(meter_target, '0') as meter,
+      ROUND(AVG(accent_target == accent_pred), 3) as accent_ok,
+      ROUND(AVG(meter_target == meter_pred), 3) as meter_ok,
+      ROUND(COUNT(*) * 1.0 / SUM(COUNT(*)) OVER (), 4) AS freq
+  FROM predictions
+  GROUP BY meter_target
+  )
+  WHERE freq >= 0.01
+  ORDER BY freq DESC
+#+end_src
+
+#+RESULTS: accuracy_per_meter
+| meter | accent_ok | meter_ok |   freq |
+|-------+-----------+----------+--------|
+| Я     |     0.984 |    0.984 |    0.5 |
+| Х     |     0.962 |    0.972 | 0.1898 |
+| Дк    |     0.706 |    0.767 | 0.0774 |
+| Аф    |     0.951 |    0.947 | 0.0748 |
+| Ан    |     0.935 |    0.938 | 0.0723 |
+| Д     |     0.911 |    0.791 | 0.0461 |
+| Тк    |     0.452 |    0.532 | 0.0123 |
+
+График, отображающий точность определения метра и ритма по типу метра.
+#+begin_src python :var data=accuracy_per_meter :results file link
+  import matplotlib.pyplot as plt
+  import matplotlib.ticker as mtick
+  import numpy as np
+
+  meters, accent, meter_acc, freq = zip(*data)
+
+  BLUE, GREEN, GRAY = "#378ADD", "#1D9E75", "#888780"
+  PLOT_PATH = "notebooks/dual_axis.svg"
+
+  fig, ax1 = plt.subplots(figsize=(11, 5))
+
+  x = np.arange(len(meters))
+  ax1.bar(x, [f * 100 for f in freq], color="#333", alpha=0.5, label="Frequency (%)")
+  ax1.set_ylabel("Frequency (%)", color="#333")
+  ax1.tick_params(axis="y", color="#333")
+  ax1.set_xticks(x)
+  ax1.set_xticklabels(meters, rotation=40, ha="right", fontsize=9)
+
+  ax2 = ax1.twinx()
+  ax2.plot(x, [a * 100 for a in accent],   "o-", color=BLUE,  lw=2, ms=5, label="Accent accuracy")
+  ax2.plot(x, [m * 100 for m in meter_acc], "s-", color=GREEN, lw=2, ms=5, label="Meter accuracy")
+  ax2.set_ylabel("Accuracy (%)", color="#333")
+  ax2.set_ylim(-5, 110)
+  ax2.axhline(90, color="#ccc", lw=0.8, linestyle="--")
+
+  lines1, labs1 = ax1.get_legend_handles_labels()
+  lines2, labs2 = ax2.get_legend_handles_labels()
+  ax1.legend(lines1 + lines2, labs1 + labs2, loc="upper right", framealpha=0.6, fontsize=9)
+  ax1.set_title("Frequency and accuracy per meter type", fontsize=12)
+  plt.tight_layout()
+  plt.savefig(PLOT_PATH, dpi=150)
+
+  return PLOT_PATH
+#+end_src
+
+#+RESULTS:
+[[file:dual_axis.svg]]
+
+Для каждого метра собираем соотношение попаданий при правильно
+предсказанном ритме, ошибочно предсказанном ритме и общее соотношение
+правильных предсказаний.
+#+begin_src sqlite
+  SELECT
+      RTRIM(meter_target, '0') as meter,
+      ROUND(AVG(CASE WHEN accent_target == accent_pred THEN meter_target == meter_pred END), 3) AS meter_ok_given_accent_ok,
+      ROUND(AVG(CASE WHEN accent_target <> accent_pred THEN meter_target == meter_pred END), 3) AS meter_ok_given_accent_bad,
+      ROUND(AVG(accent_pred == accent_target), 3) AS accent_ok_total,
+      ROUND(AVG(meter_target == meter_pred), 3) AS meter_ok_total,
+      COUNT(*) as total
+  FROM predictions
+  GROUP BY meter_target
+  ORDER BY total DESC;
+#+end_src
+
+#+RESULTS:
+| meter | meter_ok_given_accent_ok | meter_ok_given_accent_bad | accent_ok_total | meter_ok_total | total |
+|-------+--------------------------+---------------------------+-----------------+----------------+-------|
+| Я     |                    0.995 |                     0.293 |           0.984 |          0.984 | 68810 |
+| Х     |                      1.0 |                      0.26 |           0.962 |          0.972 | 26126 |
+| Дк    |                    0.925 |                      0.39 |           0.706 |          0.767 | 10649 |
+| Аф    |                    0.993 |                     0.055 |           0.951 |          0.947 | 10293 |
+| Ан    |                      1.0 |                     0.057 |           0.935 |          0.938 |  9954 |
+| Д     |                    0.865 |                     0.032 |           0.911 |          0.791 |  6338 |
+| Тк    |                    0.831 |                     0.286 |           0.452 |          0.532 |  1689 |
+| Гек   |                    0.439 |                     0.436 |            0.88 |          0.439 |   918 |
+| С     |                      1.0 |                     0.064 |           0.458 |          0.493 |   716 |
+| Ак    |                     0.29 |                     0.287 |           0.525 |          0.288 |   617 |
+| ЯЯ    |                    0.289 |                     0.009 |            0.72 |           0.21 |   414 |
+| ХХ    |                    0.938 |                     0.066 |           0.587 |          0.578 |   332 |
+| Л     |                      0.0 |                       0.0 |           0.643 |            0.0 |   294 |
+| АнАн  |                      0.0 |                       0.0 |           0.497 |            0.0 |   197 |
+| ДД    |                    0.539 |                       0.0 |           0.783 |          0.422 |   180 |
+| ЯЯЯ   |                      0.0 |                       0.0 |           0.875 |            0.0 |    40 |
+| АфАф  |                      0.0 |                       0.0 |           0.833 |            0.0 |    24 |
+| Пен   |                      0.0 |                       0.0 |           0.381 |            0.0 |    21 |
+| ХХХ   |                          |                       0.0 |             0.0 |            0.0 |     6 |
+| ЯХ    |                      0.0 |                       0.0 |             0.5 |            0.0 |     4 |
+| ДЯ    |                          |                       0.5 |             0.0 |            0.5 |     2 |
+| ХЯ    |                          |                       0.0 |             0.0 |            0.0 |     1 |
+| ДАн   |                      0.0 |                           |             1.0 |            0.0 |     1 |
+| АфД   |                          |                       0.0 |             0.0 |            0.0 |     1 |
+| АфАн  |                      0.0 |                           |             1.0 |            0.0 |     1 |
+
+Типы цезур, предсказанные корректно
+#+begin_src sqlite
+  SELECT
+      caesura_target AS caesura,
+      meter_target,
+      meter_pred,
+      COUNT(*) AS cnt
+  FROM predictions
+  WHERE caesura_target == caesura_pred AND caesura_target <> '--'
+  GROUP BY caesura_target, caesura_pred, meter_target, meter_pred
+  ORDER BY cnt DESC
+#+end_src
+
+#+RESULTS:
+| caesura | meter_target | meter_pred | cnt |
+|---------+--------------+------------+-----|
+|      7- | ХХ0          | ХХ0        | 185 |
+|      7- | ДД0          | ДД0        |  76 |
+|      7- | ЯЯ0          | ЯЯ0        |  41 |
+|      7- | Пен00        | ДД0        |   2 |
+|      3- | ХХ0          | ХЯ0        |   1 |
+
+Статистика предсказаний перебоев
+#+begin_src sqlite
+  SELECT
+      unstable_target,
+      unstable_pred,
+      COUNT(*) * 1.0 / SUM(COUNT(*)) OVER () AS global_ratio,
+      COUNT(*) AS cnt
+  FROM predictions
+  GROUP BY unstable_target, unstable_pred
+  ORDER BY unstable_target, unstable_pred;
+#+end_src
+
+#+RESULTS:
+| unstable_target | unstable_pred |         global_ratio |    cnt |
+|-----------------+---------------+----------------------+--------|
+|               0 |             0 |    0.999266137704537 | 137527 |
+|               1 |             0 | 0.000733862295463133 |    101 |
+
+Ошибки при определении дактиля
+#+begin_src sqlite
+  SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
+  FROM predictions
+  WHERE meter_target = 'Д00' AND meter_target <> meter_pred
+  GROUP BY meter_pred, accent_ok
+  ORDER BY cnt DESC
+  LIMIT 5
+#+end_src
+
+#+RESULTS:
+| meter_pred | accent_ok | cnt |
+|------------+-----------+-----|
+| Аф00       |         1 | 727 |
+| Дк00       |         0 | 213 |
+| Я00        |         0 | 118 |
+| Тк00       |         0 |  71 |
+| Х00        |         0 |  58 |
+
+Ошибки при определении гекзаметра:
+#+begin_src sqlite
+  SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
+  FROM predictions
+  WHERE meter_target = 'Гек00' AND meter_target <> meter_pred
+  GROUP BY meter_pred, accent_ok
+  ORDER BY cnt DESC
+  LIMIT 5
+#+end_src
+
+#+RESULTS:
+| meter_pred | accent_ok | cnt |
+|------------+-----------+-----|
+| Аф00       |         1 | 421 |
+| Л00        |         1 |  20 |
+| Тк00       |         0 |  18 |
+| Ак00       |         0 |  15 |
+| Дк00       |         0 |  12 |
+
+Распределение правильных предсказаний метра по количеству стоп в строке
+#+begin_src sqlite
+  SELECT
+      feet,
+      ROUND(AVG(meter_pred = meter_target), 3) AS correct_ratio,
+      COUNT(*) as cnt
+  FROM (
+      SELECT
+          meter_pred,
+          meter_target,
+          LENGTH(REPLACE(accent_target, '0', '')) AS feet
+      FROM predictions
+      WHERE meter_target <> 'С00' -- Исключаем силлабику
+  )
+  GROUP BY feet
+  ORDER BY feet;
+#+end_src
+
+#+RESULTS:
+| feet | correct_ratio |   cnt |
+|------+---------------+-------|
+|    0 |           0.5 |     8 |
+|    1 |         0.309 |   969 |
+|    2 |         0.836 |  7707 |
+|    3 |         0.911 | 28725 |
+|    4 |         0.958 | 59618 |
+|    5 |         0.967 | 24760 |
+|    6 |         0.878 | 14296 |
+|    7 |         0.722 |   449 |
+|    8 |         0.893 |   290 |
+|    9 |         0.423 |    26 |
+|   10 |         0.921 |    38 |
+|   11 |           0.4 |     5 |
+|   12 |         0.933 |    15 |
+|   13 |           0.0 |     1 |
+|   14 |           1.0 |     1 |
+|   15 |           0.0 |     1 |
+|   20 |           0.0 |     2 |
+|   26 |           0.0 |     1 |
