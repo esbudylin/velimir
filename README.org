@@ -69,8 +69,8 @@ the repository and run the scripts directly from the command line.
   Collects data on model accuracy. The data are collected from 5000
   poems from the original dataset, which were excluded from the
   training data. The collected data are dumped to
-  [[file:data/predictions.db]] as a SQLite database. The repository
-  includes an org-babel [[file:prediction-analysis.org][notebook]] with analytical queries to the database.
+  ~data/predictions.db~ as a SQLite database. The repository includes
+  an org-babel [[file:notebooks/prediction-analysis.org][notebook]] with analytical queries to the database.
   
 To run the test suite for the project, use
 #+begin_src sh
@@ -78,6 +78,34 @@ To run the test suite for the project, use
 #+end_src
 
 #+RESULTS:
+
+** How it works
+Velimir uses two sequential neural networks trained on a corpus of
+Russian poetry.
+
+The first model, accent detection, takes each line of a poem and
+predicts which syllables carry poetic stress. As inputs, it accepts
+binary masks showing line's linguistic accents and word boundaries. It
+also accepts mean linguistic accent rate accross the stanza for each
+syllable in the line.
+
+# TODO add an example
+
+The second model, meter classification, accepts the predicted poetic
+accents and detect the metrical form of the line.
+
+# TODO meter classification is a subject to change, add documentation
+# after improvements
+
+Validating the models on the test dataset shows 93.3% accuracy for
+accent detection and 92.7% accuracy for meter detection.
+
+Accuracy varies by meter type. The graph below shows accuracy of meter
+and accent detection contrasted with the frequency of each meter type
+in the test dataset, for meters with more than 1% presence.
+
+#+CAPTION: Frequency and accuracy per meter type
+[[file:notebooks/dual_axis.svg]]
 
 ** Data sources
 Velimir's models were trained on the data extracted from the poetic
@@ -94,7 +122,7 @@ depend on the original corpus files: ~build_dataset.py~ and
 ~validate_accentuator.py~.
 
 The directory [[file:data/accent_dicts]] includes files ~accent.dic~ and
-~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_accent]] repo. Minor changes
+~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_{accent}]] repo. Minor changes
 were made to ~accent1.dic~. The file ~accent2.dic~ was created
 entirely for this project.
 
