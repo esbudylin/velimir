@@ -172,7 +172,7 @@ def split_poems(
 ) -> tuple[list, list]:
     poems_l = list(poems)
 
-    rng = random.Random(42)
+    rng = random.Random(seed)
     rng.shuffle(poems_l)
 
     split = int(len(poems_l) * (1 - test_ratio))
