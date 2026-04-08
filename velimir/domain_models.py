@@ -1,5 +1,3 @@
-import itertools
-import statistics
 from enum import IntEnum
 from dataclasses import dataclass
 
@@ -130,9 +128,9 @@ class Meter:
     def decode(cls, data):
         meter, feet, clausula, unstable = data
         return cls(
-            meter=meter,
+            meter=MeterType(meter),
             feet=feet,
-            clausula=clausula,
+            clausula=Clausula(clausula),
             unstable=unstable,
         )
 
@@ -142,8 +140,9 @@ class Meter:
 @dataclass(frozen=True, slots=True)
 class MeterClass:
     meter_types: tuple[MeterType]
-    caesura: tuple[int]
-    unstable: bool
+    # позиции цезурных разделений относительно количества поэтических ударений в строке
+    caesura: tuple[float]
+    unstable: tuple[bool]
 
 
 @dataclass(slots=True)
@@ -155,10 +154,15 @@ class Line:
     syllable_masks: SyllableMasks
 
     def to_meterclass(self) -> MeterClass:
+        feet = sum(self.syllable_masks.poetic_accent_mask)
+
         return MeterClass(
             tuple(m.meter for m in self.meters),
-            tuple(self.caesura),
-            self.meters[0].unstable,
+            tuple(
+                sum(self.syllable_masks.poetic_accent_mask[:c]) / feet
+                for c in self.caesura
+            ),
+            tuple(m.unstable for m in self.meters),
         )
 
     def length(self):

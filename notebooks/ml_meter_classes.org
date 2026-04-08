@@ -13,12 +13,17 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 
   poems = load_poems_from_msgpack()
 
+  meter_class_examples = {}
   meter_class_counter = Counter()
+
   for poem_data in poems:
       poem = Poem.decode(poem_data)
-      for line in poem.lines:
+      for i, line in enumerate(poem.lines):
           mclass = line.to_meterclass()
           meter_class_counter[mclass] += 1
+
+          if mclass not in meter_class_examples: 
+              meter_class_examples[mclass] = (poem.path, i)
 
   print(f"Total of {meter_class_counter.total()} lines analyzed")
   print(f"{len(meter_class_counter)} meter classes identified")
@@ -26,7 +31,7 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 
 #+RESULTS:
 : Total of 2869064 lines analyzed
-: 212 meter classes identified
+: 195 meter classes identified
 
 #+begin_src python :results graphics file value :file notebooks/coverage_vs_threshold.svg
   import numpy as np
@@ -46,11 +51,12 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 
   vocab = []
 
-  for mclass, i in meter_class_counter.items():
+  for mclass, i in meter_class_counter.most_common():
       if i < MIN_COUNT:
           discarded += 1
           discarded_items += i
           continue
+
       vocab.append(mclass)
 
   print(f"Discarded {discarded} meter classes as too rare (represent {discarded_items} lines)")
@@ -59,9 +65,9 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 #+end_src
 
 #+RESULTS:
-: Discarded 181 meter classes as too rare (represent 3405 lines)
-: Discarded data represents 0.0011867982031770641 of lines
-: Total of 31 meter classes accepted
+: Discarded 173 meter classes as too rare (represent 3132 lines)
+: Discarded data represents 0.0010916452194862157 of lines
+: Total of 22 meter classes accepted
 
 Dump class vocab to a file
 #+begin_src python :results output
@@ -80,3 +86,58 @@ Dump class vocab to a file
 
 #+RESULTS:
 : dump meter classes to data/meter_vocab.jsonl
+
+Collect examples for selected classes (RNC files are required)
+#+begin_src python :results table
+  from bs4 import BeautifulSoup
+
+  from velimir.parsers import extract_lines
+  from velimir.io import read_poem_xml
+
+  examples = []
+
+  for mclass in vocab:
+      poem_path, line_id = meter_class_examples[mclass]
+
+      poem_xml = read_poem_xml(poem_path)
+      soup = BeautifulSoup(poem_xml, "xml")
+      lines = list(extract_lines(soup))
+
+      line = lines[line_id]
+      caesura_repr = list(map(lambda c: round(c, 3), mclass.caesura))
+
+      meter_acc = []
+      for m, u in zip(mclass.meter_types, mclass.unstable):
+          mstr = m.to_str()
+          if u:
+              mstr += "*"
+          meter_acc.append(mstr)
+              
+      examples.append((line.text, "~".join(meter_acc), caesura_repr or "-", poem_path, meter_class_counter[mclass]))
+
+  examples
+#+end_src
+
+#+RESULTS:
+| Ещѐ вкруг со̀лнцев нѐ враща̀лись                            | Я     | -       | xix/1790-1810_poets/poets-001 | 1472270 |
+| Стра̀шна о̀трасль днѐй небѐсных,                            | Х     | -       | xix/1790-1810_poets/poets-008 |  514430 |
+| В осьмисо̀т во двадца̀том году,                             | Ан    | -       | xix/1790-1810_poets/poets-111 |  210449 |
+| Прѐобразѝтель словѐсности на̀шей пѝшет, об нѐй рассужда̀я,  | Дк    | -       | xix/1790-1810_poets/poets-109 |  205477 |
+| Игра̀йте, пото̀ки, на мя̀гких луга̀х,                         | Аф    | -       | xix/1790-1810_poets/poets-026 |  201526 |
+| Лѐто паля̀ще летѝт;                                        | Д     | -       | xix/1790-1810_poets/poets-014 |  135253 |
+| На широ̀ком Каменно̀м мосту,                                | Тк    | -       | xix/1790-1810_poets/poets-111 |   39623 |
+| Му̀з благода̀тных сла̀вный любѝмец, владѐющий лѝрой,         | Гек   | -       | xix/1790-1810_poets/poets-109 |   30943 |
+| Восста̀нут ли бессмы̀сленные на му̀дрых и сла̀бые на крѐпких! | Ак    | -       | xix/1790-1810_poets/poets-290 |   15998 |
+| Богиня моя! ты в рощах свящѐнных,                         | С     | -       | xix/volsnx/vols-033           |   10699 |
+| Пусть злы̀е лю̀ди венѐц сплета̀ют,                           | Я~Я   | (0.5)   | xix/1790-1810_poets/poets-439 |    7627 |
+| О̀ пита̀тельница̀ река̀ Нева̀                                  | Л     | -       | xix/1790-1810_poets/poets-162 |    5749 |
+| Мѝрный зла̀к полѐй ѝссушѝла о̀сень;                         | Х~Х   | (0.5)   | xix/1790-1810_poets/poets-170 |    4966 |
+| Слы̀шать в гумнѐ на току̀ бо̀й в лад цепо̀в молотя̀щих:        | Д~Д   | (0.5)   | xix/1790-1810_poets/poets-109 |    3738 |
+| Лето кра̀сное! проходѝ скорей,                             | Ан~Ан | (0.5)   | xix/1790-1810_poets/poets-116 |    1957 |
+| Со̀вет в сѐрдце во̀пиѐт, пла̀чу ѝ рыда̀ю!                     | Х~Х   | (0.571) | xix/1790-1810_poets/psec-153  |    1833 |
+| Ѐму о̀пера̀тор                                              | Х*    | -       | xix/1830/1830-255             |    1095 |
+| За зна̀мя отчѝзны гру̀дью стоя̀ть!                           | Дк    | (0.5)   | xix/1820/1820-271             |     790 |
+| Сво̀да пещѐрного,                                          | Я*    | -       | xix/konevskoj/konev-010       |     525 |
+| Ты̀, что сто̀лько кра̀т тѐшила в жѝзни меня̀.                 | Пен   | -       | xix/1790-1810_poets/poets-319 |     387 |
+| Однѝ ли несча̀стные знако̀мы с тобо̀ю,                       | Аф~Аф | (0.5)   | xix/1790-1810_poets/psec-012  |     317 |
+| Там далѐко-далѐко, где навѝс очаро̀ванный лѐс,             | Ан~Ан | (0.4)   | xix/lochvicka/mloch-186       |     280 |
