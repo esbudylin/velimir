@@ -24,6 +24,8 @@ ACCENT_DICT_PATHS = [
 ]
 PREDICTION_DB_PATH = os.path.join(DATA_DIRECTORY, "predictions.db")
 
+METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
+
 
 class InputDialect(csv.unix_dialect):
     delimiter = ";"

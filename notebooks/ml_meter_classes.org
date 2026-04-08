@@ -1,0 +1,82 @@
+#+PROPERTY: header-args :dir ..
+#+PROPERTY: header-args:python :session meter-classes
+
+Analyze meter classes present in the dataset. Selected meter classes are used in model training.
+
+#+begin_src python :results output
+  from collections import Counter
+  from itertools import islice
+  from dataclasses import dataclass
+
+  from velimir.domain_models import Poem, MeterType
+  from velimir.io import load_poems_from_msgpack
+
+  poems = load_poems_from_msgpack()
+
+  meter_class_counter = Counter()
+  for poem_data in poems:
+      poem = Poem.decode(poem_data)
+      for line in poem.lines:
+          mclass = line.to_meterclass()
+          meter_class_counter[mclass] += 1
+
+  print(f"Total of {meter_class_counter.total()} lines analyzed")
+  print(f"{len(meter_class_counter)} meter classes identified")
+#+end_src
+
+#+RESULTS:
+: Total of 2869064 lines analyzed
+: 212 meter classes identified
+
+#+begin_src python :results graphics file value :file notebooks/coverage_vs_threshold.svg
+  import numpy as np
+  import matplotlib.pyplot as plt
+
+  # TODO
+#+end_src
+
+#+RESULTS:
+[[file:coverage_vs_threshold.svg]]
+
+#+begin_src python :results output
+  MIN_COUNT = 250
+
+  discarded = 0
+  discarded_items = 0
+
+  vocab = []
+
+  for mclass, i in meter_class_counter.items():
+      if i < MIN_COUNT:
+          discarded += 1
+          discarded_items += i
+          continue
+      vocab.append(mclass)
+
+  print(f"Discarded {discarded} meter classes as too rare (represent {discarded_items} lines)")
+  print(f"Discarded data represents {discarded_items / meter_class_counter.total()} of lines")
+  print(f"Total of {len(vocab)} meter classes accepted")
+#+end_src
+
+#+RESULTS:
+: Discarded 181 meter classes as too rare (represent 3405 lines)
+: Discarded data represents 0.0011867982031770641 of lines
+: Total of 31 meter classes accepted
+
+Dump class vocab to a file
+#+begin_src python :results output
+  import json
+  from dataclasses import asdict
+
+  from velimir.settings import METER_VOCAB_PATH
+
+  with open(METER_VOCAB_PATH, "w") as f:
+      for mclass in vocab:
+          json.dump(asdict(mclass), f)
+          f.write("\n")
+
+  print(f"dump meter classes to {METER_VOCAB_PATH}")
+#+end_src
+
+#+RESULTS:
+: dump meter classes to data/meter_vocab.jsonl

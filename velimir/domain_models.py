@@ -137,6 +137,15 @@ class Meter:
         )
 
 
+# Simlified representation of a line's meter
+# used for classification in ML models
+@dataclass(frozen=True, slots=True)
+class MeterClass:
+    meter_types: tuple[MeterType]
+    caesura: tuple[int]
+    unstable: bool
+
+
 @dataclass(slots=True)
 class Line:
     # строка может содержать несколько метров: например, в случае цезурного разделения строки
@@ -144,6 +153,13 @@ class Line:
     # позиции слогов, после которых располагается цезура
     caesura: list[int]
     syllable_masks: SyllableMasks
+
+    def to_meterclass(self) -> MeterClass:
+        return MeterClass(
+            tuple(m.meter for m in self.meters),
+            tuple(self.caesura),
+            self.meters[0].unstable,
+        )
 
     def length(self):
         # маски - равной длины, здесь можно использовать любую маску
