@@ -24,10 +24,11 @@
 
 Процент попаданий для предсказаний метра и ритма
 
-NB: числа точности в логе выше, т.к. при логировании используется
-расчёт по токенам, а не сравнение формул целиком.  Например, при
-расчёте по токенам учитывается схожесть между ритмическими формулами
-"0101" и "1001". SQL-запрос учитывает только полные совпадения.
+NB: точность для ударений в логе выше, т.к. при логировании
+используется расчёт по токенам, а не сравнение формул целиком.
+Например, при расчёте по токенам учитывается схожесть между
+ритмическими формулами "0101" и "1001". SQL-запрос учитывает только
+полные совпадения.
 #+begin_src sqlite
   SELECT
     ROUND(AVG(accent_target == accent_pred), 3) as accent_ok,
@@ -45,7 +46,7 @@ NB: числа точности в логе выше, т.к. при логиро
 #+name: accuracy_per_meter
 #+begin_src sqlite
   SELECT * FROM (
-  SELECT RTRIM(meter_target, '0') as meter,
+  SELECT meter_target as meter,
       ROUND(AVG(accent_target == accent_pred), 3) as accent_ok,
       ROUND(AVG(meter_target == meter_pred), 3) as meter_ok,
       ROUND(COUNT(*) * 1.0 / SUM(COUNT(*)) OVER (), 4) AS freq
@@ -112,7 +113,7 @@ NB: числа точности в логе выше, т.к. при логиро
 правильных предсказаний.
 #+begin_src sqlite
   SELECT
-      RTRIM(meter_target, '0') as meter,
+      meter_target as meter,
       ROUND(AVG(CASE WHEN accent_target == accent_pred THEN meter_target == meter_pred END), 3) AS meter_ok_given_accent_ok,
       ROUND(AVG(CASE WHEN accent_target <> accent_pred THEN meter_target == meter_pred END), 3) AS meter_ok_given_accent_bad,
       ROUND(AVG(accent_pred == accent_target), 3) AS accent_ok_total,
@@ -156,11 +157,12 @@ NB: числа точности в логе выше, т.к. при логиро
 #+begin_src sqlite
   SELECT
       caesura_target AS caesura,
+      caesura_pred,
       meter_target,
       meter_pred,
       COUNT(*) AS cnt
   FROM predictions
-  WHERE caesura_target == caesura_pred AND caesura_target <> '--'
+  WHERE caesura_target <> ''
   GROUP BY caesura_target, caesura_pred, meter_target, meter_pred
   ORDER BY cnt DESC
 #+end_src
@@ -174,29 +176,11 @@ NB: числа точности в логе выше, т.к. при логиро
 |      7- | Пен00        | ДД0        |   2 |
 |      3- | ХХ0          | ХЯ0        |   1 |
 
-Статистика предсказаний перебоев
-#+begin_src sqlite
-  SELECT
-      unstable_target,
-      unstable_pred,
-      COUNT(*) * 1.0 / SUM(COUNT(*)) OVER () AS global_ratio,
-      COUNT(*) AS cnt
-  FROM predictions
-  GROUP BY unstable_target, unstable_pred
-  ORDER BY unstable_target, unstable_pred;
-#+end_src
-
-#+RESULTS:
-| unstable_target | unstable_pred |         global_ratio |    cnt |
-|-----------------+---------------+----------------------+--------|
-|               0 |             0 |    0.999266137704537 | 137527 |
-|               1 |             0 | 0.000733862295463133 |    101 |
-
 Ошибки при определении дактиля
 #+begin_src sqlite
   SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
   FROM predictions
-  WHERE meter_target = 'Д00' AND meter_target <> meter_pred
+  WHERE meter_target = 'Д' AND meter_target <> meter_pred
   GROUP BY meter_pred, accent_ok
   ORDER BY cnt DESC
   LIMIT 5
@@ -215,7 +199,7 @@ NB: числа точности в логе выше, т.к. при логиро
 #+begin_src sqlite
   SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
   FROM predictions
-  WHERE meter_target = 'Гек00' AND meter_target <> meter_pred
+  WHERE meter_target = 'Гек' AND meter_target <> meter_pred
   GROUP BY meter_pred, accent_ok
   ORDER BY cnt DESC
   LIMIT 5
