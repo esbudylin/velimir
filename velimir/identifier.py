@@ -6,9 +6,9 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 from . import accentuator, parsers
-from .domain_models import Clausula, Meter, MeterType
+from .domain_models import Clausula, Meter, MeterType, MeterClass
 from .io import load_models
-from .ml_loader import compute_mean_ling_accents_per_stanza
+from .ml_loader import compute_mean_ling_accents_per_stanza, MeterClassRegistry
 
 
 @dataclass
@@ -117,11 +117,7 @@ def detect_meter(model, device, accent_pred):
     with torch.no_grad():
         pred = model(accent_pred)
 
-    pred_meter = pred[:, :3]
-    pred_caesura = pred[:, 3:5]
-    pred_unstable = pred[:, 5]
-
-    return pred_meter, pred_caesura, pred_unstable
+    return torch.argmax(pred, dim=1)
 
 
 def extract_meter_accent_mask(
@@ -149,15 +145,12 @@ def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
     return Clausula(len(list(last_syllables_without_accent)))
 
 
-def process_line(meta, pmask) -> ProcessedLine:
-    meter_codes, caesura_positions, unstable = meta
-    meter_types = []
+def process_line(mc: MeterClass, pmask: list[bool]) -> ProcessedLine:
     line_meters = []
 
-    for code in meter_codes:
-        meter_types.append(MeterType(code))
+    caesura_positions = mc.decode_caesura_positions(pmask)
 
-    for i, meter_type in enumerate(meter_types):
+    for i, meter_type in enumerate(mc.meter_types):
         meter_mask = extract_meter_accent_mask(i, caesura_positions, pmask)
 
         line_meters.append(
@@ -165,7 +158,7 @@ def process_line(meta, pmask) -> ProcessedLine:
                 meter=meter_type,
                 feet=len([i for i in meter_mask if i]),
                 clausula=extract_clausula(meter_mask),
-                unstable=unstable,
+                unstable=mc.unstable[i],
             )
         )
 
@@ -191,7 +184,7 @@ def process_lines(
         lines,
         stanza_breaks,
     )
-    meter_preds, caesura_preds, unstable_preds = detect_meter(
+    meter_preds = detect_meter(
         meter_model,
         device,
         poetic_accent_masks,
@@ -202,11 +195,10 @@ def process_lines(
 
     meters_list = []
     for i in range(len(lines)):
-        meter_codes = filter_padding(meter_preds[i].round().int().tolist())
-        caesura_positions = filter_padding(caesura_preds[i].round().int().tolist())
-        unstable = (torch.sigmoid(unstable_preds[i]) > 0.5).item()
+        mi = meter_preds[i]
+        mc = MeterClassRegistry.int_to_mc(mi)
 
-        meters_list.append((meter_codes, caesura_positions, unstable))
+        meters_list.append(mc)
 
     poetic_accent_masks_list = []
     for mask in poetic_accent_masks:
@@ -214,9 +206,9 @@ def process_lines(
         poetic_accent_masks_list.append(valid_mask.cpu().numpy().tolist())
 
     res = []
-    for i, (meta, pmask) in enumerate(zip(meters_list, poetic_accent_masks_list)):
+    for i, (mc, pmask) in enumerate(zip(meters_list, poetic_accent_masks_list)):
         try:
-            pl = process_line(meta, pmask)
+            pl = process_line(mc, pmask)
             res.append(pl)
         except Exception as e:
             logging.error("Failed to process line: %s", lines[i])

@@ -78,7 +78,9 @@ Dump class vocab to a file
 
   with open(METER_VOCAB_PATH, "w") as f:
       for mclass in vocab:
-          json.dump(asdict(mclass), f)
+          entry = asdict(mclass)
+          entry["count"] = meter_class_counter[mclass]
+          json.dump(entry, f)
           f.write("\n")
 
   print(f"dump meter classes to {METER_VOCAB_PATH}")
@@ -93,6 +95,7 @@ Collect examples for selected classes (RNC files are required)
 
   from velimir.parsers import extract_lines
   from velimir.io import read_poem_xml
+  from velimir.validation import meters_to_str
 
   examples = []
 
@@ -106,14 +109,7 @@ Collect examples for selected classes (RNC files are required)
       line = lines[line_id]
       caesura_repr = list(map(lambda c: round(c, 3), mclass.caesura))
 
-      meter_acc = []
-      for m, u in zip(mclass.meter_types, mclass.unstable):
-          mstr = m.to_str()
-          if u:
-              mstr += "*"
-          meter_acc.append(mstr)
-              
-      examples.append((line.text, "~".join(meter_acc), caesura_repr or "-", poem_path, meter_class_counter[mclass]))
+      examples.append((line.text, meters_to_str(mclass), caesura_repr or "-", poem_path, meter_class_counter[mclass]))
 
   examples
 #+end_src

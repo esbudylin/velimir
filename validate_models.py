@@ -3,7 +3,7 @@ import logging
 import torch
 
 from velimir.io import load_models, load_poems_from_msgpack
-from velimir.ml_loader import split_poems
+from velimir.ml_loader import split_poems, MeterClassRegistry
 from velimir.settings import LoggingSettings
 from velimir.validation import validate_models
 
@@ -25,5 +25,6 @@ def validate():
 
 if __name__ == "__main__":
     logging.basicConfig(**LoggingSettings().model_dump())
+    MeterClassRegistry.initialize()
 
     validate()

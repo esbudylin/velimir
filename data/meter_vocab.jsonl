@@ -1,22 +1,22 @@
-{"meter_types": [0], "caesura": [], "unstable": [false]}
-{"meter_types": [1], "caesura": [], "unstable": [false]}
-{"meter_types": [3], "caesura": [], "unstable": [false]}
-{"meter_types": [5], "caesura": [], "unstable": [false]}
-{"meter_types": [4], "caesura": [], "unstable": [false]}
-{"meter_types": [2], "caesura": [], "unstable": [false]}
-{"meter_types": [6], "caesura": [], "unstable": [false]}
-{"meter_types": [9], "caesura": [], "unstable": [false]}
-{"meter_types": [7], "caesura": [], "unstable": [false]}
-{"meter_types": [11], "caesura": [], "unstable": [false]}
-{"meter_types": [0, 0], "caesura": [0.5], "unstable": [false, false]}
-{"meter_types": [8], "caesura": [], "unstable": [false]}
-{"meter_types": [1, 1], "caesura": [0.5], "unstable": [false, false]}
-{"meter_types": [2, 2], "caesura": [0.5], "unstable": [false, false]}
-{"meter_types": [3, 3], "caesura": [0.5], "unstable": [false, false]}
-{"meter_types": [1, 1], "caesura": [0.5714285714285714], "unstable": [false, false]}
-{"meter_types": [1], "caesura": [], "unstable": [true]}
-{"meter_types": [5], "caesura": [0.5], "unstable": [false]}
-{"meter_types": [0], "caesura": [], "unstable": [true]}
-{"meter_types": [10], "caesura": [], "unstable": [false]}
-{"meter_types": [4, 4], "caesura": [0.5], "unstable": [false, false]}
-{"meter_types": [3, 3], "caesura": [0.4], "unstable": [false, false]}
+{"meter_types": [0], "caesura": [], "unstable": [false], "count": 1472270}
+{"meter_types": [1], "caesura": [], "unstable": [false], "count": 514430}
+{"meter_types": [3], "caesura": [], "unstable": [false], "count": 210449}
+{"meter_types": [5], "caesura": [], "unstable": [false], "count": 205477}
+{"meter_types": [4], "caesura": [], "unstable": [false], "count": 201526}
+{"meter_types": [2], "caesura": [], "unstable": [false], "count": 135253}
+{"meter_types": [6], "caesura": [], "unstable": [false], "count": 39623}
+{"meter_types": [9], "caesura": [], "unstable": [false], "count": 30943}
+{"meter_types": [7], "caesura": [], "unstable": [false], "count": 15998}
+{"meter_types": [11], "caesura": [], "unstable": [false], "count": 10699}
+{"meter_types": [0, 0], "caesura": [0.5], "unstable": [false, false], "count": 7627}
+{"meter_types": [8], "caesura": [], "unstable": [false], "count": 5749}
+{"meter_types": [1, 1], "caesura": [0.5], "unstable": [false, false], "count": 4966}
+{"meter_types": [2, 2], "caesura": [0.5], "unstable": [false, false], "count": 3738}
+{"meter_types": [3, 3], "caesura": [0.5], "unstable": [false, false], "count": 1957}
+{"meter_types": [1, 1], "caesura": [0.5714285714285714], "unstable": [false, false], "count": 1833}
+{"meter_types": [1], "caesura": [], "unstable": [true], "count": 1095}
+{"meter_types": [5], "caesura": [0.5], "unstable": [false], "count": 790}
+{"meter_types": [0], "caesura": [], "unstable": [true], "count": 525}
+{"meter_types": [10], "caesura": [], "unstable": [false], "count": 387}
+{"meter_types": [4, 4], "caesura": [0.5], "unstable": [false, false], "count": 317}
+{"meter_types": [3, 3], "caesura": [0.4], "unstable": [false, false], "count": 280}

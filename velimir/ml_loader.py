@@ -1,3 +1,4 @@
+import json
 import logging
 import random
 from dataclasses import dataclass
@@ -5,8 +6,8 @@ from dataclasses import dataclass
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
-
-from .domain_models import Poem
+from velimir.domain_models import MeterClass, Poem
+from velimir.settings import METER_VOCAB_PATH
 
 
 def get_loader(poems, **kwargs):
@@ -18,7 +19,7 @@ def get_loader(poems, **kwargs):
 class Sample:
     accent_input: torch.Tensor
     poetic_accents: torch.Tensor
-    meta: torch.Tensor  # meter, caesuras, unstable
+    meter_class: torch.Tensor
 
 
 class PoetryDataset(Dataset):
@@ -26,6 +27,8 @@ class PoetryDataset(Dataset):
         logging.info("Loading poetry dataset")
 
         self.samples: list[Sample] = []
+        rare_meters_excluded = 0
+
         for poem_data in poems:
             poem = Poem.decode(poem_data)
 
@@ -48,6 +51,15 @@ class PoetryDataset(Dataset):
                     logging.error("Empty line in text %s. Skipping...", poem.path)
                     continue
 
+                meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
+
+                if meter_class is None:
+                    # Исключаем редкие типы метров из датасета
+                    rare_meters_excluded += 1
+                    continue
+
+                meter_class_t = torch.tensor(meter_class, dtype=torch.long)
+
                 stanza_stat = stanza_stats[current_stanza][: line.length()]
 
                 accent_input = torch.stack(
@@ -60,33 +72,22 @@ class PoetryDataset(Dataset):
                 )
                 poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
 
-                meter = fixed_size_tensor(
-                    [int(m.meter) for m in line.meters],
-                    size=3,
-                )
-
-                caesura = fixed_size_tensor(
-                    line.caesura,
-                    size=2,
-                )
-
-                unstable_flag = any(m.unstable for m in line.meters)
-                if unstable_flag:
-                    unstable = torch.tensor([1], dtype=torch.float32)
-                else:
-                    unstable = torch.tensor([0], dtype=torch.float32)
-
-                meta = torch.cat([meter, caesura, unstable])
-
                 self.samples.append(
                     Sample(
                         accent_input=accent_input,
                         poetic_accents=poetic,
-                        meta=meta,
+                        meter_class=meter_class_t,
                     )
                 )
 
-        logging.info("Dataset loading finished")
+        logging.info(
+            "Dataset loading finished. %d samples created",
+            len(self.samples),
+        )
+        logging.info(
+            "%d lines are excluded from dataset as having rare meter types",
+            rare_meters_excluded,
+        )
 
     def __len__(self):
         return len(self.samples)
@@ -95,19 +96,75 @@ class PoetryDataset(Dataset):
         return self.samples[idx]
 
 
-def fixed_size_tensor(values, size, dtype=torch.float32, padding_value=-1):
-    values = list(values)
-    if len(values) < size:
-        values += [padding_value] * (size - len(values))
-    else:
-        values = values[:size]
-    return torch.tensor(values, dtype=dtype)
+class MeterClassRegistry:
+    _vocab: list[MeterClass] = None
+    _mc_to_idx: dict[MeterClass, int] = None
+    _counts: list[int] = None
+    _weights: torch.Tensor = None
+
+    @classmethod
+    def initialize(cls):
+        if cls._vocab is not None:
+            return  # already initialized
+
+        vocab = []
+        counts = []
+
+        with open(METER_VOCAB_PATH, "r") as f:
+            for line in f:
+                data = json.loads(line)
+
+                mc = MeterClass.from_dict(data)
+                mc_count = data["count"]
+
+                vocab.append(mc)
+                counts.append(mc_count)
+
+        cls._vocab = vocab
+        cls._counts = counts
+        cls._mc_to_idx = {mc: idx for idx, mc in enumerate(vocab)}
+
+    @classmethod
+    def mc_to_int(cls, mc: MeterClass) -> int | None:
+        return cls._mc_to_idx.get(mc)
+
+    @classmethod
+    def int_to_mc(cls, i: int) -> MeterClass:
+        if i < 0:
+            raise ValueError("Meter class index cannot be negative")
+
+        return cls._vocab[i]
+
+    @classmethod
+    def num(cls) -> int:
+        return len(cls._vocab)
+
+    @classmethod
+    def get_weights(cls, mode: str = "sqrt_inv") -> torch.Tensor:
+        if cls._weights is not None:
+            return cls._weights
+
+        counts = torch.tensor(cls._counts, dtype=torch.float32)
+        counts = torch.clamp(counts, min=1)
+
+        if mode == "inv":
+            weights = 1.0 / counts
+        elif mode == "sqrt_inv":
+            weights = 1.0 / torch.sqrt(counts)
+        elif mode == "log_inv":
+            weights = 1.0 / torch.log1p(counts)
+        else:
+            raise ValueError(f"Unknown weight mode: {mode}")
+
+        weights = weights / weights.sum()
+        cls._weights = weights
+        return weights
 
 
 def collate(batch: list[Sample]):
     accent_input = [b.accent_input for b in batch]
     poetic = [b.poetic_accents for b in batch]
-    meta = [b.meta for b in batch]
+    meters = [b.meter_class for b in batch]
 
     accent_input = pad_sequence(
         accent_input,
@@ -119,12 +176,11 @@ def collate(batch: list[Sample]):
         batch_first=True,
         padding_value=-1,
     )
-    meta = torch.stack(meta)
 
     return Sample(
         accent_input=accent_input,
         poetic_accents=poetic,
-        meta=meta,
+        meter_class=torch.stack(meters),
     )
 
 

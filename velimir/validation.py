@@ -4,8 +4,8 @@ from collections import deque
 
 import torch
 
-from .domain_models import MeterType, Poem
-from .ml_loader import get_loader
+from .domain_models import Poem, MeterClass
+from .ml_loader import get_loader, MeterClassRegistry
 from .settings import PREDICTION_DB_PATH
 
 error_db_schema = """
@@ -17,17 +17,15 @@ CREATE TABLE IF NOT EXISTS predictions (
     accent_pred TEXT,
     accent_target TEXT,
 
-    -- Meter (fixed size)
+    meter_class_pred INTEGER,
+    meter_class_target INTEGER,
+
+    -- Meter formula and caesura are converted from meter class
     meter_pred TEXT,
     meter_target TEXT,
 
-    -- Caesura
     caesura_pred TEXT,
     caesura_target TEXT,
-
-    -- Unstable
-    unstable_pred INTEGER,
-    unstable_target INTEGER,
 
     UNIQUE(poem_path, line_idx) ON CONFLICT FAIL
 );
@@ -48,22 +46,20 @@ def rhythm_to_str(t):
     return "".join(str(int(x)) if x != -1 else "" for x in t.tolist())
 
 
-def meters_to_str(li):
-    res = []
-    for m in li:
-        if m != -1:
-            try:
-                res.append(MeterType(m).to_str())
-            except ValueError:
-                res.append("?")
-        else:
-            res.append("0")
+def meters_to_str(mc: MeterClass):
+    acc = []
 
-    return "".join(res)
+    for m, u in zip(mc.meter_types, mc.unstable):
+        mstr = m.to_str()
+        if u:
+            mstr += "*"
+        acc.append(mstr)
+
+    return "~".join(acc)
 
 
-def caesura_to_str(t):
-    return "".join(str(int(x)) if x != -1 else "-" for x in t.tolist())
+def caesura_to_str(li):
+    return ",".join(str(round(x, 3)) for x in li)
 
 
 def validate_models(
@@ -88,12 +84,6 @@ def validate_models(
     meter_correct = 0
     meter_total = 0
 
-    unstable_correct = 0
-    unstable_total = 0
-
-    caesura_correct = 0
-    caesura_total = 0
-
     poem_counts = deque(
         (
             {
@@ -110,7 +100,7 @@ def validate_models(
             accent_input = batch.accent_input.to(device)
 
             poetic_target = batch.poetic_accents.to(device)
-            meta_target = batch.meta.to(device)  # (B, 6)
+            meter_target = batch.meter_class.to(device)
 
             # =====================
             # Accent
@@ -128,40 +118,22 @@ def validate_models(
             # Meter input
             # =====================
             accent_pred_masked = accent_pred.masked_fill(~mask, -1)
-            meter_pred = meter_model(accent_pred_masked.unsqueeze(-1))
-
-            pred_meter = meter_pred[:, :3]
-            pred_caesura = meter_pred[:, 3:5]
-            pred_unstable = meter_pred[:, 5]
-
-            target_meter = meta_target[:, :3]
-            target_caesura = meta_target[:, 3:5]
-            target_unstable = meta_target[:, 5]
+            meter_pred = torch.argmax(
+                meter_model(accent_pred_masked.unsqueeze(-1)),
+                dim=1,
+            )
 
             # =====================
             # Meter
             # =====================
-            meter_correct += (pred_meter.round() == target_meter).sum().item()
-            meter_total += torch.numel(target_meter)
-
-            # =====================
-            # Caesura (integer positions)
-            # =====================
-            caesura_correct += (pred_caesura.round() == target_caesura).sum().item()
-            caesura_total += torch.numel(target_caesura)
-
-            # =====================
-            # Unstable (binary)
-            # =====================
-            unstable_pred = (torch.sigmoid(pred_unstable) > 0.5).float()
-            unstable_correct += (unstable_pred == target_unstable).sum().item()
-            unstable_total += torch.numel(target_unstable)
+            meter_correct += (meter_pred.round() == meter_target).sum().item()
+            meter_total += torch.numel(meter_target)
 
             # =====================
             # DB logging
             # =====================
             rows = []
-            batch_size_actual = pred_meter.size(0)
+            batch_size_actual = meter_pred.size(0)
 
             for line_idx in range(batch_size_actual):
                 current_poem = poem_counts[0]
@@ -169,14 +141,17 @@ def validate_models(
                 accent_p = rhythm_to_str(accent_pred_masked[line_idx])
                 accent_t = rhythm_to_str(poetic_target[line_idx])
 
-                meter_p = meters_to_str(pred_meter[line_idx].round().tolist())
-                meter_t = meters_to_str(target_meter[line_idx].tolist())
+                meter_class_p_i = meter_pred[line_idx].round().item()
+                meter_class_t_i = meter_target[line_idx].item()
 
-                caesura_p = caesura_to_str(pred_caesura[line_idx].round())
-                caesura_t = caesura_to_str(target_caesura[line_idx])
+                meter_class_p = MeterClassRegistry.int_to_mc(meter_class_p_i)
+                meter_class_t = MeterClassRegistry.int_to_mc(meter_class_t_i)
 
-                unstable_p = int(unstable_pred[line_idx].item())
-                unstable_t = int(target_unstable[line_idx].item())
+                meter_p = meters_to_str(meter_class_p)
+                meter_t = meters_to_str(meter_class_t)
+
+                caesura_p = caesura_to_str(meter_class_p.caesura)
+                caesura_t = caesura_to_str(meter_class_t.caesura)
 
                 rows.append(
                     (
@@ -184,12 +159,12 @@ def validate_models(
                         current_poem["lines_consumed"],
                         accent_p,
                         accent_t,
+                        meter_class_p_i,
+                        meter_class_t_i,
                         meter_p,
                         meter_t,
                         caesura_p,
                         caesura_t,
-                        unstable_p,
-                        unstable_t,
                     )
                 )
 
@@ -203,9 +178,9 @@ def validate_models(
                 INSERT INTO predictions (
                     poem_path, line_idx,
                     accent_pred, accent_target,
+                    meter_class_pred, meter_class_target,
                     meter_pred, meter_target,
-                    caesura_pred, caesura_target,
-                    unstable_pred, unstable_target
+                    caesura_pred, caesura_target
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -218,6 +193,4 @@ def validate_models(
     return {
         "accent_accuracy": total_acccent_correct / accent_total if accent_total else 0,
         "meter_accuracy": meter_correct / meter_total if meter_total else 0,
-        "caesura_accuracy": caesura_correct / caesura_total if caesura_total else 0,
-        "unstable_accuracy": unstable_correct / unstable_total if unstable_total else 0,
     }

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .ml_loader import get_loader
+from .ml_loader import get_loader, MeterClassRegistry
 
 
 class AccentModel(nn.Module):
@@ -68,9 +68,10 @@ class MeterModel(nn.Module):
         super().__init__()
 
         input_size = 1
-        meta_size = 6
 
-        hidden = 64
+        hidden = 128
+
+        num_classes = MeterClassRegistry.num()
 
         self.encoder = nn.LSTM(
             input_size=input_size,
@@ -81,7 +82,8 @@ class MeterModel(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(hidden * 2, hidden),
             nn.ReLU(),
-            nn.Linear(hidden, meta_size),
+            nn.Dropout(0.1),
+            nn.Linear(hidden, num_classes),
         )
         self.attn = nn.Linear(hidden * 2, 1)
 
@@ -111,35 +113,21 @@ def train_meter(model, loader, optimizer, device):
     model.train()
     total_loss = 0
 
+    class_weights = MeterClassRegistry.get_weights().to(device, non_blocking=True)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+
     for batch in loader:
         poetic_accents = batch.poetic_accents.to(device, non_blocking=True)
         # add feature dimension
         poetic_accents = poetic_accents.unsqueeze(-1)
 
-        meter_target = batch.meta.to(device, non_blocking=True)
+        meter_target = batch.meter_class.to(device, non_blocking=True)
 
         optimizer.zero_grad()
 
-        logits = model(poetic_accents)  # (batch, meta_size)
+        logits = model(poetic_accents)
 
-        meter_part = logits[:, :3]
-        caesura_part = logits[:, 3:5]
-        unstable_part = logits[:, 5]
-
-        meter_loss = F.mse_loss(
-            meter_part,
-            meter_target[:, :3],
-        )
-        caesura_loss = F.mse_loss(
-            caesura_part,
-            meter_target[:, 3:5],
-        )
-        unstable_loss = F.binary_cross_entropy_with_logits(
-            unstable_part,
-            meter_target[:, 5],
-        )
-
-        loss = meter_loss + caesura_loss + unstable_loss
+        loss = loss_fn(logits, meter_target)
 
         if torch.isnan(loss) or torch.isinf(loss):
             logging.error("Meter model: skipping invalid batch")
@@ -157,7 +145,7 @@ def train_meter(model, loader, optimizer, device):
 def train_models(
     poems,
     epochs=9,
-    batch_size=128,
+    batch_size=2048,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

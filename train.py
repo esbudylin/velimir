@@ -6,7 +6,7 @@ import torch
 
 from velimir.io import load_poems_from_msgpack
 from velimir.ml import train_models
-from velimir.ml_loader import split_poems
+from velimir.ml_loader import split_poems, MeterClassRegistry
 from velimir.settings import (
     ACCENT_MODEL,
     ACCENT_TEST_MODEL,
@@ -53,5 +53,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logging.basicConfig(**LoggingSettings().model_dump())
+    MeterClassRegistry.initialize()
 
     train(test_run=args.test_run)
