@@ -181,43 +181,56 @@ NB: точность для ударений в логе выше, т.к. при
 |     0.5 |              | Дк           | Тк         |         1 |  11 |
 |     0.5 |              | Я~Я          | Дк         |         1 |  11 |
 
-Ошибки при определении дактиля
+View для сбора ошибок при определении метра
 #+begin_src sqlite
-  SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
+  CREATE VIEW meter_errors AS
+  SELECT 
+      meter_target,
+      meter_pred,
+      accent_pred == accent_target AS accent_ok,
+      COUNT(*) as cnt
   FROM predictions
-  WHERE meter_target = 'Д' AND meter_target <> meter_pred
-  GROUP BY meter_pred, accent_ok
-  ORDER BY cnt DESC
-  LIMIT 5
+  WHERE meter_target <> meter_pred
+  GROUP BY meter_target, meter_pred, accent_ok;
 #+end_src
 
 #+RESULTS:
-| meter_pred | accent_ok | cnt |
-|------------+-----------+-----|
-| Дк         |         0 | 231 |
-| Я          |         0 |  80 |
-| Тк         |         0 |  50 |
-| Гек        |         1 |  35 |
-| Х          |         0 |  32 |
 
-Ошибки при определении гекзаметра:
+Ошибки при определении дольника
 #+begin_src sqlite
-  SELECT meter_pred, accent_pred == accent_target AS accent_ok, COUNT(*) as cnt
-  FROM predictions
-  WHERE meter_target = 'Гек' AND meter_target <> meter_pred
-  GROUP BY meter_pred, accent_ok
+  SELECT *
+  FROM meter_errors
+  WHERE meter_target = 'Дк' AND cnt > 100
   ORDER BY cnt DESC
-  LIMIT 5
 #+end_src
 
 #+RESULTS:
-| meter_pred | accent_ok | cnt |
-|------------+-----------+-----|
-| Д          |         1 | 114 |
-| Д~Д        |         1 |   8 |
-| Дк         |         0 |   8 |
-| Ак         |         0 |   7 |
-| Тк         |         0 |   5 |
+| meter_target | meter_pred | accent_ok | cnt |
+|--------------+------------+-----------+-----|
+| Дк           | Тк         |         0 | 330 |
+| Дк           | Ан         |         0 | 293 |
+| Дк           | Д          |         0 | 200 |
+| Дк           | Х          |         0 | 188 |
+| Дк           | Аф         |         0 | 186 |
+| Дк           | Ак         |         0 | 177 |
+| Дк           | Ак         |         1 | 164 |
+| Дк           | Я          |         0 | 113 |
+
+Ошибки при определении тактовика:
+#+begin_src sqlite
+  SELECT *
+  FROM meter_errors
+  WHERE meter_target = 'Тк' AND cnt > 50
+  ORDER BY cnt DESC
+#+end_src
+
+#+RESULTS:
+| meter_target | meter_pred | accent_ok | cnt |
+|--------------+------------+-----------+-----|
+| Тк           | Дк         |         0 | 134 |
+| Тк           | Ак         |         0 | 108 |
+| Тк           | Я          |         0 |  68 |
+| Тк           | Х          |         0 |  56 |
 
 Распределение правильных предсказаний метра по количеству стоп в строке
 #+begin_src sqlite
