@@ -44,7 +44,7 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 [[file:coverage_vs_threshold.svg]]
 
 #+begin_src python :results output
-  MIN_COUNT = 250
+  MIN_COUNT = 1000
 
   discarded = 0
   discarded_items = 0
@@ -65,9 +65,9 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 #+end_src
 
 #+RESULTS:
-: Discarded 173 meter classes as too rare (represent 3132 lines)
-: Discarded data represents 0.0010916452194862157 of lines
-: Total of 22 meter classes accepted
+: Discarded 178 meter classes as too rare (represent 5431 lines)
+: Discarded data represents 0.0018929518477106123 of lines
+: Total of 17 meter classes accepted
 
 Dump class vocab to a file
 #+begin_src python :results output
@@ -132,8 +132,3 @@ Collect examples for selected classes (RNC files are required)
 | Лето кра̀сное! проходѝ скорей,                             | Ан~Ан | (0.5)   | xix/1790-1810_poets/poets-116 |    1957 |
 | Со̀вет в сѐрдце во̀пиѐт, пла̀чу ѝ рыда̀ю!                     | Х~Х   | (0.571) | xix/1790-1810_poets/psec-153  |    1833 |
 | Ѐму о̀пера̀тор                                              | Х*    | -       | xix/1830/1830-255             |    1095 |
-| За зна̀мя отчѝзны гру̀дью стоя̀ть!                           | Дк    | (0.5)   | xix/1820/1820-271             |     790 |
-| Сво̀да пещѐрного,                                          | Я*    | -       | xix/konevskoj/konev-010       |     525 |
-| Ты̀, что сто̀лько кра̀т тѐшила в жѝзни меня̀.                 | Пен   | -       | xix/1790-1810_poets/poets-319 |     387 |
-| Однѝ ли несча̀стные знако̀мы с тобо̀ю,                       | Аф~Аф | (0.5)   | xix/1790-1810_poets/psec-012  |     317 |
-| Там далѐко-далѐко, где навѝс очаро̀ванный лѐс,             | Ан~Ан | (0.4)   | xix/lochvicka/mloch-186       |     280 |

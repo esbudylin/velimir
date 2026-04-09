@@ -59,7 +59,7 @@ the repository and run the scripts directly from the command line.
   Trains the models. The resulting models are saved to the
   [[file:data/models/]] directory.
 
-  Training can be resource-intensive. The models presented in the
+  Training can be resource-intensive. The models present in the
   repository were trained on a GPU with 24 GB VRAM.
 
   Use the flag ~--test-run~ to run the training on a small data subset
@@ -115,7 +115,7 @@ data are included in the repository as [[file:data/poems.msgpack]]. Note
 that although the code and models are open source, the data themselves
 are proprietary and used under fair use conditions.
 
-Note that the ~poems.msgpack~ only includes binary metadata (meter
+Note that ~poems.msgpack~ only includes binary metadata (meter
 formulas and accent positions) extracted from the corpus. The original
 corpus files are not included in the repository due to copyright
 constraints. However, the repository still contains scripts that
