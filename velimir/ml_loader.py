@@ -33,52 +33,49 @@ class PoetryDataset(Dataset):
             poem = Poem.decode(poem_data)
 
             stanza_stats = compute_mean_ling_accents_per_stanza(
-                poem.stanza_breaks,
                 [li.syllable_masks.linguistic_accent_mask for li in poem.lines],
+                poem.stanza_breaks,
             )
-            current_stanza = 0
+            stanzas = break_into_stanzas(poem.lines, poem.stanza_breaks)
 
-            for i, line in enumerate(poem.lines):
-                if (
-                    len(poem.stanza_breaks) != current_stanza + 1
-                    and i == poem.stanza_breaks[current_stanza + 1]
-                ):
-                    current_stanza += 1
+            for current_stanza, stanza in enumerate(stanzas):
+                for line in stanza:
+                    masks = line.syllable_masks
 
-                masks = line.syllable_masks
+                    if not masks.poetic_accent_mask:
+                        logging.error("Empty line in text %s. Skipping...", poem.path)
+                        continue
 
-                if not masks.poetic_accent_mask:
-                    logging.error("Empty line in text %s. Skipping...", poem.path)
-                    continue
+                    meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
 
-                meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
+                    if meter_class is None:
+                        # Исключаем редкие типы метров из датасета
+                        rare_meters_excluded += 1
+                        continue
 
-                if meter_class is None:
-                    # Исключаем редкие типы метров из датасета
-                    rare_meters_excluded += 1
-                    continue
+                    meter_class_t = torch.tensor(meter_class, dtype=torch.long)
 
-                meter_class_t = torch.tensor(meter_class, dtype=torch.long)
+                    stanza_stat = stanza_stats[current_stanza][: line.length()]
 
-                stanza_stat = stanza_stats[current_stanza][: line.length()]
-
-                accent_input = torch.stack(
-                    [
-                        torch.tensor(stanza_stat, dtype=torch.float32),
-                        torch.tensor(masks.linguistic_accent_mask, dtype=torch.float32),
-                        torch.tensor(masks.last_in_word_mask, dtype=torch.float32),
-                    ],
-                    dim=1,
-                )
-                poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
-
-                self.samples.append(
-                    Sample(
-                        accent_input=accent_input,
-                        poetic_accents=poetic,
-                        meter_class=meter_class_t,
+                    accent_input = torch.stack(
+                        [
+                            torch.tensor(stanza_stat, dtype=torch.float32),
+                            torch.tensor(
+                                masks.linguistic_accent_mask, dtype=torch.float32
+                            ),
+                            torch.tensor(masks.last_in_word_mask, dtype=torch.float32),
+                        ],
+                        dim=1,
                     )
-                )
+                    poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
+
+                    self.samples.append(
+                        Sample(
+                            accent_input=accent_input,
+                            poetic_accents=poetic,
+                            meter_class=meter_class_t,
+                        )
+                    )
 
         logging.info(
             "Dataset loading finished. %d samples created",
@@ -140,23 +137,18 @@ class MeterClassRegistry:
         return len(cls._vocab)
 
     @classmethod
-    def get_weights(cls, mode: str = "sqrt_inv") -> torch.Tensor:
+    def get_weights(cls) -> torch.Tensor:
         if cls._weights is not None:
             return cls._weights
 
         counts = torch.tensor(cls._counts, dtype=torch.float32)
         counts = torch.clamp(counts, min=1)
 
-        if mode == "inv":
-            weights = 1.0 / counts
-        elif mode == "sqrt_inv":
-            weights = 1.0 / torch.sqrt(counts)
-        elif mode == "log_inv":
-            weights = 1.0 / torch.log1p(counts)
-        else:
-            raise ValueError(f"Unknown weight mode: {mode}")
+        # sqrt inv
+        weights = 1.0 / torch.sqrt(counts)
 
         weights = weights / weights.sum()
+
         cls._weights = weights
         return weights
 
@@ -184,19 +176,17 @@ def collate(batch: list[Sample]):
     )
 
 
-def compute_mean_ling_accents_per_stanza(
-    stanza_breaks: list[int],
-    ling_accent_masks,
-):
-    stanzas = []
-
+def break_into_stanzas(lines: list, stanza_breaks: list[int]):
     for i, start in enumerate(stanza_breaks):
-        end = (
-            stanza_breaks[i + 1]
-            if i + 1 < len(stanza_breaks)
-            else len(ling_accent_masks)
-        )
-        stanzas.append(ling_accent_masks[start:end])
+        end = stanza_breaks[i + 1] if i + 1 < len(stanza_breaks) else len(lines)
+        yield lines[start:end]
+
+
+def compute_mean_ling_accents_per_stanza(
+    ling_accent_masks,
+    stanza_breaks: list[int],
+) -> list[float]:
+    stanzas = break_into_stanzas(ling_accent_masks, stanza_breaks)
 
     res = []
 
