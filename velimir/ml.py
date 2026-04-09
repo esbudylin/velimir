@@ -12,9 +12,13 @@ class AccentModel(nn.Module):
         super().__init__()
 
         hidden = 128
+        num_meter_classes = MeterClassRegistry.num()
+        meter_emb_dim = 16
+
+        self.meter_emb = nn.Embedding(num_meter_classes, meter_emb_dim)
 
         self.encoder = nn.LSTM(
-            input_size=3,
+            input_size=3 + meter_emb_dim,
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,
@@ -28,10 +32,34 @@ class AccentModel(nn.Module):
             nn.Linear(hidden, 1),
         )
 
-    def forward(self, x):
-        h, _ = self.encoder(x)
+    def forward(self, accent_input, meter_class):
+        """
+        accent_input: (B, T, 3) with -1 padding
+        meter_class: (B,)
+        """
 
-        logits = self.head(h).squeeze(-1)
+        mask = (accent_input != -1).all(dim=-1)  # (B, T)
+        lengths = mask.sum(dim=1).cpu()
+
+        _, T, _ = accent_input.shape
+
+        meter_emb = self.meter_emb(meter_class)  # (B, D)
+        meter_emb = meter_emb.unsqueeze(1).expand(-1, T, -1)  # (B, T, D)
+
+        x = torch.cat([accent_input, meter_emb], dim=-1)
+
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x,
+            lengths,
+            batch_first=True,
+            enforce_sorted=False,
+        )
+
+        out, _ = self.encoder(packed)
+
+        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
+
+        logits = self.head(out).squeeze(-1)
 
         return logits
 
@@ -42,12 +70,14 @@ def train_accent(model, loader, optimizer, device):
 
     for batch in loader:
         # move tensors to GPU
-        x = batch.accent_input.to(device, non_blocking=True)
+        accent_input = batch.accent_input.to(device, non_blocking=True)
+        meter_class = batch.meter_class.to(device, non_blocking=True)
+
         y = batch.poetic_accents.to(device, non_blocking=True)
         mask = y != -1
 
         optimizer.zero_grad()
-        logits = model(x)
+        logits = model(accent_input, meter_class)
         loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
 
         if torch.isnan(loss) or torch.isinf(loss):
@@ -67,7 +97,7 @@ class MeterModel(nn.Module):
     def __init__(self):
         super().__init__()
 
-        input_size = 1
+        input_size = 3
 
         hidden = 128
 
@@ -78,6 +108,7 @@ class MeterModel(nn.Module):
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,
+            num_layers=2,
         )
         self.fc = nn.Sequential(
             nn.Linear(hidden * 2, hidden),
@@ -87,14 +118,17 @@ class MeterModel(nn.Module):
         )
         self.attn = nn.Linear(hidden * 2, 1)
 
-    def forward(self, poetic_accents):
-        mask = (poetic_accents != -1).squeeze(-1)
+    def forward(self, accent_input):
+        mask = (accent_input != -1).any(dim=-1)
 
         lengths = mask.sum(dim=1).cpu()
-        x = poetic_accents.masked_fill(~mask.unsqueeze(-1), 0.0)
+        x = accent_input.masked_fill(~mask.unsqueeze(-1), 0.0)
 
         packed = nn.utils.rnn.pack_padded_sequence(
-            x, lengths, batch_first=True, enforce_sorted=False
+            x,
+            lengths,
+            batch_first=True,
+            enforce_sorted=False,
         )
 
         out, _ = self.encoder(packed)
@@ -117,15 +151,12 @@ def train_meter(model, loader, optimizer, device):
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     for batch in loader:
-        poetic_accents = batch.poetic_accents.to(device, non_blocking=True)
-        # add feature dimension
-        poetic_accents = poetic_accents.unsqueeze(-1)
-
+        accent_input = batch.accent_input.to(device, non_blocking=True)
         meter_target = batch.meter_class.to(device, non_blocking=True)
 
         optimizer.zero_grad()
 
-        logits = model(poetic_accents)
+        logits = model(accent_input)
 
         loss = loss_fn(logits, meter_target)
 

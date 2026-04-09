@@ -6,9 +6,13 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 from . import accentuator, parsers
-from .domain_models import Clausula, Meter, MeterType, MeterClass
+from .domain_models import Clausula, Meter, MeterClass
 from .io import load_models
-from .ml_loader import compute_mean_ling_accents_per_stanza, MeterClassRegistry
+from .ml_loader import (
+    MeterClassRegistry,
+    break_into_stanzas,
+    compute_mean_ling_accents_per_stanza,
+)
 
 
 @dataclass
@@ -56,66 +60,66 @@ class ProcessedLine:
                 raise ValueError("Invalid caesura sequence length")
 
 
-# TODO: remove code duplication with ml_loader
-def detect_poetic_accents(
-    model,
-    device,
+def extract_accent_input(
     lines: list[str],
     stanza_breaks: list[int],
 ):
     xs = []
+
     ling_accent_masks = [accentuator.accent_line(li) for li in lines]
 
     stanza_stats = compute_mean_ling_accents_per_stanza(
-        stanza_breaks,
         ling_accent_masks,
+        stanza_breaks,
     )
-    current_stanza = 0
+    stanzas = break_into_stanzas(
+        list(zip(ling_accent_masks, lines)),
+        stanza_breaks,
+    )
 
-    for i, (ling_accent_mask, line) in enumerate(zip(ling_accent_masks, lines)):
-        if (
-            len(stanza_breaks) != current_stanza + 1
-            and i == stanza_breaks[current_stanza + 1]
-        ):
-            current_stanza += 1
+    for current_stanza, stanza_lines in enumerate(stanzas):
+        for ling_accent_mask, line in stanza_lines:
+            stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
 
-        stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
-
-        xs.append(
-            torch.stack(
-                [
-                    torch.tensor(
-                        stanza_stat,
-                        dtype=torch.float32,
-                    ),
-                    torch.tensor(
-                        ling_accent_mask,
-                        dtype=torch.float32,
-                    ),
-                    torch.tensor(
-                        parsers.extract_word_ending_mask(line),
-                        dtype=torch.float32,
-                    ),
-                ],
-                dim=1,
+            xs.append(
+                torch.stack(
+                    [
+                        torch.tensor(
+                            stanza_stat,
+                            dtype=torch.float32,
+                        ),
+                        torch.tensor(
+                            ling_accent_mask,
+                            dtype=torch.float32,
+                        ),
+                        torch.tensor(
+                            parsers.extract_word_ending_mask(line),
+                            dtype=torch.float32,
+                        ),
+                    ],
+                    dim=1,
+                )
             )
-        )
 
-    x = pad_sequence(xs, batch_first=True, padding_value=-1).to(device)
+    return pad_sequence(xs, batch_first=True, padding_value=-1)
+
+
+def detect_poetic_accents(model, device, accent_input, meter_pred):
+    accent_input = accent_input.to(device)
 
     with torch.no_grad():
-        logits = model(x)
+        logits = model(accent_input, meter_pred)
         pred = (torch.sigmoid(logits) > 0.5).float()
 
-    mask = (x != -1).all(dim=2)
+    mask = (accent_input != -1).all(dim=2)
     return pred.masked_fill(~mask, -1).unsqueeze(-1)
 
 
-def detect_meter(model, device, accent_pred):
-    accent_pred = accent_pred.to(device)
+def detect_meter(model, device, accent_input):
+    accent_input = accent_input.to(device)
 
     with torch.no_grad():
-        pred = model(accent_pred)
+        pred = model(accent_input)
 
     return torch.argmax(pred, dim=1)
 
@@ -178,16 +182,20 @@ def process_lines(
 
     accent_model, meter_model = load_models(device)
 
-    poetic_accent_masks = detect_poetic_accents(
-        accent_model,
-        device,
+    accent_input = extract_accent_input(
         lines,
         stanza_breaks,
     )
     meter_preds = detect_meter(
         meter_model,
         device,
-        poetic_accent_masks,
+        accent_input,
+    )
+    poetic_accent_masks = detect_poetic_accents(
+        accent_model,
+        device,
+        accent_input,
+        meter_preds,
     )
 
     def filter_padding(li):

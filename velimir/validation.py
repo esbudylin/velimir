@@ -103,9 +103,16 @@ def validate_models(
             meter_target = batch.meter_class.to(device)
 
             # =====================
+            # Meter
+            # =====================
+            meter_pred = torch.argmax(meter_model(accent_input), dim=1)
+            meter_correct += (meter_pred.round() == meter_target).sum().item()
+            meter_total += torch.numel(meter_target)
+
+            # =====================
             # Accent
             # =====================
-            accent_logits = accent_model(accent_input)
+            accent_logits = accent_model(accent_input, meter_pred)
             accent_pred = (torch.sigmoid(accent_logits) > 0.5).float()
 
             mask = poetic_target != -1
@@ -114,20 +121,7 @@ def validate_models(
             )
             accent_total += mask.sum().item()
 
-            # =====================
-            # Meter input
-            # =====================
             accent_pred_masked = accent_pred.masked_fill(~mask, -1)
-            meter_pred = torch.argmax(
-                meter_model(accent_pred_masked.unsqueeze(-1)),
-                dim=1,
-            )
-
-            # =====================
-            # Meter
-            # =====================
-            meter_correct += (meter_pred.round() == meter_target).sum().item()
-            meter_total += torch.numel(meter_target)
 
             # =====================
             # DB logging
