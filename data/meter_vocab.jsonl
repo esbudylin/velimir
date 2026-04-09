@@ -15,3 +15,8 @@
 {"meter_types": [3, 3], "caesura": [0.5], "unstable": [false, false], "count": 1957}
 {"meter_types": [1, 1], "caesura": [0.5714285714285714], "unstable": [false, false], "count": 1833}
 {"meter_types": [1], "caesura": [], "unstable": [true], "count": 1095}
+{"meter_types": [5], "caesura": [0.5], "unstable": [false], "count": 790}
+{"meter_types": [0], "caesura": [], "unstable": [true], "count": 525}
+{"meter_types": [10], "caesura": [], "unstable": [false], "count": 387}
+{"meter_types": [4, 4], "caesura": [0.5], "unstable": [false, false], "count": 317}
+{"meter_types": [3, 3], "caesura": [0.4], "unstable": [false, false], "count": 280}
