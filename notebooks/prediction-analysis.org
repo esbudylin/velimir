@@ -97,7 +97,7 @@ NB: точность для ударений в логе выше, т.к. при
 
   lines1, labs1 = ax1.get_legend_handles_labels()
   lines2, labs2 = ax2.get_legend_handles_labels()
-  ax1.legend(lines1 + lines2, labs1 + labs2, loc="upper right", framealpha=0.6, fontsize=9)
+  ax1.legend(lines1 + lines2, labs1 + labs2, loc="center right", framealpha=0.6, fontsize=9)
   ax1.set_title("Frequency and accuracy per meter type", fontsize=12)
   plt.tight_layout()
   plt.savefig(PLOT_PATH, dpi=150)
