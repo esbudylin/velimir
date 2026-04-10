@@ -2,17 +2,26 @@ import json
 import logging
 import random
 from dataclasses import dataclass
+from typing import Iterator
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
-from velimir.domain_models import MeterClass, Poem
+
+from velimir.domain_models import MeterClass, Poem, SyllableMasks
 from velimir.settings import METER_VOCAB_PATH
 
 
 def get_loader(poems, **kwargs):
     dataset = PoetryDataset(poems)
     return DataLoader(dataset, collate_fn=collate, **kwargs)
+
+
+@dataclass(slots=True)
+class RawSample:
+    stanza_stat: list[float]
+    syllable_masks: SyllableMasks
+    meter_class: MeterClass
 
 
 @dataclass(slots=True)
@@ -23,59 +32,41 @@ class Sample:
 
 
 class PoetryDataset(Dataset):
-    def __init__(self, poems: list):
+    def __init__(self, raw_samples: list[RawSample]):
         logging.info("Loading poetry dataset")
 
         self.samples: list[Sample] = []
         rare_meters_excluded = 0
 
-        for poem_data in poems:
-            poem = Poem.decode(poem_data)
+        for rs in raw_samples:
+            meter_class = MeterClassRegistry.mc_to_int(rs.meter_class)
 
-            stanza_stats = compute_mean_ling_accents_per_stanza(
-                [li.syllable_masks.linguistic_accent_mask for li in poem.lines],
-                poem.stanza_breaks,
+            if meter_class is None:
+                # Исключаем редкие типы метров из датасета
+                rare_meters_excluded += 1
+                continue
+
+            masks = rs.syllable_masks
+
+            meter_class_t = torch.tensor(meter_class, dtype=torch.long)
+
+            accent_input = torch.stack(
+                [
+                    torch.tensor(rs.stanza_stat, dtype=torch.float32),
+                    torch.tensor(masks.linguistic_accent_mask, dtype=torch.float32),
+                    torch.tensor(masks.last_in_word_mask, dtype=torch.float32),
+                ],
+                dim=1,
             )
-            stanzas = break_into_stanzas(poem.lines, poem.stanza_breaks)
+            poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
 
-            for current_stanza, stanza in enumerate(stanzas):
-                for line in stanza:
-                    masks = line.syllable_masks
-
-                    if not masks.poetic_accent_mask:
-                        logging.error("Empty line in text %s. Skipping...", poem.path)
-                        continue
-
-                    meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
-
-                    if meter_class is None:
-                        # Исключаем редкие типы метров из датасета
-                        rare_meters_excluded += 1
-                        continue
-
-                    meter_class_t = torch.tensor(meter_class, dtype=torch.long)
-
-                    stanza_stat = stanza_stats[current_stanza][: line.length()]
-
-                    accent_input = torch.stack(
-                        [
-                            torch.tensor(stanza_stat, dtype=torch.float32),
-                            torch.tensor(
-                                masks.linguistic_accent_mask, dtype=torch.float32
-                            ),
-                            torch.tensor(masks.last_in_word_mask, dtype=torch.float32),
-                        ],
-                        dim=1,
-                    )
-                    poetic = torch.tensor(masks.poetic_accent_mask, dtype=torch.float32)
-
-                    self.samples.append(
-                        Sample(
-                            accent_input=accent_input,
-                            poetic_accents=poetic,
-                            meter_class=meter_class_t,
-                        )
-                    )
+            self.samples.append(
+                Sample(
+                    accent_input=accent_input,
+                    poetic_accents=poetic,
+                    meter_class=meter_class_t,
+                )
+            )
 
         logging.info(
             "Dataset loading finished. %d samples created",
@@ -211,19 +202,51 @@ def compute_mean_ling_accents_per_stanza(
     return res
 
 
-def split_poems(
-    poems,
-    test_ratio: float = 0.05,
+def split_samples(
+    raw_samples: Iterator[RawSample],
+    test_ratio: float = 0.02,
+    val_ratio: float = 0.02,
     seed: int = 42,
-) -> tuple[list, list]:
-    poems_l = list(poems)
+) -> tuple[list, list, list]:
+    samples_l = list(raw_samples)
 
     rng = random.Random(seed)
-    rng.shuffle(poems_l)
+    rng.shuffle(samples_l)
 
-    split = int(len(poems_l) * (1 - test_ratio))
+    n = len(samples_l)
 
-    train_poems = poems_l[:split]
-    test_poems = poems_l[split:]
+    test_size = int(n * test_ratio)
+    val_size = int(n * val_ratio)
 
-    return train_poems, test_poems
+    train_size = n - test_size - val_size
+
+    train_set = samples_l[:train_size]
+    val_set = samples_l[train_size : train_size + val_size]
+    test_set = samples_l[train_size + val_size :]
+
+    return train_set, val_set, test_set
+
+
+def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
+    for poem in poems:
+        stanza_stats = compute_mean_ling_accents_per_stanza(
+            [li.syllable_masks.linguistic_accent_mask for li in poem.lines],
+            poem.stanza_breaks,
+        )
+        stanzas = break_into_stanzas(poem.lines, poem.stanza_breaks)
+
+        for current_stanza, stanza in enumerate(stanzas):
+            for line in stanza:
+                masks = line.syllable_masks
+
+                if not masks.poetic_accent_mask:
+                    logging.error("Empty line in text %s. Skipping...", poem.path)
+                    continue
+
+                stanza_stat = stanza_stats[current_stanza][: line.length()]
+
+                yield RawSample(
+                    syllable_masks=masks,
+                    stanza_stat=stanza_stat,
+                    meter_class=line.to_meterclass(),
+                )

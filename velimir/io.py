@@ -34,14 +34,12 @@ def save_poems_as_msgpack(data: Iterator[Poem]):
             f.write(serialized_data)
 
 
-def load_poems_from_msgpack() -> Iterator:
+def load_poems_from_msgpack() -> Iterator[Poem]:
     with open(OUTPUT_FILE, "rb") as f:
         unpacker = msgpack.Unpacker(f, raw=False)
         for batch in unpacker:
             for poem_data in batch:
-                # We don't serialize data to OutputPoem at this stage,
-                # to optimize for memory usage
-                yield poem_data
+                yield Poem.decode(poem_data)
 
 
 def read_accent_dicts(filenames):

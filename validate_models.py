@@ -3,7 +3,7 @@ import logging
 import torch
 
 from velimir.io import load_models, load_poems_from_msgpack
-from velimir.ml_loader import split_poems, MeterClassRegistry
+from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_samples
 from velimir.settings import LoggingSettings
 from velimir.validation import validate_models
 
@@ -15,7 +15,7 @@ def validate():
     accent_model, meter_model = load_models(device)
 
     poems = load_poems_from_msgpack()
-    _, test_set = split_poems(poems)
+    _, _, test_set = split_samples(fetch_raw_samples(poems))
 
     validation_results = validate_models(accent_model, meter_model, test_set)
 

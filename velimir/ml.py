@@ -1,10 +1,12 @@
 import logging
+import copy
+from functools import partial
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .ml_loader import get_loader, MeterClassRegistry
+from .ml_loader import MeterClassRegistry, get_loader
 
 
 class AccentModel(nn.Module):
@@ -69,16 +71,9 @@ def train_accent(model, loader, optimizer, device):
     total_loss = 0
 
     for batch in loader:
-        # move tensors to GPU
-        accent_input = batch.accent_input.to(device, non_blocking=True)
-        meter_class = batch.meter_class.to(device, non_blocking=True)
-
-        y = batch.poetic_accents.to(device, non_blocking=True)
-        mask = y != -1
-
         optimizer.zero_grad()
-        logits = model(accent_input, meter_class)
-        loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
+
+        loss = accent_forward_loss(model, batch, device)
 
         if torch.isnan(loss) or torch.isinf(loss):
             logging.error("Accent model: skipping invalid batch")
@@ -89,6 +84,33 @@ def train_accent(model, loader, optimizer, device):
 
         optimizer.step()
         total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
+def accent_forward_loss(model, batch, device):
+    accent_input = batch.accent_input.to(device, non_blocking=True)
+    meter_class = batch.meter_class.to(device, non_blocking=True)
+    y = batch.poetic_accents.to(device, non_blocking=True)
+
+    mask = y != -1
+
+    logits = model(accent_input, meter_class)
+
+    loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
+
+    return loss
+
+
+def eval_accent(model, loader, device):
+    model.eval()
+    total_loss = 0.0
+
+    with torch.no_grad():
+        for batch in loader:
+            loss = accent_forward_loss(model, batch, device)
+
+            total_loss += loss.item()
 
     return total_loss / len(loader)
 
@@ -151,14 +173,9 @@ def train_meter(model, loader, optimizer, device):
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     for batch in loader:
-        accent_input = batch.accent_input.to(device, non_blocking=True)
-        meter_target = batch.meter_class.to(device, non_blocking=True)
-
         optimizer.zero_grad()
 
-        logits = model(accent_input)
-
-        loss = loss_fn(logits, meter_target)
+        loss = meter_forward_loss(model, batch, loss_fn, device)
 
         if torch.isnan(loss) or torch.isinf(loss):
             logging.error("Meter model: skipping invalid batch")
@@ -173,18 +190,81 @@ def train_meter(model, loader, optimizer, device):
     return total_loss / len(loader)
 
 
+def meter_forward_loss(model, batch, loss_fn, device):
+    accent_input = batch.accent_input.to(device, non_blocking=True)
+    meter_target = batch.meter_class.to(device, non_blocking=True)
+
+    logits = model(accent_input)
+
+    loss = loss_fn(logits, meter_target)
+
+    return loss
+
+
+def eval_meter(model, loader, device):
+    model.eval()
+    total_loss = 0.0
+
+    class_weights = MeterClassRegistry.get_weights().to(device, non_blocking=True)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+
+    with torch.no_grad():
+        for batch in loader:
+            loss = meter_forward_loss(model, batch, loss_fn, device)
+
+            total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
+def train_model(model, train_func, eval_func, max_epochs, patience):
+    best_validation_loss = float("inf")
+    best_state_dict = None
+    epochs_no_improve = 0
+
+    for epoch in range(max_epochs):
+        train_loss = train_func()
+        validation_loss = eval_func()
+
+        logging.info(
+            f"Epoch {epoch} train_loss={train_loss:.4f} validation_loss={validation_loss:.4f}"
+        )
+
+        if validation_loss < best_validation_loss - 1e-4:
+            epochs_no_improve = 0
+            best_state_dict = copy.deepcopy(model.state_dict())
+            best_validation_loss = validation_loss
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= patience:
+                logging.info("Early stopping triggered at epoch %d", epoch)
+                break
+
+    return best_state_dict
+
+
 def train_models(
-    poems,
-    epochs=9,
+    train_set,
+    validation_set,
+    max_epochs=50,
+    patience=3,
     batch_size=2048,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device %s for training", device)
 
-    loader = get_loader(
-        poems,
+    train_loader = get_loader(
+        train_set,
         shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        batch_size=batch_size,
+    )
+
+    validation_loader = get_loader(
+        validation_set,
+        shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
         batch_size=batch_size,
@@ -196,11 +276,22 @@ def train_models(
     accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=2e-4)
     meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=2e-4)
 
-    for epoch in range(epochs):
-        accent_loss = train_accent(accent_model, loader, accent_optimizer, device)
-        meter_loss = train_meter(meter_model, loader, meter_optimizer, device)
-        logging.info(
-            f"Epoch {epoch} accent_loss={accent_loss:.4f} meter_loss={meter_loss:.4f}"
-        )
+    logging.info("Training accent model")
+    accent_state_dict = train_model(
+        accent_model,
+        partial(train_accent, accent_model, train_loader, accent_optimizer, device),
+        partial(eval_accent, accent_model, validation_loader, device),
+        max_epochs=max_epochs,
+        patience=patience,
+    )
 
-    return accent_model, meter_model
+    logging.info("Training meter model")
+    meter_state_dict = train_model(
+        meter_model,
+        partial(train_meter, meter_model, train_loader, meter_optimizer, device),
+        partial(eval_meter, meter_model, validation_loader, device),
+        max_epochs=max_epochs,
+        patience=patience,
+    )
+
+    return accent_state_dict, meter_state_dict
