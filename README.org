@@ -63,14 +63,14 @@ the repository and run the scripts directly from the command line.
   repository were trained on a GPU with 24 GB VRAM.
 
   Use the flag ~--test-run~ to run the training on a small data subset
-  (100 poems) - the intended use case is quick sanity checks.
+  (1000 lines) - the intended use case is quick sanity checks.
   
 + ~validate_models.py~
 
-  Collects data on model accuracy. The data consist of 2% of the
-  original dataset’s lines, which are excluded from the training set.
-  The collected data are dumped to ~data/predictions.db~ as a SQLite
-  database. The repository includes an org-babel [[file:notebooks/prediction-analysis.org][notebook]] with
+  Collects data on model accuracy. The data are extracted from 2% of
+  the original dataset’s lines, which are excluded from the training
+  set.  The collected data are dumped to ~data/predictions.db~ as a
+  SQLite database. The repository includes an org-babel [[file:notebooks/prediction-analysis.org][notebook]] with
   analytical queries to the database.
   
 To run the test suite for the project, use
