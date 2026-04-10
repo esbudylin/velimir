@@ -67,11 +67,11 @@ the repository and run the scripts directly from the command line.
   
 + ~validate_models.py~
 
-  Collects data on model accuracy. The data are collected from 5000
-  poems from the original dataset, which were excluded from the
-  training data. The collected data are dumped to
-  ~data/predictions.db~ as a SQLite database. The repository includes
-  an org-babel [[file:notebooks/prediction-analysis.org][notebook]] with analytical queries to the database.
+  Collects data on model accuracy. The data consist of 2% of the
+  original dataset’s lines, which are excluded from the training set.
+  The collected data are dumped to ~data/predictions.db~ as a SQLite
+  database. The repository includes an org-babel [[file:notebooks/prediction-analysis.org][notebook]] with
+  analytical queries to the database.
   
 To run the test suite for the project, use
 #+begin_src sh
