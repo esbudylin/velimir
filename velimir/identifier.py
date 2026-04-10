@@ -156,10 +156,29 @@ def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
     return Clausula(len(list(last_syllables_without_accent)))
 
 
+def decode_caesura_positions(
+    relative_caesuras: tuple[float],
+    poetic_accent_mask: list[bool],
+) -> list[int]:
+    target_stresses = [
+        round(frac * len(poetic_accent_mask)) for frac in relative_caesuras
+    ]
+
+    result = []
+    target_idx = 0
+
+    for i, stress in enumerate(poetic_accent_mask):
+        if target_idx < len(target_stresses) and i == target_stresses[target_idx]:
+            result.append(i)
+            target_idx += 1
+
+    return result
+
+
 def process_line(mc: MeterClass, pmask: list[bool]) -> ProcessedLine:
     line_meters = []
 
-    caesura_positions = mc.decode_caesura_positions(pmask)
+    caesura_positions = decode_caesura_positions(mc.caesura, pmask)
 
     for i, meter_type in enumerate(mc.meter_types):
         meter_mask = extract_meter_accent_mask(

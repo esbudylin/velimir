@@ -152,28 +152,6 @@ class MeterClass:
             unstable=tuple(data["unstable"]),
         )
 
-    def decode_caesura_positions(self, poetic_accent_mask: list[bool]) -> list[int]:
-        EPS = 1e-6
-
-        total_stresses = sum(poetic_accent_mask)
-        target_stresses = [frac * total_stresses for frac in self.caesura]
-
-        result = []
-        cumulative = 0
-        target_idx = 0
-
-        for i, stress in enumerate(poetic_accent_mask):
-            cumulative += stress
-
-            if (
-                target_idx < len(target_stresses)
-                and cumulative + EPS >= target_stresses[target_idx]
-            ):
-                result.append(i)
-                target_idx += 1
-
-        return result
-
 
 @dataclass(slots=True)
 class Line:
