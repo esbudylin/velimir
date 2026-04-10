@@ -126,19 +126,26 @@ def detect_meter(model, device, accent_input):
 
 def extract_meter_accent_mask(
     meter_position: int,
+    total_meters: int,
     caesuras: list[int],
     line_accent_mask: list[bool],
 ) -> list[bool]:
-    if not caesuras:
+    if not caesuras or total_meters == 1:
         return line_accent_mask
 
-    match meter_position:
-        case 0:
-            return line_accent_mask[: caesuras[0]]
-        case 1:
-            return line_accent_mask[caesuras[0] : caesuras[1]]
-        case 2:
-            return line_accent_mask[caesuras[1] : caesuras[2]]
+    match meter_position, caesuras:
+        case 0, [ca]:
+            return line_accent_mask[:ca]
+        case 1, [ca]:
+            return line_accent_mask[ca:]
+        case 0, [ca, cb]:
+            return line_accent_mask[:ca]
+        case 1, [ca, cb]:
+            return line_accent_mask[ca:cb]
+        case 2, [ca, cb]:
+            return line_accent_mask[cb:]
+        case _:
+            raise ValueError("Invalid combination of meters and caesuras")
 
 
 def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
@@ -155,7 +162,12 @@ def process_line(mc: MeterClass, pmask: list[bool]) -> ProcessedLine:
     caesura_positions = mc.decode_caesura_positions(pmask)
 
     for i, meter_type in enumerate(mc.meter_types):
-        meter_mask = extract_meter_accent_mask(i, caesura_positions, pmask)
+        meter_mask = extract_meter_accent_mask(
+            meter_position=i,
+            total_meters=len(mc.meter_types),
+            caesuras=caesura_positions,
+            line_accent_mask=pmask,
+        )
 
         line_meters.append(
             Meter(
