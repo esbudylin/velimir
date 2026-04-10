@@ -1,11 +1,10 @@
 import os
 import sqlite3
-from collections import deque
 
 import torch
 
-from .domain_models import Poem, MeterClass
-from .ml_loader import get_loader, MeterClassRegistry
+from .domain_models import MeterClass
+from .ml_loader import MeterClassRegistry, RawSample, get_loader
 from .settings import PREDICTION_DB_PATH
 
 error_db_schema = """
@@ -65,12 +64,12 @@ def caesura_to_str(li):
 def validate_models(
     accent_model,
     meter_model,
-    poems: list,
+    raw_samples: list[RawSample],
     batch_size: int = 16,
 ):
     device = next(accent_model.parameters()).device
 
-    loader = get_loader(poems, batch_size=batch_size, shuffle=False)
+    loader = get_loader(raw_samples, batch_size=batch_size, shuffle=False)
 
     accent_model.eval()
     meter_model.eval()
@@ -83,17 +82,6 @@ def validate_models(
 
     meter_correct = 0
     meter_total = 0
-
-    poem_counts = deque(
-        (
-            {
-                "path": poem.path,
-                "lines_count": len(poem.lines),
-                "lines_consumed": 0,
-            }
-            for poem in map(Poem.decode, poems)
-        )
-    )
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(loader):
@@ -130,7 +118,7 @@ def validate_models(
             batch_size_actual = meter_pred.size(0)
 
             for line_idx in range(batch_size_actual):
-                current_poem = poem_counts[0]
+                current_sample = raw_samples[batch_idx * batch_size + line_idx]
 
                 accent_p = rhythm_to_str(accent_pred_masked[line_idx])
                 accent_t = rhythm_to_str(poetic_target[line_idx])
@@ -149,8 +137,8 @@ def validate_models(
 
                 rows.append(
                     (
-                        current_poem["path"],
-                        current_poem["lines_consumed"],
+                        current_sample.poem_path,
+                        current_sample.line_idx,
                         accent_p,
                         accent_t,
                         meter_class_p_i,
@@ -161,11 +149,6 @@ def validate_models(
                         caesura_t,
                     )
                 )
-
-                current_poem["lines_consumed"] += 1
-
-                if current_poem["lines_consumed"] == current_poem["lines_count"]:
-                    poem_counts.popleft()
 
             cursor.executemany(
                 """

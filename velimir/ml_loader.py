@@ -19,6 +19,8 @@ def get_loader(poems, **kwargs):
 
 @dataclass(slots=True)
 class RawSample:
+    poem_path: str
+    line_idx: int
     stanza_stat: list[float]
     syllable_masks: SyllableMasks
     meter_class: MeterClass
@@ -229,6 +231,8 @@ def split_samples(
 
 def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
     for poem in poems:
+        line_idx = 0
+
         stanza_stats = compute_mean_ling_accents_per_stanza(
             [li.syllable_masks.linguistic_accent_mask for li in poem.lines],
             poem.stanza_breaks,
@@ -249,4 +253,8 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     syllable_masks=masks,
                     stanza_stat=stanza_stat,
                     meter_class=line.to_meterclass(),
+                    poem_path=poem.path,
+                    line_idx=line_idx,
                 )
+
+                line_idx += 1
