@@ -24,7 +24,7 @@ def validate():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(**LoggingSettings().model_dump())
+    LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
     validate()

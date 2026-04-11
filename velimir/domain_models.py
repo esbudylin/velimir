@@ -1,13 +1,12 @@
+from dataclasses import dataclass, fields
 from enum import IntEnum
-from dataclasses import dataclass
 
 import bitarray.util as bu
-
 from bitarray import bitarray
-from pydantic import BaseModel
 
 
-class InputPoem(BaseModel):
+@dataclass
+class InputPoem:
     author: str
     created: str
     header: str
@@ -17,8 +16,14 @@ class InputPoem(BaseModel):
     feet: str
     path: str
 
+    @classmethod
+    def from_row(cls, d):
+        field_names = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in field_names})
 
-class InputLine(BaseModel):
+
+@dataclass
+class InputLine:
     meter: str
     text: str
 

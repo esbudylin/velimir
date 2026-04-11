@@ -18,7 +18,7 @@ from velimir.io import read_poem_xml, save_poems_as_msgpack, read_accent_dicts
 
 def transform_data(csv_reader: csv.DictReader) -> Iterator[Poem]:
     for row in csv_reader:
-        poem = InputPoem(**row)
+        poem = InputPoem.from_row(row)
 
         delayed_logger.create(
             logging.INFO, "Transforming poem: %s, meter: %s", poem.path, poem.formula
@@ -36,7 +36,8 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[Poem]:
 
 
 def main():
-    logging.basicConfig(**LoggingSettings().model_dump())
+    LoggingSettings.setup()
+
     build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
 
     with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:

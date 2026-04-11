@@ -1,8 +1,7 @@
 import csv
-import os
 import logging
-
-from pydantic_settings import BaseSettings
+import os
+from dataclasses import asdict, dataclass
 
 DATA_DIRECTORY = "data"
 
@@ -31,12 +30,14 @@ class InputDialect(csv.unix_dialect):
     delimiter = ";"
 
 
-class LoggingSettings(BaseSettings):
+@dataclass
+class LoggingSettings:
     filename: str = "main.log"
     encoding: str = "utf-8"
     level: int = logging.INFO
     filemode: str = "w"
     format: str = "%(asctime)s [%(levelname)s] %(message)s"
 
-    class Config:
-        env_prefix = "LOGGING_"
+    @classmethod
+    def setup(cls):
+        logging.basicConfig(**asdict(cls()))

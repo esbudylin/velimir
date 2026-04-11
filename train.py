@@ -63,7 +63,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    logging.basicConfig(**LoggingSettings().model_dump())
+    LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
     train(test_run=args.test_run)

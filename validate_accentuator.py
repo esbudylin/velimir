@@ -26,7 +26,7 @@ from velimir.settings import (
 
 def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
     for row in csv_reader:
-        poem = InputPoem(**row)
+        poem = InputPoem.from_row(row)
 
         if not ("Ак" in poem.meter or "Тк" in poem.meter):
             continue
@@ -117,7 +117,8 @@ def accent_diff_word_indexes(masks: SyllableMasks) -> list[int]:
 
 
 def main():
-    logging.basicConfig(**LoggingSettings().model_dump())
+    LoggingSettings.setup()
+
     accentuator.build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
 
     start_time = time.time()
