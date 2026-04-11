@@ -31,15 +31,14 @@ NB: точность для ударений в логе выше, т.к. при
 #+begin_src sqlite
   SELECT
     ROUND(AVG(accent_target == accent_pred), 3) as accent_ok,
-    ROUND(AVG(meter_target == meter_pred), 3) as meter_ok,
-    ROUND(AVG(caesura_target == caesura_pred), 3) as caesura_ok
+    ROUND(AVG(meter_target == meter_pred), 3) as meter_ok
   FROM predictions
 #+end_src
 
 #+RESULTS:
-| accent_ok | meter_ok | caesura_ok |
-|-----------+----------+------------|
-|     0.931 |     0.94 |      0.992 |
+| accent_ok | meter_ok |
+|-----------+----------|
+|     0.931 |     0.94 |
 
 Процент попаданий метра и ритма, распределённый по наиболее частым метрам
 #+name: accuracy_per_meter
@@ -147,6 +146,53 @@ NB: точность для ударений в логе выше, т.к. при
 | Я*    |           0.444 |          0.444 |                      0.5 |                       0.4 |     9 |
 | Аф~Аф |           0.889 |          0.778 |                    0.857 |                       1.0 |     9 |
 
+Частота присутствия цезуры
+#+begin_src sqlite
+  SELECT
+      ROUND(
+          COUNT(*) * 1.0 /
+          (SELECT COUNT(*) FROM predictions),
+          4
+      ) AS caesura_freq
+  FROM predictions
+  WHERE caesura_target <> '';
+#+end_src
+
+#+RESULTS:
+| caesura_freq |
+|--------------|
+|       0.0069 |
+
+Ложнопозитивные определения цезуры
+#+begin_src sqlite
+  SELECT
+      ROUND(
+          SUM(caesura_target = '' AND caesura_pred <> '') * 1.0 /
+          SUM(caesura_target = ''),
+          4
+      ) AS false_positive_rate
+  FROM predictions;
+#+end_src
+
+#+RESULTS:
+| false_positive_rate |
+|---------------------|
+|               0.007 |
+
+Точность в определении цезуры, метра и ударения для тех строк, где присутствует цезура
+#+begin_src sqlite
+  SELECT ROUND(AVG(caesura_target == caesura_pred), 3) as caesura_ok,
+  ROUND(AVG(meter_target == meter_pred), 3) as meter_ok,
+  ROUND(AVG(accent_target == accent_pred), 3) as accent_ok
+  FROM predictions
+  WHERE caesura_target <> ''
+#+end_src
+
+#+RESULTS:
+| caesura_ok | meter_ok | accent_ok |
+|------------+----------+-----------|
+|      0.869 |    0.871 |     0.876 |
+
 Точность в определении цезурных форм
 #+begin_src sqlite
   SELECT * FROM
@@ -161,7 +207,7 @@ NB: точность для ударений в логе выше, т.к. при
       WHERE caesura_target <> ''
       GROUP BY caesura_target, caesura_pred, meter_target, meter_pred
       ORDER BY cnt DESC)
-  WHERE cnt > 10
+  WHERE cnt > 5
 #+end_src
 
 #+RESULTS:
@@ -172,6 +218,9 @@ NB: точность для ударений в логе выше, т.к. при
 |     0.5 |          0.5 | Х~Х          | Х~Х        |         1 |  60 |
 |   0.571 |        0.571 | Х~Х          | Х~Х        |         1 |  37 |
 |     0.5 |          0.5 | Ан~Ан        | Ан~Ан      |         1 |  24 |
+|     0.4 |          0.4 | Ан~Ан        | Ан~Ан      |         1 |   9 |
+|     0.5 |          0.5 | Аф~Аф        | Аф~Аф      |         1 |   7 |
+|     0.5 |              | Х~Х          | Дк         |         0 |   6 |
 
 View для сбора ошибок при определении метра
 #+begin_src sqlite
