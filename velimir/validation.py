@@ -8,7 +8,7 @@ from .ml_loader import MeterClassRegistry, RawSample, get_loader
 from .settings import PREDICTION_DB_PATH
 
 error_db_schema = """
-CREATE TABLE IF NOT EXISTS predictions (
+CREATE TABLE predictions (
     poem_path TEXT,
     line_idx INTEGER,
 
