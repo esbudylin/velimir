@@ -144,10 +144,10 @@ class Meter:
 # used for classification in ML models
 @dataclass(frozen=True, slots=True)
 class MeterClass:
-    meter_types: tuple[MeterType]
+    meter_types: tuple[MeterType, ...]
     # позиции цезурных разделений относительно количества поэтических ударений в строке
-    caesura: tuple[float]
-    unstable: tuple[bool]
+    caesura: tuple[float, ...]
+    unstable: tuple[bool, ...]
 
     @classmethod
     def from_dict(cls, data: dict):

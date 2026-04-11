@@ -46,9 +46,9 @@ def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
 def calc_accent_diff(lines: Iterator[str], accent_line_fn) -> Counter:
     total_lines = 0
     total_words = 0
-    total_diff = 0
+    total_diff = 0.0
 
-    diffed_words = Counter()
+    diffed_words: Counter[str] = Counter()
 
     for line in lines:
         try:
