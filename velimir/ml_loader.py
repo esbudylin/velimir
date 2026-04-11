@@ -178,7 +178,7 @@ def break_into_stanzas(lines: list, stanza_breaks: list[int]):
 def compute_mean_ling_accents_per_stanza(
     ling_accent_masks,
     stanza_breaks: list[int],
-) -> list[float]:
+) -> list[list[float]]:
     stanzas = break_into_stanzas(ling_accent_masks, stanza_breaks)
 
     res = []
