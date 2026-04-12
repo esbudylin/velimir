@@ -23,7 +23,7 @@ class RawSample:
     line_idx: int
     stanza_stat: list[float]
     syllable_masks: SyllableMasks
-    meter_class: MeterClass
+    meter_class: int
 
 
 @dataclass(slots=True)
@@ -38,19 +38,11 @@ class PoetryDataset(Dataset):
         logging.info("Loading poetry dataset")
 
         self.samples: list[Sample] = []
-        rare_meters_excluded = 0
 
         for rs in raw_samples:
-            meter_class = MeterClassRegistry.mc_to_int(rs.meter_class)
-
-            if meter_class is None:
-                # Исключаем редкие типы метров из датасета
-                rare_meters_excluded += 1
-                continue
-
             masks = rs.syllable_masks
 
-            meter_class_t = torch.tensor(meter_class, dtype=torch.long)
+            meter_class_t = torch.tensor(rs.meter_class, dtype=torch.long)
 
             accent_input = torch.stack(
                 [
@@ -73,10 +65,6 @@ class PoetryDataset(Dataset):
         logging.info(
             "Dataset loading finished. %d samples created",
             len(self.samples),
-        )
-        logging.info(
-            "%d lines are excluded from dataset as having rare meter types",
-            rare_meters_excluded,
         )
 
     def __len__(self):
@@ -230,6 +218,10 @@ def split_samples(
 
 
 def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
+    logging.info("Loading raw samples")
+
+    rare_meters_excluded = 0
+
     for poem in poems:
         line_idx = 0
 
@@ -242,19 +234,27 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
         for current_stanza, stanza in enumerate(stanzas):
             for line in stanza:
                 masks = line.syllable_masks
+                meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
 
                 if not masks.poetic_accent_mask:
                     logging.error("Empty line in text %s. Skipping...", poem.path)
-                    continue
+                elif meter_class is None:
+                    # Исключаем редкие типы метров из датасета
+                    rare_meters_excluded += 1
+                else:
+                    stanza_stat = stanza_stats[current_stanza][: line.length()]
 
-                stanza_stat = stanza_stats[current_stanza][: line.length()]
-
-                yield RawSample(
-                    syllable_masks=masks,
-                    stanza_stat=stanza_stat,
-                    meter_class=line.to_meterclass(),
-                    poem_path=poem.path,
-                    line_idx=line_idx,
-                )
+                    yield RawSample(
+                        syllable_masks=masks,
+                        stanza_stat=stanza_stat,
+                        meter_class=meter_class,
+                        poem_path=poem.path,
+                        line_idx=line_idx,
+                    )
 
                 line_idx += 1
+
+    logging.info(
+        "%d lines are excluded from dataset as having rare meter types",
+        rare_meters_excluded,
+    )

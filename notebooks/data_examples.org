@@ -1,0 +1,67 @@
+#+PROPERTY: header-args :dir ..
+#+PROPERTY: header-args:python :session meter-classes
+
+Collect examples for selected classes (RNC files are required)
+#+begin_src python :results table
+  import sqlite3
+
+  from bs4 import BeautifulSoup
+
+  from velimir.parsers import extract_lines
+  from velimir.io import read_poem_xml
+  from velimir.validation import meters_to_str
+  from velimir.ml_loader import MeterClassRegistry
+  from velimir.settings import PREDICTION_DB_PATH
+
+  MeterClassRegistry.initialize()
+
+  meters = [(i, MeterClassRegistry.int_to_mc(i)) for i in range(MeterClassRegistry.num())]
+  examples = []
+
+  conn = sqlite3.connect(PREDICTION_DB_PATH)
+
+  for i, mclass in meters:
+      res = conn.execute("""
+      SELECT poem_path, line_idx
+      FROM predictions
+      WHERE meter_class_target = ?
+      ORDER BY RANDOM()
+      """, (i,))
+
+      poem_path, line_id = res.fetchone()
+
+      poem_xml = read_poem_xml(poem_path)
+      soup = BeautifulSoup(poem_xml, "xml")
+      lines = list(extract_lines(soup))
+
+      line = lines[line_id]
+      caesura_repr = "-".join(map(str, mclass.caesura))
+
+      examples.append((line.text, meters_to_str(mclass), caesura_repr or "-", poem_path, meter_class_counter[mclass]))
+
+  examples
+#+end_src
+
+#+RESULTS:
+| Счита̀й с рождѐнья врѐмя,                                      | Я     | -   | xviii/lvov/lvov-096           | 1472270 |
+| Дѐвушкѝ на у̀лицѐ смею̀тся,                                     | Х     | -   | xx/smeliakov/smel-059         |  514430 |
+| Затума̀нила сѐрдце уста̀лость и мѐсть,                          | Ан    | -   | xx/blok/blok2-0830            |  210449 |
+| Приоткры̀л свинцо̀вую кры̀шку,                                   | Дк    | -   | xx/emigration/emigr-0958      |  205477 |
+| Взгляну̀в на тебя̀ озабо̀ченно,                                  | Аф    | -   | xx/elagin/elag-330            |  201526 |
+| ва̀с не обма̀нешь сирѐнью сыро̀й.                                | Д     | -   | xx/ushakov/ushak-081          |  135253 |
+| Князѐй и гра̀фов и счита̀ть не жела̀ю.                           | Тк    | -   | xx/mandelstamm/mandl-344      |   39623 |
+| Во̀т пролета̀ет Дио̀р и пя̀ткой каса̀ется пя̀тки,                   | Гек   | -   | xx/briusov/brius-1704         |   30943 |
+| Безгра̀мотная и бесфо̀рменная!..                                | Ак    | -   | xx/1920/1920-318              |   15998 |
+| Но смерть так гибель напра̀сну                                 | С     | -   | xviii/trediakovsky/tred-041   |   10699 |
+| А во̀лны пѐли: звенѝм! звенѝм!                                 | Я~Я   | 1/2 | xx/xlebnikov/xlebn-264        |    7627 |
+| Что̀-то подхо̀дит блѝзко, вѐрно,                                | Л     | -   | xx/gumilev/gumil-086          |    5749 |
+| Ѝ зачѐм мне зна̀ть, что̀ пахну̀ло -- Нѝлом                       | Х~Х   | 1/2 | xx/cvetaeva/cvet1-455         |    4966 |
+| То̀лько, как лѐбедь, она̀ сло̀вно не шла̀, а плыла̀...             | Д~Д   | 1/2 | xix/maikov_a/maik-273         |    3738 |
+| Катись ра̀достью по поднѐбесью.                                | Ан~Ан | 1/2 | xix/1790-1810_poets/poets-334 |    1957 |
+| К Ѝлида̀ре б нѐ горѐл то̀ль мой нѐобы̀чный.                      | Х~Х   | 4/7 | xviii/trediakovsky/tred-145   |    1833 |
+| Хо̀лодна̀ наша̀ постѐль:                                         | Х*    | -   | xx/obolduev/obold-370         |    1095 |
+| Ды̀мные ж ко̀рни для землѝ рождены̀.                             | Дк    | 1/2 | xx/adobroljubov/adobr-32      |     790 |
+| В игра̀х его̀».                                                 | Я*    | -   | xviii/xviii_sb/xviii-585      |     525 |
+| Су̀мерки то̀лько паду̀т -- в двѐри моѝ он стучѝтся,              | Пен   | -   | xx/schwarz/schwar-066         |     387 |
+| Ковы̀ль, моя тра̀вушка, ковы̀ль бесприю̀тная,                     | Аф~Аф | 1/2 | xix/nikitin/nikit-130         |     317 |
+| в синих брю̀ках кита̀йских / и в футбо̀лке с дина̀мовским «Д[э̀]». | Ан~Ан | 2/5 | xx/rein/rein-143              |     280 |

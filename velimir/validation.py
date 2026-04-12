@@ -58,7 +58,7 @@ def meters_to_str(mc: MeterClass):
 
 
 def caesura_to_str(li):
-    return ",".join(str(round(x, 3)) for x in li)
+    return ",".join(str(x) for x in li)
 
 
 def validate_models(
@@ -117,14 +117,14 @@ def validate_models(
             rows = []
             batch_size_actual = meter_pred.size(0)
 
-            for line_idx in range(batch_size_actual):
-                current_sample = raw_samples[batch_idx * batch_size + line_idx]
+            for batch_line_idx in range(batch_size_actual):
+                current_sample = raw_samples[batch_idx * batch_size + batch_line_idx]
 
-                accent_p = rhythm_to_str(accent_pred_masked[line_idx])
-                accent_t = rhythm_to_str(poetic_target[line_idx])
+                accent_p = rhythm_to_str(accent_pred_masked[batch_line_idx])
+                accent_t = rhythm_to_str(poetic_target[batch_line_idx])
 
-                meter_class_p_i = meter_pred[line_idx].round().item()
-                meter_class_t_i = meter_target[line_idx].item()
+                meter_class_p_i = meter_pred[batch_line_idx].item()
+                meter_class_t_i = meter_target[batch_line_idx].item()
 
                 meter_class_p = MeterClassRegistry.int_to_mc(meter_class_p_i)
                 meter_class_t = MeterClassRegistry.int_to_mc(meter_class_t_i)
