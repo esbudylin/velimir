@@ -1,5 +1,6 @@
 from dataclasses import dataclass, fields
 from enum import IntEnum
+from fractions import Fraction
 
 import bitarray.util as bu
 from bitarray import bitarray
@@ -146,14 +147,14 @@ class Meter:
 class MeterClass:
     meter_types: tuple[MeterType, ...]
     # позиции цезурных разделений относительно количества поэтических ударений в строке
-    caesura: tuple[float, ...]
+    caesura: tuple[Fraction, ...]
     unstable: tuple[bool, ...]
 
     @classmethod
     def from_dict(cls, data: dict):
         return cls(
             meter_types=tuple(MeterType(mt) for mt in data["meter_types"]),
-            caesura=tuple(data["caesura"]),
+            caesura=tuple(map(Fraction, data["caesura"])),
             unstable=tuple(data["unstable"]),
         )
 
@@ -172,7 +173,7 @@ class Line:
         return MeterClass(
             tuple(m.meter for m in self.meters),
             tuple(
-                sum(self.syllable_masks.poetic_accent_mask[:c]) / feet
+                Fraction(sum(self.syllable_masks.poetic_accent_mask[:c]), feet)
                 for c in self.caesura
             ),
             tuple(m.unstable for m in self.meters),

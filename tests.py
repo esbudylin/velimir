@@ -1,24 +1,16 @@
 import unittest
 from dataclasses import asdict
+from fractions import Fraction
 
 from bitarray import bitarray
 from bs4 import BeautifulSoup
 from parameterized import parameterized
 
-from velimir.accentuator import accent_line, build_accent_dict
-from velimir.domain_models import (
-    Clausula,
-    Line,
-    Meter,
-    MeterType,
-    Poem,
-)
+from velimir.accentuator import accent_line, build_accent_dict, extract_accent_mask
+from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
+from velimir.identifier import decode_caesura_positions
 from velimir.io import read_accent_dicts
-from velimir.parsers import (
-    extract_lines,
-    extract_syllable_masks,
-    transform_poem,
-)
+from velimir.parsers import extract_lines, extract_syllable_masks, transform_poem
 from velimir.settings import ACCENT_DICT_PATHS
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
@@ -218,3 +210,38 @@ class TestAccentuator(unittest.TestCase):
         res = bitarray(accent_line(word))
 
         self.assertEqual(res, bitarray(with_accents))
+
+
+class TestCaesuraDecoding(unittest.TestCase):
+    @parameterized.expand(
+        [
+            (
+                ["4/7"],
+                ["Х", "Х"],
+                "Со̀вет в сѐрдце во̀пиѐт, пла̀чу ѝ рыда̀ю!",
+                [7],
+            ),
+            (
+                ["1/2"],
+                ["Я", "Я"],
+                "Пусть злы̀е лю̀ди венѐц сплета̀ют,",
+                [5],
+            ),
+            (
+                ["2/5"],
+                ["Ан", "Ан"],
+                "Там далѐко-далѐко, где навѝс очаро̀ванный лѐс,",
+                [7],
+            ),
+        ],
+    )
+    def test_decoding(self, caesura_encoded, meter_types, example, caesura_decoded):
+        mask = extract_accent_mask(example)
+
+        res = decode_caesura_positions(
+            relative_caesuras=map(Fraction, caesura_encoded),
+            meter_types=list(map(MeterType.from_str, meter_types)),
+            poetic_accent_mask=mask,
+        )
+
+        self.assertListEqual(res, caesura_decoded)

@@ -1,9 +1,11 @@
 import itertools
 import logging
 from dataclasses import dataclass
+from fractions import Fraction
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
+from velimir.domain_models import MeterType
 
 from . import accentuator, parsers
 from .domain_models import Clausula, Meter, MeterClass
@@ -157,28 +159,64 @@ def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
 
 
 def decode_caesura_positions(
-    relative_caesuras: tuple[float],
+    relative_caesuras: tuple[Fraction, ...],
+    meter_types: tuple[MeterType, ...],
     poetic_accent_mask: list[bool],
 ) -> list[int]:
     target_stresses = [
-        round(frac * len(poetic_accent_mask)) for frac in relative_caesuras
+        round(frac * sum(poetic_accent_mask)) for frac in relative_caesuras
     ]
 
-    result = []
+    clausula_positions = []
+
     target_idx = 0
+    current_stress_idx = 1
 
     for i, stress in enumerate(poetic_accent_mask):
-        if target_idx < len(target_stresses) and i == target_stresses[target_idx]:
-            result.append(i)
+        if not stress:
+            continue
+
+        if target_idx >= len(target_stresses):
+            break
+
+        if current_stress_idx == target_stresses[target_idx]:
+            clausula_positions.append(i + 1)
             target_idx += 1
 
-    return result
+        current_stress_idx += 1
+
+    caesura_positions = []
+
+    for i, pos in enumerate(clausula_positions):
+        between_stresses = len(
+            list(
+                itertools.takewhile(
+                    lambda a: not a,
+                    poetic_accent_mask[pos:],
+                )
+            )
+        )
+
+        if between_stresses == 0:
+            caesura_positions.append(pos)
+            continue
+
+        try:
+            meter = meter_types[i + 1]
+            anacrusa = parsers.stress_position_in_foot(meter)
+            clausula = between_stresses - anacrusa
+            caesura_positions.append(pos + clausula)
+        except (IndexError, ValueError):
+            # TODO: fallback to word endings
+            pass
+
+    return caesura_positions
 
 
 def process_line(mc: MeterClass, pmask: list[bool]) -> ProcessedLine:
     line_meters = []
 
-    caesura_positions = decode_caesura_positions(mc.caesura, pmask)
+    caesura_positions = decode_caesura_positions(mc.caesura, mc.meter_types, pmask)
 
     for i, meter_type in enumerate(mc.meter_types):
         meter_mask = extract_meter_accent_mask(
