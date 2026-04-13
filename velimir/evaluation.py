@@ -61,7 +61,7 @@ def caesura_to_str(li):
     return ",".join(str(x) for x in li)
 
 
-def validate_models(
+def evaluate_models(
     accent_model,
     meter_model,
     raw_samples: list[RawSample],

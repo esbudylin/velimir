@@ -65,11 +65,11 @@ the repository and run the scripts directly from the command line.
   Use the flag ~--test-run~ to run the training on a small data subset
   (1000 lines) - the intended use case is quick sanity checks.
   
-+ ~validate_models.py~
++ ~evaluate_models.py~
 
   Collects data on model accuracy. The data are extracted from 2% of
   the original dataset’s lines, which are excluded from the training
-  set.  The collected data are dumped to ~data/predictions.db~ as a
+  set. The collected data are dumped to ~data/predictions.db~ as a
   SQLite database. The repository includes an org-babel [[file:notebooks/prediction-analysis.org][notebook]] with
   analytical queries to the database.
   
@@ -97,7 +97,7 @@ the same input as the first model plus the predicted meter.
 
 # TODO explain meter classification
 
-Validating the models on the test dataset shows 93% accuracy for
+Evaluating the models on the test dataset shows 93% accuracy for
 accent detection and 94% accuracy for meter detection.
 
 Accuracy varies by meter type. The graph below shows accuracy of meter
@@ -119,7 +119,7 @@ formulas and accent positions) extracted from the corpus. The original
 corpus files are not included in the repository due to copyright
 constraints. However, the repository still contains scripts that
 depend on the original corpus files: ~build_dataset.py~ and
-~validate_accentuator.py~.
+~evaluate_accentuator.py~.
 
 The directory [[file:data/accent_dicts]] includes files ~accent.dic~ and
 ~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_accent]] repo. Minor changes

@@ -1,5 +1,5 @@
 # Собирает данные о точности акцентуатора,
-# основываясь на текстах акцентников и тактовиков, размеченных в корпусе.
+# основываясь на текстах акцентников, размеченных в корпусе.
 # NB: В акцентниках размечены реальные ударения, а не икты.
 
 import csv
@@ -28,7 +28,7 @@ def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
     for row in csv_reader:
         poem = InputPoem.from_row(row)
 
-        if not ("Ак" in poem.meter or "Тк" in poem.meter):
+        if "Ак" not in poem.meter:
             continue
 
         delayed_logger.create(
@@ -39,7 +39,7 @@ def extract_ak_lines(csv_reader: csv.DictReader) -> Iterator[str]:
         soup = BeautifulSoup(xml_str, "xml")
 
         for line in extract_lines(soup):
-            if "Ак" in line.meter or "Тк" in line.meter:
+            if "Ак" in line.meter:
                 yield line.text
 
 
