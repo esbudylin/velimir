@@ -1,8 +1,8 @@
 #+PROPERTY: header-args :dir ..
-#+PROPERTY: header-args:python :session meter-classes
+#+PROPERTY: header-args:python
 
-Collect examples for selected classes (RNC files are required)
-#+begin_src python :results table
+Collect examples for selected meter classes (RNC files are required)
+#+begin_src python :results table :session meter-classes
   import sqlite3
 
   from bs4 import BeautifulSoup

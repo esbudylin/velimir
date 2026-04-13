@@ -97,7 +97,7 @@ the same input as the first model plus the predicted meter.
 
 # TODO explain meter classification
 
-Validating the models on the test dataset shows 93.3% accuracy for
+Validating the models on the test dataset shows 93% accuracy for
 accent detection and 94% accuracy for meter detection.
 
 Accuracy varies by meter type. The graph below shows accuracy of meter
