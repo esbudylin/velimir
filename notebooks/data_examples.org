@@ -65,3 +65,99 @@ Collect examples for selected meter classes (RNC files are required)
 | Су̀мерки то̀лько паду̀т -- в двѐри моѝ он стучѝтся,              | Пен   | -   | xx/schwarz/schwar-066         |     387 |
 | Ковы̀ль, моя тра̀вушка, ковы̀ль бесприю̀тная,                     | Аф~Аф | 1/2 | xix/nikitin/nikit-130         |     317 |
 | в синих брю̀ках кита̀йских / и в футбо̀лке с дина̀мовским «Д[э̀]». | Ан~Ан | 2/5 | xx/rein/rein-143              |     280 |
+
+#+begin_src python :results value
+  import sqlite3
+
+  from bs4 import BeautifulSoup
+
+  from velimir.parsers import extract_lines
+  from velimir.io import read_poem_xml
+  from velimir.validation import meters_to_str
+  from velimir.ml_loader import MeterClassRegistry
+  from velimir.settings import PREDICTION_DB_PATH
+
+  MeterClassRegistry.initialize()
+
+  conn = sqlite3.connect(PREDICTION_DB_PATH)
+
+  res = conn.execute("""
+      SELECT poem_path, line_idx, meter_class_target, meter_class_pred
+      FROM predictions
+      WHERE meter_class_target <> meter_class_pred
+      ORDER BY RANDOM()
+      LIMIT 50
+  """)
+
+  examples = [("Текст", "Метр (корпус)", "Цезура (корпус)", "Предсказанный метр", "Предсказанная цезура", "Файл")]
+
+  while row := res.fetchone():
+      poem_path, line_id, target_class, pred_class = row
+      
+      target_class, pred_class = map(MeterClassRegistry.int_to_mc, (target_class, pred_class))
+
+      poem_xml = read_poem_xml(poem_path)
+      soup = BeautifulSoup(poem_xml, "xml")
+      lines = list(extract_lines(soup))
+
+      line = lines[line_id]
+
+      caesura_to_str = lambda c: "-".join(map(str, c.caesura)) or '-'
+
+      examples.append((line.text, meters_to_str(target_class), caesura_to_str(target_class), meters_to_str(pred_class), caesura_to_str(pred_class), poem_path))
+
+  return examples
+#+end_src
+
+#+RESULTS:
+| Текст                                                            | Метр (корпус) | Цезура (корпус) | Предсказанный метр | Предсказанная цезура | Файл                        |
+| Сего̀дня / на̀до / кастѐтом                                        | Дк            | -               | Я                  | -                    | xx/majakovsky/majak8-091    |
+| сжима̀лось сѐрдце в кула̀к или в ко̀м                               | Дк            | -               | Аф~Аф              | 1/2                  | xx/petrov/petrov-634        |
+| Бы̀ло бы у меня̀ усѐрдье,                                          | Ак            | -               | Дк                 | -                    | xx/sedakova/sedak-347       |
+| Что стру̀на о̀борвѐтся!..                                          | Я             | -               | Х                  | -                    | xx/samoilov/samoi-553       |
+| и ка̀тится̀ по жѐлтой у̀лице                                        | Я             | -               | Тк                 | -                    | xx/sapgir/sapgr-728         |
+| И во мнѐ накипа̀ет за̀висть                                        | Дк            | -               | Тк                 | -                    | xx/elagin/elag-188          |
+| Расцвету̀ ли за̀ново я̀.                                            | Дк            | -               | Аф                 | -                    | xx/emigration/emigr-1623    |
+| И не ты̀ ли,                                                      | Ан            | -               | Дк                 | -                    | xx/korvin/korvn-042         |
+| В топоры̀ пора̀ нам пого̀сты брать.                                 | Дк            | -               | Х~Х                | 1/2                  | xx/oberiu/oberi-74          |
+| Бу̀дучи дога̀дливым от приро̀ды                                     | Ак            | -               | Тк                 | -                    | xx/tixonov/tixon-133        |
+| Та̀к мы скака̀ли вдвоѐм на допро̀с у подно̀жия го̀р.                  | Д             | -               | Дк                 | -                    | xx/xlebnikov/xlebn-143      |
+| Прыжко̀м пловца̀ слетѐл Леганьѐ...                                 | Дк            | -               | Тк                 | -                    | xx/zenkevich/zenk2-017      |
+| Я / на сло̀жных агѝтвопро̀сах ро̀с,                                 | Дк            | -               | Ак                 | -                    | xx/majakovsky/majak2-28     |
+| От боло̀тного зло̀го ды̀ма,                                         | Л             | -               | Дк                 | -                    | xx/cvetaeva/cvet1-567       |
+| Любо̀вь и нѐжность тая̀,                                           | Дк            | -               | Я                  | -                    | xx/kumach/kumach-049        |
+| Ѝ бессмы̀сленны̀й Орфѐй                                            | Х             | -               | Тк                 | -                    | xx/stratanovskiy/strat-027  |
+| И ко̀нтрдублика̀тный аккредитѝв.                                   | Дк            | -               | Ак                 | -                    | xx/selvinsky/selv2-022      |
+| Оста̀лись то̀лько дѐти.                                            | Я             | -               | Дк                 | -                    | xx/gercyk/gerc-144          |
+| «Ай спасѝбо, мѝлые, на добро̀м словце,                            | Тк            | -               | Ак                 | -                    | xx/satirikon/satir-054      |
+| но ужѐ шѝре подво̀з сливо̀вого со̀ка                                | Дк            | -               | С                  | -                    | xx/cvetkov/cvetk-176        |
+| И луна̀, им одѐта,                                                | Ан            | -               | Х                  | -                    | xx/avantgarde/avan-1445     |
+| Ездишь, ѐздишь,                                                  | Ан            | -               | Х                  | -                    | xx/stratanovskiy/strat-259  |
+| Э̀то, как прѐжде, сно̀ва весна̀.                                    | Дк            | -               | Д~Д                | 1/2                  | xx/pasternak/paster-287     |
+| Дождѝ впервы̀е на рѝск и на о̀щупь,                                | Дк            | -               | Тк                 | -                    | xx/1920/1920-818            |
+| Но̀ перед смѐртью она̀ сладка̀...                                   | Дк            | -               | Я~Я                | 1/2                  | xx/oleynikov/olein-099      |
+| Та велит всем любѝти,                                            | С             | -               | Ан                 | -                    | xviii/trediakovsky/tred-070 |
+| Сторонѝтесь!                                                     | Ан            | -               | Х                  | -                    | xx/briusov/brius-1063       |
+| Конѐчно спѐр я у тебя̀ часы̀                                       | Тк            | -               | Я                  | -                    | xx/xvostenko/xvost-340      |
+| надѝр                                                            | Аф            | -               | Я                  | -                    | xx/gorbanevskaya/grbnv-526  |
+| Про̀щай -- бу̀дь здоро̀ва!                                          | Х             | -               | Х*                 | -                    | xix/grigoriev/grig-075      |
+| Пла̀кать, как об Эдѐме Ѐва!                                       | Ак            | -               | Дк                 | -                    | xx/avantgarde/avan-1143     |
+| Хра̀поѝдолы̀ заржа̀ли та̀к                                           | Х             | -               | Дк                 | -                    | xx/sapgir/sapgr-763         |
+| кро̀вь свертывалась в ша̀рики из пы̀лѝ.                             | Тк            | -               | Я                  | -                    | xx/voznesensky/vozns-242    |
+| Тума̀н навѝс,                                                     | Я             | -               | Дк                 | -                    | xx/china/china-169          |
+| Говоря̀ стиха̀ми, мы кру̀пно влѝпли,                                | Дк            | -               | Л                  | -                    | xx/zelchenko/zel-027        |
+| Суро̀в брюха̀тостѝ пейза̀ж отѐческий,                               | Я             | -               | Я~Я                | 1/2                  | xx/bozhnev/bozhn-132        |
+| А пережива̀нья стихѝйного тѐла?                                   | Дк            | -               | Аф                 | -                    | xx/moritz/mrtz-0749         |
+| Если хо̀чешь в Иису̀совой коро̀не ходѝть,                           | Тк            | -               | Ак                 | -                    | xx/mandelstamm/mandl-346    |
+| То̀лько всѐ догна̀ть не мо̀жет, «по̀дождѝ, сыно̀к, меня̀»,             | Х             | -               | Дк                 | -                    | xx/adamovic/adam-116        |
+| мне жѝть в нем приѐлось, что Бо̀гу -- / «ра̀знообра̀зность» молѝтв, | Дк            | -               | Ак                 | -                    | xx/ryzhiy/ryzh-008          |
+| была̀ я в ЗА̀ГСЕ                                                   | Я             | -               | Х*                 | -                    | xx/xarms/xarms-107          |
+| Всегда̀-Unvollèndete                                              | Аф            | -               | Я                  | -                    | xx/aygi/aygi-258            |
+| О̀н объявѝл ѝстину мѝра в винѐ,                                   | Дк            | -               | Аф                 | -                    | xx/1920/1920-785            |
+| поло̀жить по̀бедѝвшую̀ кома̀нду.                                     | Я             | -               | Тк                 | -                    | xx/baitov/bait-344          |
+| Едѝнственно, ка̀жется, что̀ не уста̀л он, --                        | Аф            | -               | Тк                 | -                    | xx/simonov/smnv-184         |
+| Слѝшком легко̀, как мне пѝшется, слѝшком легко̀                    | Д             | -               | Дк                 | 1/2                  | xx/mironov/miron-258        |
+| и сама̀ надѐжда убива̀ет.                                          | Тк            | -               | Х                  | -                    | xx/sedakova/sedak-351       |
+| Минма̀ш                                                           | Я             | -               | Х                  | -                    | xx/saburov/sabur-622-1      |
+| тыча вспы̀шками,                                                  | Ан            | -               | Х                  | -                    | xx/kirsanov/kirsan-191      |
+| Он не по̀нял, кто зажѐг вас,                                      | Тк            | -               | Дк                 | -                    | xx/esenin/es4-172           |
