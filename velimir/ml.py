@@ -217,7 +217,7 @@ def eval_meter(model, loader, device):
     return total_loss / len(loader)
 
 
-def train_model(model, train_func, eval_func, max_epochs, patience):
+def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
     best_validation_loss = float("inf")
     best_state_dict = None
     epochs_no_improve = 0
@@ -225,12 +225,13 @@ def train_model(model, train_func, eval_func, max_epochs, patience):
     for epoch in range(max_epochs):
         train_loss = train_func()
         validation_loss = eval_func()
+        scheduler.step(validation_loss)
 
         logging.info(
             f"Epoch {epoch} train_loss={train_loss:.4f} validation_loss={validation_loss:.4f}"
         )
 
-        if validation_loss < best_validation_loss - 1e-4:
+        if validation_loss + 1e-5 < best_validation_loss:
             epochs_no_improve = 0
             best_state_dict = copy.deepcopy(model.state_dict())
             best_validation_loss = validation_loss
@@ -246,7 +247,7 @@ def train_model(model, train_func, eval_func, max_epochs, patience):
 def train_models(
     train_set,
     validation_set,
-    max_epochs=50,
+    max_epochs=100,
     patience=3,
     batch_size=2048,
     num_workers=4,
@@ -273,14 +274,18 @@ def train_models(
     accent_model = AccentModel().to(device)
     meter_model = MeterModel().to(device)
 
-    accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=2e-4)
-    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=2e-4)
+    accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=3e-4)
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
+
+    accent_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(accent_optimizer)
+    meter_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(meter_optimizer)
 
     logging.info("Training accent model")
     accent_state_dict = train_model(
         accent_model,
         partial(train_accent, accent_model, train_loader, accent_optimizer, device),
         partial(eval_accent, accent_model, validation_loader, device),
+        scheduler=accent_scheduler,
         max_epochs=max_epochs,
         patience=patience,
     )
@@ -290,6 +295,7 @@ def train_models(
         meter_model,
         partial(train_meter, meter_model, train_loader, meter_optimizer, device),
         partial(eval_meter, meter_model, validation_loader, device),
+        scheduler=meter_scheduler,
         max_epochs=max_epochs,
         patience=patience,
     )
