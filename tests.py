@@ -10,7 +10,12 @@ from velimir.accentuator import accent_line, build_accent_dict, extract_accent_m
 from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
 from velimir.identifier import decode_caesura_positions
 from velimir.io import read_accent_dicts
-from velimir.parsers import extract_lines, extract_syllable_masks, transform_poem
+from velimir.parsers import (
+    extract_lines,
+    extract_syllable_masks,
+    transform_poem,
+    extract_word_ending_mask,
+)
 from velimir.settings import ACCENT_DICT_PATHS
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
@@ -233,6 +238,12 @@ class TestCaesuraDecoding(unittest.TestCase):
                 "Там далѐко-далѐко, где навѝс очаро̀ванный лѐс,",
                 [7],
             ),
+            (
+                ["1/2"],
+                ["Дк"],
+                "Ды̀мные ж ко̀рни для землѝ рождены̀.",
+                [5],
+            ),
         ],
     )
     def test_decoding(self, caesura_encoded, meter_types, example, caesura_decoded):
@@ -242,6 +253,7 @@ class TestCaesuraDecoding(unittest.TestCase):
             relative_caesuras=map(Fraction, caesura_encoded),
             meter_types=list(map(MeterType.from_str, meter_types)),
             poetic_accent_mask=mask,
+            word_ending_mask=extract_word_ending_mask(example),
         )
 
         self.assertListEqual(res, caesura_decoded)

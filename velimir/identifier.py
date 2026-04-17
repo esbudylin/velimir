@@ -63,24 +63,23 @@ class ProcessedLine:
 
 
 def extract_accent_input(
-    lines: list[str],
     stanza_breaks: list[int],
+    accent_masks: list[list[bool]],
+    word_ending_masks: list[list[bool]],
 ):
     xs = []
 
-    ling_accent_masks = [accentuator.accent_line(li) for li in lines]
-
     stanza_stats = compute_mean_ling_accents_per_stanza(
-        ling_accent_masks,
+        accent_masks,
         stanza_breaks,
     )
     stanzas = break_into_stanzas(
-        list(zip(ling_accent_masks, lines)),
+        list(zip(accent_masks, word_ending_masks)),
         stanza_breaks,
     )
 
     for current_stanza, stanza_lines in enumerate(stanzas):
-        for ling_accent_mask, line in stanza_lines:
+        for ling_accent_mask, word_ending_mask in stanza_lines:
             stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
 
             xs.append(
@@ -95,7 +94,7 @@ def extract_accent_input(
                             dtype=torch.float32,
                         ),
                         torch.tensor(
-                            parsers.extract_word_ending_mask(line),
+                            word_ending_mask,
                             dtype=torch.float32,
                         ),
                     ],
@@ -162,6 +161,7 @@ def decode_caesura_positions(
     relative_caesuras: tuple[Fraction, ...],
     meter_types: tuple[MeterType, ...],
     poetic_accent_mask: list[bool],
+    word_ending_mask: list[bool],
 ) -> list[int]:
     target_stresses = [
         round(frac * sum(poetic_accent_mask)) for frac in relative_caesuras
@@ -207,22 +207,50 @@ def decode_caesura_positions(
             clausula = between_stresses - anacrusa
             caesura_positions.append(pos + clausula)
         except (IndexError, ValueError):
-            # TODO: fallback to word endings
-            pass
+            # fallback to word ending position. applicable to Дк
+            caesura_positions.append(
+                extract_caesura_from_word_endings(
+                    pos,
+                    between_stresses,
+                    word_ending_mask,
+                )
+            )
 
     return caesura_positions
 
 
-def process_line(mc: MeterClass, pmask: list[bool]) -> ProcessedLine:
-    line_meters = []
+def extract_caesura_from_word_endings(
+    clausula_pos: int,
+    caesura_gap: int,
+    word_ending_mask: list[bool],
+):
+    caesura_gap_end = clausula_pos + caesura_gap
+    word_ending_gap = word_ending_mask[clausula_pos:caesura_gap_end]
 
-    caesura_positions = decode_caesura_positions(mc.caesura, mc.meter_types, pmask)
+    first_word_end_pos = len(
+        list(
+            itertools.takewhile(
+                lambda a: not a,
+                word_ending_gap,
+            )
+        )
+    )
+
+    return clausula_pos + first_word_end_pos + 1
+
+
+def process_line(
+    mc: MeterClass,
+    pmask: list[bool],
+    caesuras: list[int],
+) -> ProcessedLine:
+    line_meters = []
 
     for i, meter_type in enumerate(mc.meter_types):
         meter_mask = extract_meter_accent_mask(
             meter_position=i,
             total_meters=len(mc.meter_types),
-            caesuras=caesura_positions,
+            caesuras=caesuras,
             line_accent_mask=pmask,
         )
 
@@ -236,7 +264,7 @@ def process_line(mc: MeterClass, pmask: list[bool]) -> ProcessedLine:
         )
 
     return ProcessedLine(
-        caesura=caesura_positions,
+        caesura=caesuras,
         meters=line_meters,
         poetic_accent_mask=pmask,
     )
@@ -251,9 +279,13 @@ def process_lines(
 
     accent_model, meter_model = load_models(device)
 
+    word_ending_masks = [parsers.extract_word_ending_mask(li) for li in lines]
+    ling_accent_masks = [accentuator.accent_line(li) for li in lines]
+
     accent_input = extract_accent_input(
-        lines,
         stanza_breaks,
+        ling_accent_masks,
+        word_ending_masks,
     )
     meter_preds = detect_meter(
         meter_model,
@@ -283,9 +315,17 @@ def process_lines(
         poetic_accent_masks_list.append(valid_mask.cpu().numpy().tolist())
 
     res = []
-    for i, (mc, pmask) in enumerate(zip(meters_list, poetic_accent_masks_list)):
+    for i, (mc, pmask, wmask) in enumerate(
+        zip(meters_list, poetic_accent_masks_list, word_ending_masks)
+    ):
         try:
-            pl = process_line(mc, pmask)
+            caesuras = decode_caesura_positions(
+                mc.caesura,
+                mc.meter_types,
+                pmask,
+                wmask,
+            )
+            pl = process_line(mc, pmask, caesuras)
             res.append(pl)
         except Exception as e:
             logging.error("Failed to process line: %s", lines[i])
