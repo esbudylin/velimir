@@ -1,4 +1,6 @@
 import logging
+from dataclasses import dataclass
+from fractions import Fraction
 from functools import cache
 from typing import Iterator
 
@@ -40,29 +42,27 @@ grammar = Grammar(
 )
 
 
-class MeterVisitor(NodeVisitor):
+@dataclass(slots=True)
+class LineFormula:
+    meters: list[Meter]
+    # абсолютные позиции ударных слогов, после которых располагается цезура
+    caesura: list[int]
+    rhythm_accents: list[bool]
+
+
+class LineFormulaVisitor(NodeVisitor):
     def __init__(self):
         self.meters = []
         self.caesura = []
-        self.syllable_accents = []
+        self.rhythm_accents = []
 
         super().__init__()
 
     def visit_expr(self, node, visited_children):
-        # Определяем положение цезуры для строк, в
-        # которых не был размечен ритм, исходя из схемы метра
-        if len(self.meters) > 1 and not self.caesura:
-            try:
-                self.caesura = extract_caesura(self.meters)
-            except ValueError as e:
-                # Невозможно разметить цезуру из-за нерегулярного метра (например, дольника)
-                delayed_logger.record()
-                logging.error(e)
-
-        return dict(
-            meters=self.meters,
+        return LineFormula(
+            meters=[Meter(**meter) for meter in self.meters],
             caesura=self.caesura,
-            syllables=self.syllable_accents,
+            rhythm_accents=self.rhythm_accents,
         )
 
     def visit_meter(self, node, *_):
@@ -82,13 +82,13 @@ class MeterVisitor(NodeVisitor):
         self._current_meter["unstable"] = True
 
     def visit_caesura(self, *_):
-        self.caesura.append(len(self.syllable_accents))
+        self.caesura.append(sum(self.rhythm_accents))
 
     def visit_interval(self, node, *_):
-        self.syllable_accents.extend(False for _ in range(int(node.text)))
+        self.rhythm_accents.extend(False for _ in range(int(node.text)))
 
     def visit_accent(self, node, *_):
-        self.syllable_accents.append(True)
+        self.rhythm_accents.append(True)
 
     def generic_visit(self, node, visited_children):
         return visited_children or node
@@ -115,22 +115,22 @@ def transform_poem(xml: str) -> dict:
 
 
 @cache
-def parse_line_meter(meter: str) -> dict:
+def parse_line_formula(formula: str) -> LineFormula:
     try:
-        tree = grammar.parse(meter)
+        tree = grammar.parse(formula)
 
     except ParseError as e:
         delayed_logger.record()
 
         if isinstance(e, IncompleteParseError):
-            logging.warning("Can't fully parse the line meter: %s", meter)
-            tree = grammar.match(meter)
+            logging.warning("Can't fully parse the line meter: %s", formula)
+            tree = grammar.match(formula)
 
         else:
-            logging.error("Can't parse the line meter: %s Continuing...", meter)
+            logging.error("Can't parse the line meter: %s Continuing...", formula)
             return {}
 
-    return MeterVisitor().visit(tree)
+    return LineFormulaVisitor().visit(tree)
 
 
 def extract_word_ending_mask(text: str) -> list[bool]:
@@ -186,15 +186,14 @@ def collect_line_text(line_tag) -> str:
     return "".join(parts).strip()
 
 
-def parse_line(line_text: str, parsed_meter: dict) -> Line:
-    meters = [Meter(**meter) for meter in parsed_meter["meters"]]
-
-    syllable_masks = extract_syllable_masks(line_text, parsed_meter["syllables"])
+def parse_line(line_text: str, line_formula: LineFormula) -> Line:
+    syllable_masks = extract_syllable_masks(line_text, line_formula.rhythm_accents)
+    caesura = extract_caesura(line_formula, syllable_masks.poetic_accent_mask)
 
     return Line(
-        meters=meters,
+        meters=line_formula.meters,
         syllable_masks=syllable_masks,
-        caesura=parsed_meter["caesura"],
+        caesura=caesura,
     )
 
 
@@ -213,9 +212,9 @@ def extract_lines(soup) -> Iterator[InputLine]:
 
 def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
     for line in lines:
-        if parsed_meter := parse_line_meter(line.meter):
+        if line_formula := parse_line_formula(line.meter):
             try:
-                yield parse_line(line.text, parsed_meter)
+                yield parse_line(line.text, line_formula)
             except Exception:
                 delayed_logger.record()
                 logging.error(
@@ -224,48 +223,25 @@ def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
                 )
 
 
-def match_foot_syllables_from_meter(meter: MeterType) -> int:
-    match meter:
-        case MeterType.IAMB | MeterType.TROCHEE:
-            return 2
-        case MeterType.ANAPEST | MeterType.AMPHIBRACH | MeterType.DACTYL:
-            return 3
-        case _:
-            raise ValueError(f"Can't match feet syllables from meter: {meter}")
+def extract_caesura(
+    formula: LineFormula,
+    poetic_accent_mask: list[bool],
+) -> list[Fraction]:
+    if formula.caesura:
+        feet = sum(poetic_accent_mask)
+        return [Fraction(c, feet) for c in formula.caesura]
 
+    # Определяем положение цезуры для строк, в
+    # которых не был размечен ритм, исходя из схемы метра
+    if len(formula.meters) > 1 and not formula.caesura:
+        feet = sum(meter.feet for meter in formula.meters)
+        feet_acc = 0
+        caesura = []
 
-def stress_position_in_foot(meter: MeterType) -> int:
-    match meter:
-        case MeterType.TROCHEE | MeterType.DACTYL:
-            return 0
-        case MeterType.IAMB | MeterType.AMPHIBRACH:
-            return 1
-        case MeterType.ANAPEST:
-            return 2
-        case _:
-            raise ValueError(f"Unsupported meter for stress offset: {meter}")
+        for meter in formula.meters[:-1]:
+            feet_acc += meter.feet
+            caesura.append(Fraction(feet_acc, feet))
 
+        return caesura
 
-def find_final_foot_size(meter: MeterType, clausula: Clausula) -> int:
-    stress_pos = stress_position_in_foot(meter)
-
-    return stress_pos + 1 + clausula
-
-
-def extract_caesura(meters: list[dict]) -> list[int]:
-    meter_pairs = list(zip(meters, meters[1:]))
-    last_caesura_position = 0
-
-    res = []
-
-    for meter, _ in meter_pairs:
-        feet = meter["feet"]
-
-        foot_syllables = match_foot_syllables_from_meter(meter["meter"])
-        final_foot_size = find_final_foot_size(meter["meter"], meter["clausula"])
-
-        last_caesura_position += foot_syllables * (feet - 1) + final_foot_size
-
-        res.append(last_caesura_position)
-
-    return res
+    return []

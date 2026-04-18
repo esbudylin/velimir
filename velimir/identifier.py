@@ -157,6 +157,18 @@ def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
     return Clausula(len(list(last_syllables_without_accent)))
 
 
+def anacrusa_by_meter_type(meter: MeterType) -> int:
+    match meter:
+        case MeterType.TROCHEE | MeterType.DACTYL:
+            return 0
+        case MeterType.IAMB | MeterType.AMPHIBRACH:
+            return 1
+        case MeterType.ANAPEST:
+            return 2
+        case _:
+            raise ValueError(f"Unsupported meter for stress offset: {meter}")
+
+
 def decode_caesura_positions(
     relative_caesuras: tuple[Fraction, ...],
     meter_types: tuple[MeterType, ...],
@@ -203,7 +215,7 @@ def decode_caesura_positions(
 
         try:
             meter = meter_types[i + 1]
-            anacrusa = parsers.stress_position_in_foot(meter)
+            anacrusa = anacrusa_by_meter_type(meter)
             clausula = between_stresses - anacrusa
 
             caesura = pos + clausula

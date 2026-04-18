@@ -79,11 +79,36 @@ class TestParseLine(unittest.TestCase):
 
     @parameterized.expand(
         [
-            ("single_caesura", caesura, [7], 15),
-            ("multiple_caesuras", multiple_caesuras, [6, 13], 22),
-            ("without_rhythm", caesura_without_rhythm, [4], 8),
-            ("multiple_without_rhythm", multiple_caesuras_without_rhythm, [5, 10], 15),
-            ("af_without_rhythm", af_caesura_without_rhythm, [5], 14),
+            (
+                "single_caesura",
+                caesura,
+                [(1, 2)],
+                15,
+            ),
+            (
+                "multiple_caesuras",
+                multiple_caesuras,
+                [(2, 7), (4, 7)],
+                22,
+            ),
+            (
+                "without_rhythm",
+                caesura_without_rhythm,
+                [(1, 2)],
+                8,
+            ),
+            (
+                "multiple_without_rhythm",
+                multiple_caesuras_without_rhythm,
+                [(1, 3), (2, 3)],
+                15,
+            ),
+            (
+                "af_without_rhythm",
+                af_caesura_without_rhythm,
+                [(2, 5)],
+                14,
+            ),
         ]
     )
     def test_parse_caesuras(self, name, xml_line, caesuras, syllable_count):
@@ -91,7 +116,7 @@ class TestParseLine(unittest.TestCase):
         self.assertEqual(len(result), 1)
         line = result[0]
 
-        self.assertListEqual(line.caesura, caesuras)
+        self.assertListEqual(line.caesura, [Fraction(*c) for c in caesuras])
         self.assertEqual(len(line.syllable_masks.poetic_accent_mask), syllable_count)
 
     @parameterized.expand(

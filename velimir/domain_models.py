@@ -146,7 +146,6 @@ class Meter:
 @dataclass(frozen=True, slots=True)
 class MeterClass:
     meter_types: tuple[MeterType, ...]
-    # позиции цезурных разделений относительно количества поэтических ударений в строке
     caesura: tuple[Fraction, ...]
     unstable: tuple[bool, ...]
 
@@ -163,19 +162,14 @@ class MeterClass:
 class Line:
     # строка может содержать несколько метров: например, в случае цезурного разделения строки
     meters: list[Meter]
-    # позиции слогов, после которых располагается цезура
-    caesura: list[int]
+    # позиции цезурных разделений относительно количества поэтических ударений в строке
+    caesura: list[Fraction]
     syllable_masks: SyllableMasks
 
     def to_meterclass(self) -> MeterClass:
-        feet = sum(self.syllable_masks.poetic_accent_mask)
-
         return MeterClass(
             tuple(m.meter for m in self.meters),
-            tuple(
-                Fraction(sum(self.syllable_masks.poetic_accent_mask[:c]), feet)
-                for c in self.caesura
-            ),
+            tuple(self.caesura),
             tuple(m.unstable for m in self.meters),
         )
 
@@ -185,7 +179,7 @@ class Line:
 
     def encode(self):
         return [
-            self.caesura,
+            [(c.numerator, c.denominator) for c in self.caesura],
             self.syllable_masks.encode(),
             [m.encode() for m in self.meters],
         ]
@@ -195,7 +189,7 @@ class Line:
         caesura, masks_data, meters_data = data
 
         return cls(
-            caesura=caesura,
+            caesura=[Fraction(c[0], c[1]) for c in caesura],
             syllable_masks=SyllableMasks.decode(masks_data),
             meters=[Meter.decode(m) for m in meters_data],
         )
