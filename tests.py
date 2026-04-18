@@ -244,6 +244,12 @@ class TestCaesuraDecoding(unittest.TestCase):
                 "Ды̀мные ж ко̀рни для землѝ рождены̀.",
                 [5],
             ),
+            (
+                ["1/2"],
+                ["Л"],
+                "Вѐтры молча̀т; круго̀м тишина̀",
+                [4],
+            ),
         ],
     )
     def test_decoding(self, caesura_encoded, meter_types, example, caesura_decoded):

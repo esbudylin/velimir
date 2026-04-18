@@ -205,9 +205,19 @@ def decode_caesura_positions(
             meter = meter_types[i + 1]
             anacrusa = parsers.stress_position_in_foot(meter)
             clausula = between_stresses - anacrusa
-            caesura_positions.append(pos + clausula)
+
+            caesura = pos + clausula
+
+            if not word_ending_mask[caesura - 1]:
+                # расчитанная цезура приходится на середину слова,
+                # вероятно в тексте присутствует цезурное сокращение
+                # или наращение
+                raise ValueError
+
+            caesura_positions.append(caesura)
         except (IndexError, ValueError):
-            # fallback to word ending position. applicable to Дк
+            # используем позицию первого окончания слова в цезурном "интервале" как позицию цезуры
+            # применяется к тоническим размерам и строкам с цезурными наращениями/сокращениями
             caesura_positions.append(
                 extract_caesura_from_word_endings(
                     pos,
@@ -225,7 +235,12 @@ def extract_caesura_from_word_endings(
     word_ending_mask: list[bool],
 ):
     caesura_gap_end = clausula_pos + caesura_gap
+
+    begins_with_word_ending = word_ending_mask[clausula_pos - 1]
     word_ending_gap = word_ending_mask[clausula_pos:caesura_gap_end]
+
+    if begins_with_word_ending:
+        return clausula_pos
 
     first_word_end_pos = len(
         list(
