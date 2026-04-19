@@ -1,4 +1,5 @@
 import logging
+import re
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cache
@@ -9,15 +10,8 @@ from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
-from . import accentuator
-from .domain_models import (
-    Clausula,
-    InputLine,
-    Line,
-    Meter,
-    MeterType,
-    SyllableMasks,
-)
+from . import accentuator, cyrlat
+from .domain_models import Clausula, InputLine, Line, Meter, MeterType, SyllableMasks
 from .logger import delayed_logger
 
 grammar = Grammar(
@@ -204,8 +198,16 @@ def extract_lines(soup) -> Iterator[InputLine]:
 
             if not text:
                 delayed_logger.record()
-                logging.error(f"Cannot collect text from line {line}")
+                logging.error("Cannot collect text from line %s", line)
                 continue
+
+            match cyrlat.detect(text):
+                case cyrlat.DetectionResult.LATIN:
+                    delayed_logger.record()
+                    logging.warning("Skipping line (latin script detected) %s", text)
+                    continue
+                case cyrlat.DetectionResult.CYRLAT:
+                    text = cyrlat.fix(text)
 
             yield InputLine(text=text, meter=meter.strip())
 
@@ -215,11 +217,12 @@ def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
         if line_formula := parse_line_formula(line.meter):
             try:
                 yield parse_line(line.text, line_formula)
-            except Exception:
+            except Exception as e:
                 delayed_logger.record()
                 logging.error(
-                    "Error while processing line: %s",
+                    "Error while processing line: %s, %s",
                     line,
+                    str(e),
                 )
 
 

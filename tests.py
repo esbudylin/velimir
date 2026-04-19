@@ -6,6 +6,7 @@ from bitarray import bitarray
 from bs4 import BeautifulSoup
 from parameterized import parameterized
 
+from velimir import cyrlat
 from velimir.accentuator import accent_line, build_accent_dict, extract_accent_mask
 from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
 from velimir.identifier import decode_caesura_positions
@@ -288,3 +289,28 @@ class TestCaesuraDecoding(unittest.TestCase):
         )
 
         self.assertListEqual(res, caesura_decoded)
+
+
+class TestCyrlat(unittest.TestCase):
+    def test_cyrlat_detection(self):
+        cyr_string = "Тест.,[]!:()"
+        self.assertEqual(cyrlat.detect(cyr_string), cyrlat.DetectionResult.CYR)
+
+        lat_string = "Test.,[]!:()"
+        self.assertEqual(cyrlat.detect(lat_string), cyrlat.DetectionResult.LATIN)
+
+        cyrlat_string = "Тeстy"
+        self.assertEqual(cyrlat.detect(cyrlat_string), cyrlat.DetectionResult.CYRLAT)
+
+        lat_with_cyr = "Hello, мои друзья"
+        self.assertEqual(cyrlat.detect(lat_with_cyr), cyrlat.DetectionResult.LATIN)
+
+    def test_cyrlat_fix(self):
+        input = "Была̀ вeрна̀ ты что̀б[ы] ввѐк,"
+
+        self.assertEqual(cyrlat.detect(input), cyrlat.DetectionResult.CYRLAT)
+
+        fixed = cyrlat.fix(input)
+
+        self.assertEqual(cyrlat.detect(fixed), cyrlat.DetectionResult.CYR)
+        self.assertEqual(fixed, "Была̀ верна̀ ты что̀б[ы] ввѐк,")
