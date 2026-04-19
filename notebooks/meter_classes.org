@@ -25,8 +25,8 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 #+end_src
 
 #+RESULTS:
-: Total of 2869064 lines analyzed
-: 195 meter classes identified
+: Total of 2866229 lines analyzed
+: 184 meter classes identified
 
 #+begin_src python :results graphics file value :file notebooks/coverage_vs_threshold.svg
   import numpy as np
@@ -60,8 +60,8 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 #+end_src
 
 #+RESULTS:
-: Discarded 173 meter classes as too rare (represent 3132 lines)
-: Discarded data represents 0.0010916452194862157 of lines
+: Discarded 162 meter classes as too rare (represent 3010 lines)
+: Discarded data represents 0.001050160332618224 of lines
 : Total of 22 meter classes accepted
 
 Dump class vocab to a file
