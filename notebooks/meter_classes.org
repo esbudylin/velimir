@@ -29,10 +29,31 @@ Analyze meter classes present in the dataset. Selected meter classes are used in
 : 184 meter classes identified
 
 #+begin_src python :results graphics file value :file notebooks/coverage_vs_threshold.svg
-  import numpy as np
   import matplotlib.pyplot as plt
 
-  # TODO
+  total = meter_class_counter.total()
+  mc_counts = meter_class_counter.values()
+
+  x = list(range(1, 2500)) # threshold
+
+  # texts excluded for the treshold
+  y = [total - sum(mc_count for mc_count in mc_counts if mc_count > threshold) for threshold in x]
+
+  selected_threshold = 250
+
+  plt.figure()
+  plt.plot(x, y)
+
+  plt.axvline(x=selected_threshold, linestyle='--', color="grey")
+
+  plt.xlabel("Threshold")
+  plt.ylabel("Excluded texts")
+  plt.title("Coverage vs Threshold")
+
+  plt.grid(True)
+  plt.tight_layout()
+
+  plt
 #+end_src
 
 #+RESULTS:
