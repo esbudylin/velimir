@@ -209,7 +209,7 @@ NB: точность для ударений в логе выше, т.к. при
           4
       ) AS caesura_freq
   FROM predictions
-  WHERE caesura_target <> '';
+  WHERE caesura_target <> ''
 #+end_src
 
 #+RESULTS:
@@ -225,7 +225,7 @@ NB: точность для ударений в логе выше, т.к. при
           SUM(caesura_target = ''),
           4
       ) AS false_positive_rate
-  FROM predictions;
+  FROM predictions
 #+end_src
 
 #+RESULTS:
@@ -249,19 +249,18 @@ NB: точность для ударений в логе выше, т.к. при
 
 Точность в определении цезурных форм
 #+begin_src sqlite
-  SELECT * FROM
-      (SELECT
-          caesura_target AS caesura,
-          caesura_pred,
-          meter_target,
-          meter_pred,
-          accent_pred == accent_target AS accent_ok,
-          COUNT(*) AS cnt
-      FROM predictions
-      WHERE caesura_target <> ''
-      GROUP BY caesura_target, caesura_pred, meter_target, meter_pred
-      ORDER BY cnt DESC)
-  WHERE cnt > 5
+  SELECT
+      caesura_target AS caesura,
+      caesura_pred,
+      meter_target,
+      meter_pred,
+      accent_pred == accent_target AS accent_ok,
+      COUNT(*) AS cnt
+  FROM predictions
+  WHERE caesura_target <> ''
+  GROUP BY caesura_target, caesura_pred, meter_target, meter_pred
+  HAVING cnt > 5
+  ORDER BY cnt DESC
 #+end_src
 
 #+RESULTS:
@@ -365,7 +364,6 @@ View для сбора ошибок при определении метра
 
 Ошибки в определении ударений для гекзаметра
 #+begin_src sqlite
-  SELECT * FROM (
   SELECT
   accent_target,
   ROUND(AVG(accent_target == accent_pred), 3) AS accent_ok_ratio,
@@ -373,8 +371,8 @@ View для сбора ошибок при определении метра
   FROM predictions
   WHERE meter_target == 'Гек'
   GROUP BY accent_target
+  HAVING cnt > 10
   ORDER BY cnt DESC
-  ) WHERE cnt > 10
 #+end_src
 
 #+RESULTS:
