@@ -102,8 +102,8 @@ def accent_diff_word_indexes(masks: SyllableMasks) -> list[int]:
         word_poet.append(poet)
 
         if last:  # конец слова
-            # ударения размечены в обоих вариантах
-            if sum(word_ling) and sum(word_poet):
+            # поэтические ударения размечены, и слово не односложное
+            if len(word_poet) > 1 and sum(word_poet):
                 diff = sum(a != b for a, b in zip(word_ling, word_poet))
 
                 if diff:
