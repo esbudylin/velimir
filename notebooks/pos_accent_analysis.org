@@ -1,0 +1,33 @@
+#+PROPERTY: header-args :dir ..
+#+PROPERTY: header-args:sqlite :db data/pos_accent.db :colnames yes
+
+#+begin_src sqlite
+  SELECT * FROM
+  (SELECT
+  pos,
+  COUNT(*) as cnt,
+  ROUND(COUNT(*) * 1.0 / SUM(COUNT(*)) OVER (), 4) AS freq,
+  ROUND(AVG(has_accent * 1.0), 4) AS accented_pct
+  FROM pos_accent
+  WHERE meter = 'Х' AND syllable_count = 1
+  GROUP BY pos
+  ORDER BY accented_pct DESC)
+  WHERE freq > 0.005
+#+end_src
+
+#+RESULTS:
+| pos  |    cnt |   freq | accented_pct |
+|------+--------+--------+--------------|
+| NOUN | 100319 | 0.1561 |       0.9695 |
+| PRED |   5079 | 0.0079 |        0.948 |
+| INTJ |   4510 |  0.007 |        0.941 |
+| VERB |  20641 | 0.0321 |       0.9303 |
+| ADJS |   3318 | 0.0052 |       0.9283 |
+| INFN |   9641 |  0.015 |       0.8922 |
+| NUMR |   3519 | 0.0055 |       0.8062 |
+| ADVB |  23972 | 0.0373 |       0.8037 |
+| ADJF |  24517 | 0.0381 |       0.7163 |
+| NPRO |  94179 | 0.1465 |       0.7096 |
+| CONJ | 155683 | 0.2422 |       0.6904 |
+| PRCL |  82760 | 0.1288 |       0.5833 |
+| PREP | 112533 | 0.1751 |       0.5648 |
