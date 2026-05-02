@@ -1,5 +1,4 @@
 import logging
-import re
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cache
@@ -109,7 +108,7 @@ def transform_poem(xml: str) -> dict:
 
 
 @cache
-def parse_line_formula(formula: str) -> LineFormula:
+def parse_line_formula(formula: str) -> LineFormula | None:
     try:
         tree = grammar.parse(formula)
 
@@ -122,7 +121,7 @@ def parse_line_formula(formula: str) -> LineFormula:
 
         else:
             logging.error("Can't parse the line meter: %s Continuing...", formula)
-            return {}
+            return None
 
     return LineFormulaVisitor().visit(tree)
 
