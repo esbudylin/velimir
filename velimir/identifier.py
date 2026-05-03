@@ -124,11 +124,12 @@ def detect_poetic_accents(model, device, accent_input, meter_pred, pos_input):
     return pred.masked_fill(~mask, -1).unsqueeze(-1)
 
 
-def detect_meter(model, device, accent_input):
+def detect_meter(model, device, accent_input, pos_input):
     accent_input = accent_input.to(device)
+    pos_input = pos_input.to(device)
 
     with torch.no_grad():
-        pred = model(accent_input)
+        pred = model(accent_input, pos_input)
 
     return torch.argmax(pred, dim=1)
 

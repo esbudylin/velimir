@@ -86,6 +86,7 @@ def evaluate_models(
     with torch.no_grad():
         for batch_idx, batch in enumerate(loader):
             accent_input = batch.accent_input.to(device)
+            pos_input = batch.part_of_speech_input.to(device)
 
             poetic_target = batch.poetic_accents.to(device)
             meter_target = batch.meter_class.to(device)
@@ -93,14 +94,14 @@ def evaluate_models(
             # =====================
             # Meter
             # =====================
-            meter_pred = torch.argmax(meter_model(accent_input), dim=1)
+            meter_pred = torch.argmax(meter_model(accent_input, pos_input), dim=1)
             meter_correct += (meter_pred.round() == meter_target).sum().item()
             meter_total += torch.numel(meter_target)
 
             # =====================
             # Accent
             # =====================
-            accent_logits = accent_model(accent_input, meter_pred)
+            accent_logits = accent_model(accent_input, meter_pred, pos_input)
             accent_pred = (torch.sigmoid(accent_logits) > 0.5).float()
 
             mask = poetic_target != -1
