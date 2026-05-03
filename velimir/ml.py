@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .ml_loader import MeterClassRegistry, get_loader
+from .domain_models import PartOfSpeech
 
 
 class AccentModel(nn.Module):
@@ -16,11 +17,14 @@ class AccentModel(nn.Module):
         hidden = 128
         num_meter_classes = MeterClassRegistry.num()
         meter_emb_dim = 16
+        num_pos_classes = len(PartOfSpeech) + 1
+        pos_emb_dim = 8
 
         self.meter_emb = nn.Embedding(num_meter_classes, meter_emb_dim)
+        self.pos_emb = nn.Embedding(num_pos_classes, pos_emb_dim, padding_idx=0)
 
         self.encoder = nn.LSTM(
-            input_size=3 + meter_emb_dim,
+            input_size=3 + meter_emb_dim + pos_emb_dim,
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,
@@ -34,21 +38,26 @@ class AccentModel(nn.Module):
             nn.Linear(hidden, 1),
         )
 
-    def forward(self, accent_input, meter_class):
+    def forward(self, accent_input, meter_class, pos_input):
         """
         accent_input: (B, T, 3) with -1 padding
         meter_class: (B,)
+        pos_input: (B, T) with -1 padding
         """
 
-        mask = (accent_input != -1).all(dim=-1)  # (B, T)
+        mask = (accent_input != -1).any(dim=-1)  # (B, T)
         lengths = mask.sum(dim=1).cpu()
 
         _, T, _ = accent_input.shape
 
+        accent_input = accent_input.masked_fill(~mask.unsqueeze(-1), 0.0)
+
         meter_emb = self.meter_emb(meter_class)  # (B, D)
         meter_emb = meter_emb.unsqueeze(1).expand(-1, T, -1)  # (B, T, D)
 
-        x = torch.cat([accent_input, meter_emb], dim=-1)
+        pos_emb = self.pos_emb(pos_input + 1)  # (B, T, D_pos)
+
+        x = torch.cat([accent_input, meter_emb, pos_emb], dim=-1)
 
         packed = nn.utils.rnn.pack_padded_sequence(
             x,
@@ -59,7 +68,7 @@ class AccentModel(nn.Module):
 
         out, _ = self.encoder(packed)
 
-        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
+        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True, total_length=T)
 
         logits = self.head(out).squeeze(-1)
 
@@ -91,11 +100,12 @@ def train_accent(model, loader, optimizer, device):
 def accent_forward_loss(model, batch, device):
     accent_input = batch.accent_input.to(device, non_blocking=True)
     meter_class = batch.meter_class.to(device, non_blocking=True)
+    pos_input = batch.part_of_speech_input.to(device, non_blocking=True)
     y = batch.poetic_accents.to(device, non_blocking=True)
 
     mask = y != -1
 
-    logits = model(accent_input, meter_class)
+    logits = model(accent_input, meter_class, pos_input)
 
     loss = F.binary_cross_entropy_with_logits(logits[mask], y[mask])
 
@@ -120,13 +130,17 @@ class MeterModel(nn.Module):
         super().__init__()
 
         input_size = 3
+        pos_emb_dim = 8
+        num_pos_classes = len(PartOfSpeech) + 1
 
         hidden = 128
 
         num_classes = MeterClassRegistry.num()
 
+        self.pos_emb = nn.Embedding(num_pos_classes, pos_emb_dim, padding_idx=0)
+
         self.encoder = nn.LSTM(
-            input_size=input_size,
+            input_size=input_size + pos_emb_dim,
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,
@@ -140,11 +154,16 @@ class MeterModel(nn.Module):
         )
         self.attn = nn.Linear(hidden * 2, 1)
 
-    def forward(self, accent_input):
+    def forward(self, accent_input, pos_input):
         mask = (accent_input != -1).any(dim=-1)
+
+        _, T, _ = accent_input.shape
 
         lengths = mask.sum(dim=1).cpu()
         x = accent_input.masked_fill(~mask.unsqueeze(-1), 0.0)
+
+        pos_emb = self.pos_emb(pos_input + 1)
+        x = torch.cat([x, pos_emb], dim=-1)
 
         packed = nn.utils.rnn.pack_padded_sequence(
             x,
@@ -154,7 +173,7 @@ class MeterModel(nn.Module):
         )
 
         out, _ = self.encoder(packed)
-        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
+        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True, total_length=T)
 
         scores = self.attn(out).squeeze(-1)
         scores = scores.masked_fill(~mask, -1e9)
@@ -192,9 +211,10 @@ def train_meter(model, loader, optimizer, device):
 
 def meter_forward_loss(model, batch, loss_fn, device):
     accent_input = batch.accent_input.to(device, non_blocking=True)
+    pos_input = batch.part_of_speech_input.to(device, non_blocking=True)
     meter_target = batch.meter_class.to(device, non_blocking=True)
 
-    logits = model(accent_input)
+    logits = model(accent_input, pos_input)
 
     loss = loss_fn(logits, meter_target)
 

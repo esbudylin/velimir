@@ -29,6 +29,7 @@ class RawSample:
 @dataclass(slots=True)
 class Sample:
     accent_input: torch.Tensor
+    part_of_speech_input: torch.Tensor
     poetic_accents: torch.Tensor
     meter_class: torch.Tensor
 
@@ -52,6 +53,7 @@ class PoetryDataset(Dataset):
                 ],
                 dim=1,
             )
+            pos = torch.tensor(syllables.part_of_speech, dtype=torch.long)
             poetic = torch.tensor(syllables.poetic_accents, dtype=torch.float32)
 
             self.samples.append(
@@ -59,6 +61,7 @@ class PoetryDataset(Dataset):
                     accent_input=accent_input,
                     poetic_accents=poetic,
                     meter_class=meter_class_t,
+                    part_of_speech_input=pos,
                 )
             )
 
@@ -138,6 +141,7 @@ def collate(batch: list[Sample]):
     accent_input = [b.accent_input for b in batch]
     poetic = [b.poetic_accents for b in batch]
     meters = [b.meter_class for b in batch]
+    pos = [b.part_of_speech_input for b in batch]
 
     accent_input = pad_sequence(
         accent_input,
@@ -149,11 +153,17 @@ def collate(batch: list[Sample]):
         batch_first=True,
         padding_value=-1,
     )
+    pos = pad_sequence(
+        pos,
+        batch_first=True,
+        padding_value=-1,
+    )
 
     return Sample(
         accent_input=accent_input,
         poetic_accents=poetic,
         meter_class=torch.stack(meters),
+        part_of_speech_input=pos,
     )
 
 

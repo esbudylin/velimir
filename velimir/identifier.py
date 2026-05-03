@@ -66,20 +66,22 @@ def extract_accent_input(
     stanza_breaks: list[int],
     accent_masks: list[list[bool]],
     word_ending_masks: list[list[bool]],
+    part_of_speech: list[list[int]],
 ):
     xs = []
+    pos_xs = []
 
     stanza_stats = compute_mean_ling_accents_per_stanza(
         accent_masks,
         stanza_breaks,
     )
     stanzas = break_into_stanzas(
-        list(zip(accent_masks, word_ending_masks)),
+        list(zip(accent_masks, word_ending_masks, part_of_speech)),
         stanza_breaks,
     )
 
     for current_stanza, stanza_lines in enumerate(stanzas):
-        for ling_accent_mask, word_ending_mask in stanza_lines:
+        for ling_accent_mask, word_ending_mask, pos in stanza_lines:
             stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
 
             xs.append(
@@ -102,14 +104,20 @@ def extract_accent_input(
                 )
             )
 
-    return pad_sequence(xs, batch_first=True, padding_value=-1)
+            pos_xs.append(torch.tensor(pos, dtype=torch.long))
+
+    xs_padded = pad_sequence(xs, batch_first=True, padding_value=-1)
+    pos_xs_padded = pad_sequence(pos_xs, batch_first=True, padding_value=-1)
+
+    return xs_padded, pos_xs_padded
 
 
-def detect_poetic_accents(model, device, accent_input, meter_pred):
+def detect_poetic_accents(model, device, accent_input, meter_pred, pos_input):
     accent_input = accent_input.to(device)
+    pos_input = pos_input.to(device)
 
     with torch.no_grad():
-        logits = model(accent_input, meter_pred)
+        logits = model(accent_input, meter_pred, pos_input)
         pred = (torch.sigmoid(logits) > 0.5).float()
 
     mask = (accent_input != -1).all(dim=2)
@@ -306,22 +314,26 @@ def process_lines(
 
     word_ending_masks = [parsers.extract_word_ending_mask(li) for li in lines]
     ling_accent_masks = [accentuator.accent_line(li) for li in lines]
+    pos_masks = [parsers.extract_part_of_speech_per_syllable(li) for li in lines]
 
-    accent_input = extract_accent_input(
+    accent_input, pos_input = extract_accent_input(
         stanza_breaks,
         ling_accent_masks,
         word_ending_masks,
+        pos_masks,
     )
     meter_preds = detect_meter(
         meter_model,
         device,
         accent_input,
+        pos_input,
     )
     poetic_accentss = detect_poetic_accents(
         accent_model,
         device,
         accent_input,
         meter_preds,
+        pos_input,
     )
 
     def filter_padding(li):
