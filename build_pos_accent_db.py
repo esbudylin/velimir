@@ -1,33 +1,25 @@
 import csv
 import itertools
 import os
-import re
 import sqlite3
+from functools import partial
 from typing import Iterator
 
 from bs4 import BeautifulSoup
-from pymorphy2 import MorphAnalyzer
 
 from velimir import accentuator, io
 from velimir.domain_models import InputLine, InputPoem
 from velimir.parsers import (
     clean_line,
     extract_lines,
+    extract_part_of_speech,
     extract_word_ending_mask,
     parse_line_formula,
+    CYRILLIC_EDGE_RE,
 )
 from velimir.settings import METADATA_TABLE, InputDialect
 
-ma = MorphAnalyzer()
-
 DB_PATH = "data/pos_accent.db"
-
-# убираем не-кириллические символы в начале и конце слова
-CYRILLIC_EDGE_RE = re.compile(r"^[^А-Яа-яЁё]+|[^А-Яа-яЁё]+$")
-
-
-def extract_pos(word):
-    return sorted(ma.parse(word), key=lambda t: -t.score)[0].tag.POS or "UNKNOWN"
 
 
 def extract_lines_from_csv(csv_reader: csv.DictReader) -> Iterator[InputLine]:
@@ -53,8 +45,9 @@ def extract_pos_accent_pairs(poetic_accents, last_in_word, parts_of_speech):
     return pos_accent_pairs
 
 
-def clean_word(word):
-    return CYRILLIC_EDGE_RE.sub("", word)
+def extract_words_for_morph(line: str):
+    clean_word = partial(CYRILLIC_EDGE_RE.sub, "")
+    return [clean_word(w) for w in line.split() if accentuator.vowel_count(w)]
 
 
 def parse_line(line):
@@ -70,9 +63,9 @@ def parse_line(line):
     poetic_accents = accentuator.extract_accent_mask(line.text)
     last_in_word = extract_word_ending_mask(cleaned_line)
 
-    words = list(map(clean_word, filter(accentuator.vowel_count, cleaned_line.split())))
+    words = extract_words_for_morph(cleaned_line)
+    parts_of_speech = map(extract_part_of_speech, words)
 
-    parts_of_speech = map(extract_pos, words)
     pos_accent_pairs = extract_pos_accent_pairs(
         poetic_accents,
         last_in_word,

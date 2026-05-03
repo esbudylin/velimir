@@ -1,4 +1,6 @@
+import itertools
 import logging
+import re
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cache
@@ -8,9 +10,18 @@ from bs4 import BeautifulSoup
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
+from pymorphy2 import MorphAnalyzer
 
 from . import accentuator, cyrlat
-from .domain_models import Clausula, InputLine, Line, Meter, MeterType, SyllableMasks
+from .domain_models import (
+    Clausula,
+    InputLine,
+    Line,
+    Meter,
+    MeterType,
+    PartOfSpeech,
+    SyllableFeatures,
+)
 from .logger import delayed_logger
 
 grammar = Grammar(
@@ -33,6 +44,8 @@ grammar = Grammar(
     ws = ~r"\s+" 
     """
 )
+
+morph_analyzer = MorphAnalyzer()
 
 
 @dataclass(slots=True)
@@ -149,23 +162,55 @@ def clean_line(s: str) -> str:
     return s
 
 
-def extract_syllable_masks(
+@cache
+def extract_part_of_speech(word: str) -> PartOfSpeech:
+    pos = sorted(morph_analyzer.parse(word), key=lambda t: -t.score)[0].tag.POS
+    return PartOfSpeech.from_str(str(pos)) if pos else PartOfSpeech.UNKNOWN
+
+
+# убираем не-кириллические символы в начале и конце слова
+CYRILLIC_EDGE_RE = re.compile(r"^[^А-Яа-яЁё]+|[^А-Яа-яЁё]+$")
+
+
+def extract_part_of_speech_per_syllable(line: str) -> list[PartOfSpeech]:
+    words_for_morph = []
+    vowel_counts = []
+
+    for word in line.split():
+        cleaned_word = CYRILLIC_EDGE_RE.sub("", word)
+        vowel_count = accentuator.vowel_count(cleaned_word)
+
+        if vowel_count:
+            words_for_morph.append(cleaned_word)
+            vowel_counts.append(vowel_count)
+
+    part_of_speech_per_word = map(extract_part_of_speech, words_for_morph)
+    part_of_speech_per_syllable = []
+
+    for pos, vowel_count in zip(part_of_speech_per_word, vowel_counts):
+        part_of_speech_per_syllable.extend(itertools.repeat(pos, vowel_count))
+
+    return part_of_speech_per_syllable
+
+
+def extract_syllable_features(
     line: str,
     rhythm_accents: list[bool] = None,
-) -> SyllableMasks:
-    poetic_accent_mask = accentuator.extract_accent_mask(line)
+) -> SyllableFeatures:
+    poetic_accents = accentuator.extract_accent_mask(line)
 
-    if not poetic_accent_mask:
+    if not sum(poetic_accents) and sum(rhythm_accents):
         # Ударения не размечены
         # Используем разметку ритма вместо них
-        poetic_accent_mask = rhythm_accents or []
+        poetic_accents = rhythm_accents or []
 
     cleaned_line = clean_line(accentuator.remove_accent_marks(line))
 
-    return SyllableMasks(
-        linguistic_accent_mask=accentuator.accent_line(cleaned_line),
-        poetic_accent_mask=poetic_accent_mask,
-        last_in_word_mask=extract_word_ending_mask(cleaned_line),
+    return SyllableFeatures(
+        poetic_accents=poetic_accents,
+        last_in_word=extract_word_ending_mask(cleaned_line),
+        part_of_speech=extract_part_of_speech_per_syllable(cleaned_line),
+        linguistic_accents=accentuator.accent_line(cleaned_line),
     )
 
 
@@ -180,12 +225,18 @@ def collect_line_text(line_tag) -> str:
 
 
 def parse_line(line_text: str, line_formula: LineFormula) -> Line:
-    syllable_masks = extract_syllable_masks(line_text, line_formula.rhythm_accents)
-    caesura = extract_caesura(line_formula, syllable_masks.poetic_accent_mask)
+    syllable_features = extract_syllable_features(
+        line_text,
+        line_formula.rhythm_accents,
+    )
+    caesura = extract_caesura(
+        line_formula,
+        syllable_features.poetic_accents,
+    )
 
     return Line(
         meters=line_formula.meters,
-        syllable_masks=syllable_masks,
+        syllables=syllable_features,
         caesura=caesura,
     )
 
@@ -227,10 +278,10 @@ def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
 
 def extract_caesura(
     formula: LineFormula,
-    poetic_accent_mask: list[bool],
+    poetic_accents: list[bool],
 ) -> list[Fraction]:
     if formula.caesura:
-        feet = sum(poetic_accent_mask)
+        feet = sum(poetic_accents)
         return [Fraction(c, feet) for c in formula.caesura]
 
     # Определяем положение цезуры для строк, в

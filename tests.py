@@ -8,14 +8,14 @@ from parameterized import parameterized
 
 from velimir import cyrlat
 from velimir.accentuator import accent_line, build_accent_dict, extract_accent_mask
-from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
+from velimir.domain_models import Clausula, Line, Meter, MeterType, PartOfSpeech, Poem
 from velimir.identifier import decode_caesura_positions
 from velimir.io import read_accent_dicts
 from velimir.parsers import (
     extract_lines,
-    extract_syllable_masks,
-    transform_poem,
+    extract_syllable_features,
     extract_word_ending_mask,
+    transform_poem,
 )
 from velimir.settings import ACCENT_DICT_PATHS
 
@@ -118,36 +118,57 @@ class TestParseLine(unittest.TestCase):
         line = result[0]
 
         self.assertListEqual(line.caesura, [Fraction(*c) for c in caesuras])
-        self.assertEqual(len(line.syllable_masks.poetic_accent_mask), syllable_count)
+        self.assertEqual(len(line.syllables.poetic_accents), syllable_count)
 
     @parameterized.expand(
         [
             (
-                "Йо̀шкин кот",
-                "100",
-                "011",
-            ),
-            (
                 "куй желѐзо пока",
                 "001000",
                 "100101",
+                ["VERB", "NOUN", "NOUN", "NOUN", "ADVB", "ADVB"],
             ),
             (
                 "в доро+гу",
                 "010",
                 "001",
+                ["NOUN"] * 3,
             ),
             (
                 "отправля+юсь в доро+гу",
                 "0010010",
                 "0001001",
+                ["VERB"] * 4 + ["NOUN"] * 3,
+            ),
+            (
+                "Йо̀шкин кот",
+                "100",
+                "011",
+                [],  # слово "йошкин" определяется неправильно
             ),
         ]
     )
-    def test_mask_extraction(self, input, accent_mask, last_in_word_mask):
-        masks = extract_syllable_masks(input)
-        self.assertEqual(masks.poetic_accent_mask, bitarray(accent_mask))
-        self.assertEqual(masks.last_in_word_mask, bitarray(last_in_word_mask))
+    def test_syllable_feature_extraction(
+        self,
+        input,
+        accent_mask,
+        last_in_word,
+        part_of_speech,
+    ):
+        features = extract_syllable_features(input)
+        self.assertEqual(
+            features.poetic_accents,
+            bitarray(accent_mask),
+        )
+        self.assertEqual(
+            features.last_in_word,
+            bitarray(last_in_word),
+        )
+        if part_of_speech:
+            self.assertEqual(
+                list(map(PartOfSpeech.from_str, part_of_speech)),
+                features.part_of_speech,
+            )
 
     def test_stanza_breaks(self):
         result = transform_poem(multiple_stanzas)
@@ -183,12 +204,12 @@ class TestParseLine(unittest.TestCase):
 
         # Маски
         self.assertEqual(
-            line.syllable_masks.poetic_accent_mask,
+            line.syllables.poetic_accents,
             bitarray("010101010"),
         )
 
         self.assertEqual(
-            line.syllable_masks.last_in_word_mask,
+            line.syllables.last_in_word,
             bitarray("011011001"),
         )
 
@@ -284,7 +305,7 @@ class TestCaesuraDecoding(unittest.TestCase):
         res = decode_caesura_positions(
             relative_caesuras=map(Fraction, caesura_encoded),
             meter_types=list(map(MeterType.from_str, meter_types)),
-            poetic_accent_mask=mask,
+            poetic_accents=mask,
             word_ending_mask=extract_word_ending_mask(example),
         )
 

@@ -21,11 +21,11 @@ from .ml_loader import (
 class ProcessedLine:
     meters: list[Meter]
     caesura: list[int]
-    poetic_accent_mask: list[bool]
+    poetic_accents: list[bool]
 
     def to_str(self):
         meter_repr = "~".join(m.to_str() for m in self.meters)
-        accent_repr = self._mask_to_string(self.poetic_accent_mask, self.caesura)
+        accent_repr = self._mask_to_string(self.poetic_accents, self.caesura)
 
         return f"{meter_repr} {accent_repr}"
 
@@ -172,19 +172,17 @@ def anacrusa_by_meter_type(meter: MeterType) -> int:
 def decode_caesura_positions(
     relative_caesuras: tuple[Fraction, ...],
     meter_types: tuple[MeterType, ...],
-    poetic_accent_mask: list[bool],
+    poetic_accents: list[bool],
     word_ending_mask: list[bool],
 ) -> list[int]:
-    target_stresses = [
-        round(frac * sum(poetic_accent_mask)) for frac in relative_caesuras
-    ]
+    target_stresses = [round(frac * sum(poetic_accents)) for frac in relative_caesuras]
 
     clausula_positions = []
 
     target_idx = 0
     current_stress_idx = 1
 
-    for i, stress in enumerate(poetic_accent_mask):
+    for i, stress in enumerate(poetic_accents):
         if not stress:
             continue
 
@@ -204,7 +202,7 @@ def decode_caesura_positions(
             list(
                 itertools.takewhile(
                     lambda a: not a,
-                    poetic_accent_mask[pos:],
+                    poetic_accents[pos:],
                 )
             )
         )
@@ -293,7 +291,7 @@ def process_line(
     return ProcessedLine(
         caesura=caesuras,
         meters=line_meters,
-        poetic_accent_mask=pmask,
+        poetic_accents=pmask,
     )
 
 
@@ -319,7 +317,7 @@ def process_lines(
         device,
         accent_input,
     )
-    poetic_accent_masks = detect_poetic_accents(
+    poetic_accentss = detect_poetic_accents(
         accent_model,
         device,
         accent_input,
@@ -336,14 +334,14 @@ def process_lines(
 
         meters_list.append(mc)
 
-    poetic_accent_masks_list = []
-    for mask in poetic_accent_masks:
+    poetic_accentss_list = []
+    for mask in poetic_accentss:
         valid_mask = mask[mask != -1]
-        poetic_accent_masks_list.append(valid_mask.cpu().numpy().tolist())
+        poetic_accentss_list.append(valid_mask.cpu().numpy().tolist())
 
     res = []
     for i, (mc, pmask, wmask) in enumerate(
-        zip(meters_list, poetic_accent_masks_list, word_ending_masks)
+        zip(meters_list, poetic_accentss_list, word_ending_masks)
     ):
         try:
             caesuras = decode_caesura_positions(

@@ -12,10 +12,10 @@ from typing import Iterator
 from bs4 import BeautifulSoup
 
 import velimir.accentuator as accentuator
-from velimir.domain_models import InputPoem, SyllableMasks
+from velimir.domain_models import InputPoem, SyllableFeatures
 from velimir.io import read_accent_dicts, read_poem_xml
 from velimir.logger import delayed_logger
-from velimir.parsers import extract_lines, extract_syllable_masks
+from velimir.parsers import extract_lines, extract_syllable_features
 from velimir.settings import (
     ACCENT_DICT_PATHS,
     METADATA_TABLE,
@@ -52,7 +52,7 @@ def calc_accent_diff(lines: Iterator[str], accent_line_fn) -> Counter:
 
     for line in lines:
         try:
-            sm = extract_syllable_masks(line)
+            sm = extract_syllable_features(line)
         except Exception as e:
             delayed_logger.record()
             logging.error("error while processing line %s", line)
@@ -71,7 +71,7 @@ def calc_accent_diff(lines: Iterator[str], accent_line_fn) -> Counter:
         for di in diff_indexes:
             diffed_words[line_words[di].lower()] += 1
 
-        word_count = sum(sm.last_in_word_mask)
+        word_count = sum(sm.last_in_word)
         if word_count:
             total_diff += len(diff_indexes) / word_count
             total_lines += 1
@@ -86,7 +86,7 @@ def calc_accent_diff(lines: Iterator[str], accent_line_fn) -> Counter:
     return diffed_words
 
 
-def accent_diff_word_indexes(masks: SyllableMasks) -> list[int]:
+def accent_diff_word_indexes(masks: SyllableFeatures) -> list[int]:
     result = []
 
     word_ling = []
@@ -94,9 +94,9 @@ def accent_diff_word_indexes(masks: SyllableMasks) -> list[int]:
     word_index = 0
 
     for ling, poet, last in zip(
-        masks.linguistic_accent_mask,
-        masks.poetic_accent_mask,
-        masks.last_in_word_mask,
+        masks.linguistic_accents,
+        masks.poetic_accents,
+        masks.last_in_word,
     ):
         word_ling.append(ling)
         word_poet.append(poet)

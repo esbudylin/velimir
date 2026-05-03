@@ -85,7 +85,7 @@ def format_verse(lines: list[str], processed_lines: list[ProcessedLine | None]) 
 
     for line, processed in zip(lines, processed_lines):
         meter = processed.to_str() if processed else "???"
-        accline = put_accents(line, processed.poetic_accent_mask) if processed else line
+        accline = put_accents(line, processed.poetic_accents) if processed else line
         parts.append(f'<line meter="{meter}"/>{accline}<br/>')
 
     parts.append("</p>")

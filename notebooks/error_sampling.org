@@ -81,7 +81,7 @@
 
           caesura_to_str = lambda c: "-".join(map(str, c.caesura)) or '-'
 
-          ling_accents = put_accents(line.text, extract_syllable_masks(line.text).linguistic_accent_mask)
+          ling_accents = put_accents(line.text, extract_syllable_masks(line.text).linguistic_accents)
           poetic_accents = put_accents(line.text, bitarray(accent_pred))
 
           samples.append((line.text, ling_accents, poetic_accents, meters_to_str(target_class), meters_to_str(pred_class), caesura_to_str(target_class), caesura_to_str(pred_class), poem_path))

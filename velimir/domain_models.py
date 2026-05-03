@@ -6,71 +6,6 @@ import bitarray.util as bu
 from bitarray import bitarray
 
 
-@dataclass
-class InputPoem:
-    author: str
-    created: str
-    header: str
-    formula: str
-    meter: str
-    clausula: str
-    feet: str
-    path: str
-
-    @classmethod
-    def from_row(cls, d):
-        field_names = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in d.items() if k in field_names})
-
-
-@dataclass
-class InputLine:
-    meter: str
-    text: str
-
-
-@dataclass(slots=True)
-class SyllableMasks:
-    linguistic_accent_mask: bitarray
-    poetic_accent_mask: bitarray
-    last_in_word_mask: bitarray
-
-    def __post_init__(self):
-        if not isinstance(self.linguistic_accent_mask, bitarray):
-            self.linguistic_accent_mask = bitarray(self.linguistic_accent_mask)
-
-        if not isinstance(self.poetic_accent_mask, bitarray):
-            self.poetic_accent_mask = bitarray(self.poetic_accent_mask)
-
-        if not isinstance(self.last_in_word_mask, bitarray):
-            self.last_in_word_mask = bitarray(self.last_in_word_mask)
-
-        l_len = len(self.linguistic_accent_mask)
-        p_len = len(self.poetic_accent_mask)
-        w_len = len(self.last_in_word_mask)
-
-        if not l_len or not p_len or not w_len:
-            raise ValueError("Masks are empty")
-
-        if l_len != p_len or p_len != w_len:
-            raise ValueError("Masks must have the same length")
-
-    def encode(self):
-        return [
-            bu.serialize(self.linguistic_accent_mask),
-            bu.serialize(self.poetic_accent_mask),
-            bu.serialize(self.last_in_word_mask),
-        ]
-
-    @classmethod
-    def decode(cls, data):
-        return cls(
-            linguistic_accent_mask=bu.deserialize(data[0]),
-            poetic_accent_mask=bu.deserialize(data[1]),
-            last_in_word_mask=bu.deserialize(data[2]),
-        )
-
-
 class CodeIntEnum(IntEnum):
     def __new__(cls, value: int, code: str):
         obj = int.__new__(cls, value)
@@ -111,6 +46,100 @@ class Clausula(CodeIntEnum):
     HYPERDACTYLIC = (3, "г")
 
 
+class PartOfSpeech(CodeIntEnum):
+    UNKNOWN = (0, "UNKNOWN")
+    NOUN = (1, "NOUN")  # имя существительное
+    ADJF = (2, "ADJF")  # имя прилагательное (полное)
+    ADJS = (3, "ADJS")  # имя прилагательное (краткое)
+    COMP = (4, "COMP")  # компаратив
+    VERB = (5, "VERB")  # глагол (личная форма)
+    INFN = (6, "INFN")  # глагол (инфинитив)
+    PRTF = (7, "PRTF")  # причастие (полное)
+    PRTS = (8, "PRTS")  # причастие (краткое)
+    GRND = (9, "GRND")  # деепричастие
+    NUMR = (10, "NUMR")  # числительное
+    ADVB = (11, "ADVB")  # наречие
+    NPRO = (12, "NPRO")  # местоимение-существительное
+    PRED = (13, "PRED")  # предикатив
+    PREP = (14, "PREP")  # предлог
+    CONJ = (15, "CONJ")  # союз
+    PRCL = (16, "PRCL")  # частица
+    INTJ = (17, "INTJ")  # междометие
+
+
+@dataclass
+class InputPoem:
+    author: str
+    created: str
+    header: str
+    formula: str
+    meter: str
+    clausula: str
+    feet: str
+    path: str
+
+    @classmethod
+    def from_row(cls, d):
+        field_names = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in field_names})
+
+
+@dataclass
+class InputLine:
+    meter: str
+    text: str
+
+
+@dataclass(slots=True)
+class SyllableFeatures:
+    linguistic_accents: bitarray
+    poetic_accents: bitarray
+    last_in_word: bitarray
+    part_of_speech: list[PartOfSpeech]
+
+    def __post_init__(self):
+        if not isinstance(self.linguistic_accents, bitarray):
+            self.linguistic_accents = bitarray(self.linguistic_accents)
+
+        if not isinstance(self.poetic_accents, bitarray):
+            self.poetic_accents = bitarray(self.poetic_accents)
+
+        if not isinstance(self.last_in_word, bitarray):
+            self.last_in_word = bitarray(self.last_in_word)
+
+        inputs = [
+            self.linguistic_accents,
+            self.poetic_accents,
+            self.last_in_word,
+            self.part_of_speech,
+        ]
+
+        lengths = set(map(len, inputs))
+
+        if len(lengths) != 1:
+            raise ValueError("Masks must have the same length")
+
+        if 0 in lengths:
+            raise ValueError("Masks are empty")
+
+    def encode(self):
+        return [
+            bu.serialize(self.linguistic_accents),
+            bu.serialize(self.poetic_accents),
+            bu.serialize(self.last_in_word),
+            self.part_of_speech,
+        ]
+
+    @classmethod
+    def decode(cls, data):
+        return cls(
+            linguistic_accents=bu.deserialize(data[0]),
+            poetic_accents=bu.deserialize(data[1]),
+            last_in_word=bu.deserialize(data[2]),
+            part_of_speech=data[3],
+        )
+
+
 @dataclass(slots=True)
 class Meter:
     meter: MeterType
@@ -141,7 +170,7 @@ class Meter:
         )
 
 
-# Simlified representation of a line's meter
+# Simplified representation of a line's meter
 # used for classification in ML models
 @dataclass(frozen=True, slots=True)
 class MeterClass:
@@ -164,7 +193,7 @@ class Line:
     meters: list[Meter]
     # позиции цезурных разделений относительно количества поэтических ударений в строке
     caesura: list[Fraction]
-    syllable_masks: SyllableMasks
+    syllables: SyllableFeatures
 
     def to_meterclass(self) -> MeterClass:
         return MeterClass(
@@ -175,12 +204,12 @@ class Line:
 
     def length(self):
         # маски - равной длины, здесь можно использовать любую маску
-        return len(self.syllable_masks.linguistic_accent_mask)
+        return len(self.syllables.linguistic_accents)
 
     def encode(self):
         return [
             [(c.numerator, c.denominator) for c in self.caesura],
-            self.syllable_masks.encode(),
+            self.syllables.encode(),
             [m.encode() for m in self.meters],
         ]
 
@@ -190,7 +219,7 @@ class Line:
 
         return cls(
             caesura=[Fraction(c[0], c[1]) for c in caesura],
-            syllable_masks=SyllableMasks.decode(masks_data),
+            syllables=SyllableFeatures.decode(masks_data),
             meters=[Meter.decode(m) for m in meters_data],
         )
 
