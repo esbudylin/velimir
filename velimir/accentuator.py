@@ -296,14 +296,10 @@ def remove_accent_marks(text: str) -> str:
 
 
 def extract_neuro_accents(line) -> list[list[bool]]:
-    words = stress_rnn.put_stress(
-        line,
-        accent_mark,
-        accuracy_threshold=0.4,
-    )
+    words = stress_rnn.put_stress(line, accent_mark, use_batch_mode=True).split()
 
     res = []
-    for word in words.split():
+    for word in words:
         if mask := extract_accent_mask(word):
             res.append(mask)
 
