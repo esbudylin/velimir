@@ -8,14 +8,14 @@ from parameterized import parameterized
 
 from velimir import cyrlat
 from velimir.accentuator import accent_line, build_accent_dict, extract_accent_mask
-from velimir.domain_models import Clausula, Line, Meter, MeterType, PartOfSpeech, Poem
+from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
 from velimir.identifier import decode_caesura_positions
 from velimir.io import read_accent_dicts
 from velimir.parsers import (
     extract_lines,
     extract_syllable_features,
-    extract_word_ending_mask,
     transform_poem,
+    extract_word_ending_mask,
 )
 from velimir.settings import ACCENT_DICT_PATHS
 
@@ -123,52 +123,31 @@ class TestParseLine(unittest.TestCase):
     @parameterized.expand(
         [
             (
+                "Йо̀шкин кот",
+                "100",
+                "011",
+            ),
+            (
                 "куй желѐзо пока",
                 "001000",
                 "100101",
-                ["VERB", "NOUN", "NOUN", "NOUN", "ADVB", "ADVB"],
             ),
             (
                 "в доро+гу",
                 "010",
                 "001",
-                ["NOUN"] * 3,
             ),
             (
                 "отправля+юсь в доро+гу",
                 "0010010",
                 "0001001",
-                ["VERB"] * 4 + ["NOUN"] * 3,
-            ),
-            (
-                "Йо̀шкин кот",
-                "100",
-                "011",
-                [],  # слово "йошкин" определяется неправильно
             ),
         ]
     )
-    def test_syllable_feature_extraction(
-        self,
-        input,
-        accent_mask,
-        last_in_word,
-        part_of_speech,
-    ):
-        features = extract_syllable_features(input)
-        self.assertEqual(
-            features.poetic_accents,
-            bitarray(accent_mask),
-        )
-        self.assertEqual(
-            features.last_in_word,
-            bitarray(last_in_word),
-        )
-        if part_of_speech:
-            self.assertEqual(
-                list(map(PartOfSpeech.from_str, part_of_speech)),
-                features.part_of_speech,
-            )
+    def test_mask_extraction(self, input, accent_mask, last_in_word_mask):
+        masks = extract_syllable_features(input)
+        self.assertEqual(masks.poetic_accent, bitarray(accent_mask))
+        self.assertEqual(masks.last_in_word, bitarray(last_in_word_mask))
 
     def test_stanza_breaks(self):
         result = transform_poem(multiple_stanzas)

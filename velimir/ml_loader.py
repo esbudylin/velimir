@@ -8,7 +8,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from velimir.domain_models import MeterClass, Poem, SyllableFeatures
+from velimir.domain_models import MeterClass, Poem, SyllableFeatures, GrammarFeatures
 from velimir.settings import METER_VOCAB_PATH
 
 
@@ -21,9 +21,10 @@ def get_loader(poems, **kwargs):
 class RawSample:
     poem_path: str
     line_idx: int
+    meter_class: int
     stanza_stat: list[float]
     syllables: SyllableFeatures
-    meter_class: int
+    grammar: GrammarFeatures
 
 
 @dataclass(slots=True)
@@ -233,8 +234,6 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
     rare_meters_excluded = 0
 
     for poem in poems:
-        line_idx = 0
-
         stanza_stats = compute_mean_ling_accents_per_stanza(
             [li.syllables.linguistic_accents for li in poem.lines],
             poem.stanza_breaks,
@@ -246,23 +245,20 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                 syllables = line.syllables
                 meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
 
-                if not syllables.poetic_accents:
-                    logging.error("Empty line in text %s. Skipping...", poem.path)
-                elif meter_class is None:
+                if meter_class is None:
                     # Исключаем редкие типы метров из датасета
                     rare_meters_excluded += 1
-                else:
-                    stanza_stat = stanza_stats[current_stanza][: line.length()]
+                    continue
 
-                    yield RawSample(
-                        syllables=syllables,
-                        stanza_stat=stanza_stat,
-                        meter_class=meter_class,
-                        poem_path=poem.path,
-                        line_idx=line_idx,
-                    )
+                stanza_stat = stanza_stats[current_stanza][: line.length()]
 
-                line_idx += 1
+                yield RawSample(
+                    line_idx=line.idx,
+                    syllables=syllables,
+                    stanza_stat=stanza_stat,
+                    meter_class=meter_class,
+                    poem_path=poem.path,
+                )
 
     logging.info(
         "%d lines are excluded from dataset as having rare meter types",

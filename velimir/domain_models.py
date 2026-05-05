@@ -47,24 +47,21 @@ class Clausula(CodeIntEnum):
 
 
 class PartOfSpeech(CodeIntEnum):
-    UNKNOWN = (0, "UNKNOWN")
-    NOUN = (1, "NOUN")  # имя существительное
-    ADJF = (2, "ADJF")  # имя прилагательное (полное)
-    ADJS = (3, "ADJS")  # имя прилагательное (краткое)
-    COMP = (4, "COMP")  # компаратив
-    VERB = (5, "VERB")  # глагол (личная форма)
-    INFN = (6, "INFN")  # глагол (инфинитив)
-    PRTF = (7, "PRTF")  # причастие (полное)
-    PRTS = (8, "PRTS")  # причастие (краткое)
-    GRND = (9, "GRND")  # деепричастие
-    NUMR = (10, "NUMR")  # числительное
-    ADVB = (11, "ADVB")  # наречие
-    NPRO = (12, "NPRO")  # местоимение-существительное
-    PRED = (13, "PRED")  # предикатив
-    PREP = (14, "PREP")  # предлог
-    CONJ = (15, "CONJ")  # союз
-    PRCL = (16, "PRCL")  # частица
-    INTJ = (17, "INTJ")  # междометие
+    ADJ = (1, "ADJ")  # adjective (полное прилагательное)
+    ADP = (2, "ADP")  # adposition (предлог)
+    ADV = (3, "ADV")  # adverb (наречие)
+    AUX = (4, "AUX")  # auxiliary (вспомогательный глагол)
+    CCONJ = (5, "CCONJ")  # coordinating conjunction (сочинительный союз)
+    DET = (6, "DET")  # determiner (детерминатив)
+    INTJ = (7, "INTJ")  # interjection (междометие)
+    NOUN = (8, "NOUN")  # noun (имя существительное)
+    NUM = (9, "NUM")  # numeral (числительное)
+    PART = (10, "PART")  # particle (частица)
+    PRON = (11, "PRON")  # pronoun (местоимение)
+    PROPN = (12, "PROPN")  # proper noun (имя собственное)
+    SCONJ = (13, "SCONJ")  # subordinating conjunction (подчинительный союз)
+    VERB = (14, "VERB")  # verb (личная форма глагола)
+    X = (0, "X")  # other (прочее)
 
 
 @dataclass
@@ -91,11 +88,15 @@ class InputLine:
 
 
 @dataclass(slots=True)
+class GrammarFeatures:
+    part_of_speech: list[PartOfSpeech]
+
+
+@dataclass(slots=True)
 class SyllableFeatures:
     linguistic_accents: bitarray
     poetic_accents: bitarray
     last_in_word: bitarray
-    part_of_speech: list[PartOfSpeech]
 
     def __post_init__(self):
         if not isinstance(self.linguistic_accents, bitarray):
@@ -111,7 +112,6 @@ class SyllableFeatures:
             self.linguistic_accents,
             self.poetic_accents,
             self.last_in_word,
-            self.part_of_speech,
         ]
 
         lengths = set(map(len, inputs))
@@ -127,7 +127,6 @@ class SyllableFeatures:
             bu.serialize(self.linguistic_accents),
             bu.serialize(self.poetic_accents),
             bu.serialize(self.last_in_word),
-            self.part_of_speech,
         ]
 
     @classmethod
@@ -136,7 +135,6 @@ class SyllableFeatures:
             linguistic_accents=bu.deserialize(data[0]),
             poetic_accents=bu.deserialize(data[1]),
             last_in_word=bu.deserialize(data[2]),
-            part_of_speech=data[3],
         )
 
 
@@ -189,6 +187,8 @@ class MeterClass:
 
 @dataclass(slots=True)
 class Line:
+    # позиция строки в тексте (с учётом строк, пропущенных при парсинге)
+    idx: int
     # строка может содержать несколько метров: например, в случае цезурного разделения строки
     meters: list[Meter]
     # позиции цезурных разделений относительно количества поэтических ударений в строке

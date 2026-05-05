@@ -1,6 +1,4 @@
-import itertools
 import logging
-import re
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cache
@@ -10,7 +8,6 @@ from bs4 import BeautifulSoup
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
-from pymorphy2 import MorphAnalyzer
 
 from . import accentuator, cyrlat
 from .domain_models import (
@@ -19,7 +16,6 @@ from .domain_models import (
     Line,
     Meter,
     MeterType,
-    PartOfSpeech,
     SyllableFeatures,
 )
 from .logger import delayed_logger
@@ -44,8 +40,6 @@ grammar = Grammar(
     ws = ~r"\s+" 
     """
 )
-
-morph_analyzer = MorphAnalyzer()
 
 
 @dataclass(slots=True)
@@ -162,37 +156,6 @@ def clean_line(s: str) -> str:
     return s
 
 
-@cache
-def extract_part_of_speech(word: str) -> PartOfSpeech:
-    pos = sorted(morph_analyzer.parse(word), key=lambda t: -t.score)[0].tag.POS
-    return PartOfSpeech.from_str(str(pos)) if pos else PartOfSpeech.UNKNOWN
-
-
-# убираем не-кириллические символы в начале и конце слова
-CYRILLIC_EDGE_RE = re.compile(r"^[^А-Яа-яЁё]+|[^А-Яа-яЁё]+$")
-
-
-def extract_part_of_speech_per_syllable(line: str) -> list[PartOfSpeech]:
-    words_for_morph = []
-    vowel_counts = []
-
-    for word in line.split():
-        cleaned_word = CYRILLIC_EDGE_RE.sub("", word)
-        vowel_count = accentuator.vowel_count(cleaned_word)
-
-        if vowel_count:
-            words_for_morph.append(cleaned_word)
-            vowel_counts.append(vowel_count)
-
-    part_of_speech_per_word = map(extract_part_of_speech, words_for_morph)
-    part_of_speech_per_syllable = []
-
-    for pos, vowel_count in zip(part_of_speech_per_word, vowel_counts):
-        part_of_speech_per_syllable.extend(itertools.repeat(pos, vowel_count))
-
-    return part_of_speech_per_syllable
-
-
 def extract_syllable_features(
     line: str,
     rhythm_accents: list[bool] = None,
@@ -209,7 +172,6 @@ def extract_syllable_features(
     return SyllableFeatures(
         poetic_accents=poetic_accents,
         last_in_word=extract_word_ending_mask(cleaned_line),
-        part_of_speech=extract_part_of_speech_per_syllable(cleaned_line),
         linguistic_accents=accentuator.accent_line(cleaned_line),
     )
 
