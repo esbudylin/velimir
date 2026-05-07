@@ -146,7 +146,7 @@ class TestParseLine(unittest.TestCase):
     )
     def test_mask_extraction(self, input, accent_mask, last_in_word_mask):
         masks = extract_syllable_features(input)
-        self.assertEqual(masks.poetic_accent, bitarray(accent_mask))
+        self.assertEqual(masks.poetic_accents, bitarray(accent_mask))
         self.assertEqual(masks.last_in_word, bitarray(last_in_word_mask))
 
     def test_stanza_breaks(self):

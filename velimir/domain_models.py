@@ -83,6 +83,7 @@ class InputPoem:
 
 @dataclass
 class InputLine:
+    idx: int
     meter: str
     text: str
 
@@ -208,6 +209,7 @@ class Line:
 
     def encode(self):
         return [
+            self.idx,
             [(c.numerator, c.denominator) for c in self.caesura],
             self.syllables.encode(),
             [m.encode() for m in self.meters],
@@ -215,9 +217,10 @@ class Line:
 
     @classmethod
     def decode(cls, data):
-        caesura, masks_data, meters_data = data
+        idx, caesura, masks_data, meters_data = data
 
         return cls(
+            idx=idx,
             caesura=[Fraction(c[0], c[1]) for c in caesura],
             syllables=SyllableFeatures.decode(masks_data),
             meters=[Meter.decode(m) for m in meters_data],

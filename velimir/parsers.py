@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cache
+from itertools import count
 from typing import Iterator
 
 from bs4 import BeautifulSoup
@@ -97,11 +98,12 @@ class LineFormulaVisitor(NodeVisitor):
 def transform_poem(xml: str) -> dict:
     soup = BeautifulSoup(xml, "xml")
 
+    line_count = count()
     lines = []
     stanza_breaks = []
 
     for verse in soup.find_all("p", class_="verse"):
-        if stanza := list(parse_lines(extract_lines(verse))):
+        if stanza := list(parse_lines(extract_lines(verse, line_count))):
             stanza_breaks.append(len(lines))
             lines.extend(stanza)
         else:
@@ -186,9 +188,9 @@ def collect_line_text(line_tag) -> str:
     return "".join(parts).strip()
 
 
-def parse_line(line_text: str, line_formula: LineFormula) -> Line:
+def parse_line(line: InputLine, line_formula: LineFormula) -> Line:
     syllable_features = extract_syllable_features(
-        line_text,
+        line.text,
         line_formula.rhythm_accents,
     )
     caesura = extract_caesura(
@@ -197,14 +199,15 @@ def parse_line(line_text: str, line_formula: LineFormula) -> Line:
     )
 
     return Line(
+        idx=line.idx,
         meters=line_formula.meters,
         syllables=syllable_features,
         caesura=caesura,
     )
 
 
-def extract_lines(soup) -> Iterator[InputLine]:
-    for line in soup.find_all("line"):
+def extract_lines(soup, line_count: Iterator[int] | None = None) -> Iterator[InputLine]:
+    for idx, line in zip(line_count or count(), soup.find_all("line")):
         if meter := line.get("meter"):
             text = collect_line_text(line)
 
@@ -221,14 +224,14 @@ def extract_lines(soup) -> Iterator[InputLine]:
                 case cyrlat.DetectionResult.CYRLAT:
                     text = cyrlat.fix(text)
 
-            yield InputLine(text=text, meter=meter.strip())
+            yield InputLine(idx=idx, text=text, meter=meter.strip())
 
 
 def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
     for line in lines:
         if line_formula := parse_line_formula(line.meter):
             try:
-                yield parse_line(line.text, line_formula)
+                yield parse_line(line, line_formula)
             except Exception as e:
                 delayed_logger.record()
                 logging.error(
