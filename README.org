@@ -9,18 +9,18 @@ poetry.
 You will need Python 3.10 to run the project. The python dependencies
 are listed in ~requirements.txt~.
 
-Velimir exposes several scripts as its interface. To use them, clone
-the repository and run the scripts directly from the command line.
+Velimir exposes several scripts in the [[file:entry/]] directory. To use
+them, clone the repository and run them via ~make~ command.
 
 ** Entry points
-+ ~markup.py~
++ ~markup~
 
   Accepts a poem from standard input as plain text and emits XML
   markup of the poem to the standard output. The XML schema of the
   output is similar to the one internally used by the Russian National
   Corpus.
 
-  ~markup.py~ is only a lean frontend, so if you want to emit data in a
+  ~markup~ is only a lean frontend, so if you want to emit data in a
   different format, you may want to replace this script
   entirely. However, if instead you want to parse the markup output,
   you may find [[file:velimir/parsers.py]] useful.
@@ -32,7 +32,7 @@ the repository and run the scripts directly from the command line.
   
   Example
   #+begin_src sh
-    python markup.py < input_poem.txt > output_poem.xml
+    make markup < input_poem.txt > output_poem.xml
   #+end_src
 
   Example of output for a poem by Mikhail Aizenberg (the text was not present in the training dataset).
@@ -54,7 +54,7 @@ the repository and run the scripts directly from the command line.
     </body>
   #+end_src
 
-+ ~train.py~
++ ~train~
 
   Trains the models. The resulting models are saved to the
   [[file:data/models/]] directory.
@@ -62,10 +62,11 @@ the repository and run the scripts directly from the command line.
   Training can be resource-intensive. The models present in the
   repository were trained on a GPU with 24 GB VRAM.
 
-  Use the flag ~--test-run~ to run the training on a small data subset
-  (1000 lines) - the intended use case is quick sanity checks.
+  Use the command ~make test-train~ to run the training on a small
+  data subset (1000 lines) - the intended use case is quick sanity
+  checks.
   
-+ ~evaluate_models.py~
++ ~evaluate~
 
   Collects data on model accuracy. The data are extracted from 2% of
   the original dataset’s lines, which are excluded from the training
@@ -75,7 +76,7 @@ the repository and run the scripts directly from the command line.
   
 To run the test suite for the project, use
 #+begin_src sh
-  python -m unittest tests
+  make test
 #+end_src
 
 #+RESULTS:
