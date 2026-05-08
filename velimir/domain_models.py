@@ -7,61 +7,49 @@ from bitarray import bitarray
 
 
 class CodeIntEnum(IntEnum):
+    def __init_subclass__(cls):
+        cls._code_to_member = {}
+
     def __new__(cls, value: int, code: str):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.code = code
+
+        cls._code_to_member[code] = obj
+
         return obj
 
     @classmethod
     def from_str(cls, s: str):
-        for member in cls:
-            if member.code == s:
-                return member
-        raise ValueError(f"{s!r} is not a valid {cls.__name__}")
+        try:
+            return cls._code_to_member[s]
+        except KeyError:
+            raise ValueError(f"{s!r} is not a valid {cls.__name__}")
 
     def to_str(self) -> str:
         return self.code
 
 
 class MeterType(CodeIntEnum):
-    IAMB = (0, "Я")
-    TROCHEE = (1, "Х")
-    DACTYL = (2, "Д")
-    ANAPEST = (3, "Ан")
-    AMPHIBRACH = (4, "Аф")
-    DOLNIK = (5, "Дк")
-    TAKTOVIK = (6, "Тк")
-    AKSTENTNIK = (7, "Ак")
-    LOGAED = (8, "Л")
-    HEXAMETER = (9, "Гек")
-    PAEON = (10, "Пен")
-    SYLLABIC = (11, "С")
+    IAMB = 0, "Я"
+    TROCHEE = 1, "Х"
+    DACTYL = 2, "Д"
+    ANAPEST = 3, "Ан"
+    AMPHIBRACH = 4, "Аф"
+    DOLNIK = 5, "Дк"
+    TAKTOVIK = 6, "Тк"
+    AKSTENTNIK = 7, "Ак"
+    LOGAED = 8, "Л"
+    HEXAMETER = 9, "Гек"
+    PAEON = 10, "Пен"
+    SYLLABIC = 11, "С"
 
 
 class Clausula(CodeIntEnum):
-    MASCULINE = (0, "м")
-    FEMININE = (1, "ж")
-    DACTYLIC = (2, "д")
-    HYPERDACTYLIC = (3, "г")
-
-
-class PartOfSpeech(CodeIntEnum):
-    ADJ = (1, "ADJ")  # adjective (полное прилагательное)
-    ADP = (2, "ADP")  # adposition (предлог)
-    ADV = (3, "ADV")  # adverb (наречие)
-    AUX = (4, "AUX")  # auxiliary (вспомогательный глагол)
-    CCONJ = (5, "CCONJ")  # coordinating conjunction (сочинительный союз)
-    DET = (6, "DET")  # determiner (детерминатив)
-    INTJ = (7, "INTJ")  # interjection (междометие)
-    NOUN = (8, "NOUN")  # noun (имя существительное)
-    NUM = (9, "NUM")  # numeral (числительное)
-    PART = (10, "PART")  # particle (частица)
-    PRON = (11, "PRON")  # pronoun (местоимение)
-    PROPN = (12, "PROPN")  # proper noun (имя собственное)
-    SCONJ = (13, "SCONJ")  # subordinating conjunction (подчинительный союз)
-    VERB = (14, "VERB")  # verb (личная форма глагола)
-    X = (0, "X")  # other (прочее)
+    MASCULINE = 0, "м"
+    FEMININE = 1, "ж"
+    DACTYLIC = 2, "д"
+    HYPERDACTYLIC = 3, "г"
 
 
 @dataclass
@@ -86,11 +74,6 @@ class InputLine:
     idx: int
     meter: str
     text: str
-
-
-@dataclass(slots=True)
-class GrammarFeatures:
-    part_of_speech: list[PartOfSpeech]
 
 
 @dataclass(slots=True)
