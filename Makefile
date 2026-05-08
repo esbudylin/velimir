@@ -24,6 +24,12 @@ build-pos-accent-db:
 build-pos-accent-db-test:
 	python scripts/build_pos_accent_db.py --test-run
 
+build-grammar-db:
+	python scripts/build_grammar_db.py
+
+build-grammar-db-test:
+	python scripts/build_grammar_db.py --test-run
+
 evaluate-accentuator:
 	python scripts/evaluate_accentuator.py
 

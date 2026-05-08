@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .ml_loader import MeterClassRegistry, get_loader
-from .domain_models import PartOfSpeech
+from .nlp import PartOfSpeech
 
 
 class AccentModel(nn.Module):

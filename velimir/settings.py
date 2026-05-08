@@ -22,6 +22,8 @@ ACCENT_DICT_PATHS = [
     for n in ["accent.dic", "accent1.dic", "accent2.dic"]
 ]
 PREDICTION_DB_PATH = os.path.join(DATA_DIRECTORY, "predictions.db")
+GRAMMAR_DB_PATH = os.path.join(DATA_DIRECTORY, "grammar.db")
+GRAMMAR_TEST_DB_PATH = os.path.join(DATA_DIRECTORY, "grammar_test.db")
 
 METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
 

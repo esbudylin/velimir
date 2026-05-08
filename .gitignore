@@ -6,3 +6,5 @@ data/models/accent-test
 data/models/meter-test
 data/predictions.db
 data/pos_accent.db
+data/pos_accent_test.db
+data/grammar_test.db

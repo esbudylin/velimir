@@ -8,7 +8,8 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from velimir.domain_models import MeterClass, Poem, SyllableFeatures, GrammarFeatures
+from velimir.domain_models import MeterClass, Poem, SyllableFeatures
+from velimir.nlp import GrammarFeatures
 from velimir.settings import METER_VOCAB_PATH
 
 
@@ -54,7 +55,7 @@ class PoetryDataset(Dataset):
                 ],
                 dim=1,
             )
-            pos = torch.tensor(syllables.part_of_speech, dtype=torch.long)
+            pos = torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
             poetic = torch.tensor(syllables.poetic_accents, dtype=torch.float32)
 
             self.samples.append(
