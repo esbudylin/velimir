@@ -15,3 +15,12 @@ test:
 test-train:
 	python entry/train.py --test-run
 
+build-dataset:
+	python scripts/build_dataset.py
+
+build-pos-accent-db:
+	python scripts/build_pos_accent_db.py
+
+evaluate-accentuator:
+	python scripts/evaluate_accentuator.py
+
