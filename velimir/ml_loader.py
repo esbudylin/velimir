@@ -151,6 +151,7 @@ def collate(batch: list[Sample]):
     poetic = [b.poetic_accents for b in batch]
     meters = [b.meter_class for b in batch]
     pos = [b.part_of_speech_input for b in batch]
+    deprel = [b.deprel_input for b in batch]
 
     accent_input = pad_sequence(
         accent_input,
@@ -167,12 +168,18 @@ def collate(batch: list[Sample]):
         batch_first=True,
         padding_value=-1,
     )
+    deprel = pad_sequence(
+        deprel,
+        batch_first=True,
+        padding_value=-1,
+    )
 
     return Sample(
         accent_input=accent_input,
         poetic_accents=poetic,
         meter_class=torch.stack(meters),
         part_of_speech_input=pos,
+        deprel_input=deprel,
     )
 
 
