@@ -1,16 +1,18 @@
 import json
 import logging
 import random
+import sqlite3
 from dataclasses import dataclass
 from typing import Iterator
 
+import msgpack
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
 from velimir.domain_models import MeterClass, Poem, SyllableFeatures
-from velimir.nlp import GrammarFeatures
-from velimir.settings import METER_VOCAB_PATH
+from velimir.nlp import DependencyRelation, GrammarFeatures, PartOfSpeech
+from velimir.settings import GRAMMAR_DB_PATH, METER_VOCAB_PATH
 
 
 def get_loader(poems, **kwargs):
@@ -32,6 +34,7 @@ class RawSample:
 class Sample:
     accent_input: torch.Tensor
     part_of_speech_input: torch.Tensor
+    deprel_input: torch.Tensor
     poetic_accents: torch.Tensor
     meter_class: torch.Tensor
 
@@ -55,8 +58,11 @@ class PoetryDataset(Dataset):
                 ],
                 dim=1,
             )
-            pos = torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
+
             poetic = torch.tensor(syllables.poetic_accents, dtype=torch.float32)
+
+            pos = torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
+            deprel = torch.tensor(rs.grammar.dep_rels, dtype=torch.long)
 
             self.samples.append(
                 Sample(
@@ -64,6 +70,7 @@ class PoetryDataset(Dataset):
                     poetic_accents=poetic,
                     meter_class=meter_class_t,
                     part_of_speech_input=pos,
+                    deprel_input=deprel,
                 )
             )
 
@@ -204,6 +211,28 @@ def compute_mean_ling_accents_per_stanza(
     return res
 
 
+def get_grammar_features(conn, poem_path: str, line_idx: int) -> GrammarFeatures | None:
+    cursor = conn.execute(
+        """SELECT gf.part_of_speech, gf.dep_rels
+        FROM grammar_features gf
+        JOIN poems p ON gf.poem_id = p.rowid
+        WHERE p.path = ? AND gf.line_idx = ?""",
+        (poem_path, line_idx),
+    )
+    row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    pos_codes = msgpack.unpackb(row[0])
+    deprel_codes = msgpack.unpackb(row[1])
+
+    return GrammarFeatures(
+        part_of_speech=[PartOfSpeech(c) for c in pos_codes],
+        dep_rels=[DependencyRelation(c) for c in deprel_codes],
+    )
+
+
 def split_samples(
     raw_samples: Iterator[RawSample],
     test_ratio: float = 0.02,
@@ -232,6 +261,8 @@ def split_samples(
 def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
     logging.info("Loading raw samples")
 
+    conn = sqlite3.connect(GRAMMAR_DB_PATH)
+
     rare_meters_excluded = 0
 
     for poem in poems:
@@ -252,6 +283,14 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     continue
 
                 stanza_stat = stanza_stats[current_stanza][: line.length()]
+                gf = get_grammar_features(conn, poem.path, line.idx)
+                if not gf:
+                    logging.error(
+                        "Can't extract grammar features for line %d, poem %s. Skipping",
+                        line.idx,
+                        poem.path,
+                    )
+                    continue
 
                 yield RawSample(
                     line_idx=line.idx,
@@ -259,7 +298,10 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     stanza_stat=stanza_stat,
                     meter_class=meter_class,
                     poem_path=poem.path,
+                    grammar=gf.expand(syllables.last_in_word),
                 )
+
+    conn.close()
 
     logging.info(
         "%d lines are excluded from dataset as having rare meter types",

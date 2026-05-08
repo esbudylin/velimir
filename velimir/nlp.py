@@ -86,6 +86,21 @@ class GrammarFeatures:
     part_of_speech: list[PartOfSpeech]
     dep_rels: list[DependencyRelation]
 
+    def expand(self, last_in_word: list[bool]):
+        current_word = 0
+
+        expanded_pos = []
+        expanded_deprels = []
+
+        for is_end in last_in_word:
+            expanded_pos.append(self.part_of_speech[current_word])
+            expanded_deprels.append(self.dep_rels[current_word])
+
+            if is_end:
+                current_word += 1
+
+        return GrammarFeatures(expanded_pos, expanded_deprels)
+
 
 def initialize():
     stanza.download(
