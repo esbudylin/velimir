@@ -62,7 +62,7 @@ them, clone the repository and run them via ~make~ command.
   Training can be resource-intensive. The models present in the
   repository were trained on a GPU with 24 GB VRAM.
 
-  Use the command ~make test-train~ to run the training on a small
+  Use the command ~make train-test~ to run the training on a small
   data subset (1000 lines) - the intended use case is quick sanity
   checks.
   

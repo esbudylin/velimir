@@ -1,25 +1,36 @@
+import argparse
 import csv
 import itertools
 import os
+import re
 import sqlite3
-from functools import partial
+from functools import cache, partial
 from typing import Iterator
 
 from bs4 import BeautifulSoup
-
+from pymorphy2 import MorphAnalyzer
 from velimir import accentuator, io
 from velimir.domain_models import InputLine, InputPoem
 from velimir.parsers import (
     clean_line,
     extract_lines,
-    extract_part_of_speech,
     extract_word_ending_mask,
     parse_line_formula,
-    CYRILLIC_EDGE_RE,
 )
 from velimir.settings import METADATA_TABLE, InputDialect
 
+morph_analyzer = MorphAnalyzer()
+
+CYRILLIC_EDGE_RE = re.compile(r"^[^А-Яа-яЁё]+|[^А-Яа-яЁё]+$")
+
 DB_PATH = "data/pos_accent.db"
+TEST_DB_PATH = "data/pos_accent_test.db"
+
+
+@cache
+def extract_part_of_speech(word: str) -> str:
+    pos = sorted(morph_analyzer.parse(word), key=lambda t: -t.score)[0].tag.POS
+    return str(pos) if pos else "UNKNOWN"
 
 
 def extract_lines_from_csv(csv_reader: csv.DictReader) -> Iterator[InputLine]:
@@ -104,11 +115,13 @@ def write_into_sqlite(cursor, conn, parsed_lines):
         conn.commit()
 
 
-def main():
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
+def main(test_run: bool = False):
+    db_path = TEST_DB_PATH if test_run else DB_PATH
 
-    conn = sqlite3.connect(DB_PATH)
+    if os.path.exists(db_path):
+        os.remove(db_path)
+
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -123,10 +136,22 @@ def main():
 
     with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:
         input_reader = csv.DictReader(csv_file, dialect=InputDialect)
+
+        if test_run:
+            input_reader = itertools.islice(input_reader, 100)
+
         lines = extract_lines_from_csv(input_reader)
         parsed_lines = itertools.chain.from_iterable(map(parse_line, lines))
         write_into_sqlite(cursor, conn, parsed_lines)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Build POS-accent database.")
+    parser.add_argument(
+        "--test-run",
+        action="store_true",
+        help="Process only 100 poems and dump to a test database",
+    )
+    args = parser.parse_args()
+
+    main(test_run=args.test_run)
