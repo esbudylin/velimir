@@ -273,6 +273,12 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
     logging.info("Loading raw samples")
 
     conn = sqlite3.connect(GRAMMAR_DB_PATH)
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_grammar_features_covering 
+        ON grammar_features(poem_id, line_idx, part_of_speech, dep_rels)
+        """
+    )
 
     rare_meters_excluded = 0
 
