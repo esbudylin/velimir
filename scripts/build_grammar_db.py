@@ -116,17 +116,18 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
 
         for sample in batch:
             if sample.poem_path not in poem_id_cache:
-                cursor.execute(
-                    "INSERT OR IGNORE INTO poems (path) VALUES (?)",
+                result = cursor.execute(
+                    "INSERT OR IGNORE INTO poems (path) VALUES (?) RETURNING rowid",
                     (sample.poem_path,),
                 )
-                conn.commit()
+                row = result.fetchone()
+                if row is None:
+                    raise ValueError(
+                        "Poem %s is already in a db. Missing cache value",
+                        sample.poem_path,
+                    )
 
-                cursor.execute(
-                    "SELECT rowid FROM poems WHERE path = ?",
-                    (sample.poem_path,),
-                )
-                poem_id_cache[sample.poem_path] = cursor.fetchone()[0]
+                poem_id_cache[sample.poem_path] = row[0]
 
             poem_id = poem_id_cache[sample.poem_path]
             pos, deprel = serialize_features(sample.features)
