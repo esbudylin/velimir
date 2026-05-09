@@ -157,8 +157,11 @@ def markup(nlp, lines: list[str]) -> list[GrammarFeatures]:
 
             line_idx = bisect_right(line_starts, word.start_char) - 1
 
+            # use only the base for composed forms
+            dep_rel_str = word.deprel.split(":")[0]
+
             pos = from_str_safe(PartOfSpeech, word.upos)
-            dep_rel = from_str_safe(DependencyRelation, word.deprel)
+            dep_rel = from_str_safe(DependencyRelation, dep_rel_str)
 
             pos_tags[line_idx].append(pos or PartOfSpeech.X)
             dep_rels[line_idx].append(dep_rel or DependencyRelation.UNKNOWN)
