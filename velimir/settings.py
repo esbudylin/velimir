@@ -4,6 +4,7 @@ import os
 from dataclasses import asdict, dataclass
 
 DATA_DIRECTORY = "data"
+LOGS_DIRECTORY = "logs"
 
 METADATA_TABLE = os.path.join(DATA_DIRECTORY, "rnc", "tables", "poetic.csv")
 TEXTS_DIR = os.path.join(DATA_DIRECTORY, "rnc", "texts")
@@ -42,4 +43,14 @@ class LoggingSettings:
 
     @classmethod
     def setup(cls):
-        logging.basicConfig(**asdict(cls()))
+        config = asdict(cls())
+
+        log_file = os.environ.get("LOG_FILE")
+        if log_file is not None:
+            config["filename"] = log_file
+
+        log_dir = os.path.dirname(config["filename"])
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+
+        logging.basicConfig(**config)

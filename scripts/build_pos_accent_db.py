@@ -1,6 +1,7 @@
 import argparse
 import csv
 import itertools
+import logging
 import os
 import re
 import sqlite3
@@ -17,7 +18,7 @@ from velimir.parsers import (
     extract_word_ending_mask,
     parse_line_formula,
 )
-from velimir.settings import METADATA_TABLE, InputDialect
+from velimir.settings import METADATA_TABLE, InputDialect, LoggingSettings
 
 morph_analyzer = MorphAnalyzer()
 
@@ -146,6 +147,8 @@ def main(test_run: bool = False):
 
 
 if __name__ == "__main__":
+    LoggingSettings.setup()
+
     parser = argparse.ArgumentParser(description="Build POS-accent database.")
     parser.add_argument(
         "--test-run",
