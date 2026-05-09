@@ -9,8 +9,8 @@ poetry.
 You will need Python 3.10 to run the project. The python dependencies
 are listed in ~requirements.txt~.
 
-Velimir exposes several scripts in the [[file:entry/]] directory. To use
-them, clone the repository and run them via ~make~ command.
+Velimir exposes several commands as its entry points. To use them,
+clone the repository and run them via the ~make~ utility.
 
 ** Entry points
 + ~markup~
@@ -118,9 +118,7 @@ are proprietary and used under fair use conditions.
 Note that the ~poems.msgpack~ only includes binary metadata (meter
 formulas and accent positions) extracted from the corpus. The original
 corpus files are not included in the repository due to copyright
-constraints. However, the repository still contains scripts that
-depend on the original corpus files: ~build_dataset.py~ and
-~evaluate_accentuator.py~.
+constraints.
 
 The directory [[file:data/accent_dicts]] includes files ~accent.dic~ and
 ~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_accent]] repo. Minor changes
