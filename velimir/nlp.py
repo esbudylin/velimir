@@ -86,7 +86,16 @@ class GrammarFeatures:
     part_of_speech: list[PartOfSpeech]
     dep_rels: list[DependencyRelation]
 
+    def __post_init__(self):
+        if len(self.part_of_speech) != len(self.dep_rels):
+            raise ValueError("part_of_speech and dep_rels must be of same length")
+
     def expand(self, last_in_word: list[bool]):
+        if sum(last_in_word) != len(self.part_of_speech):
+            raise ValueError(
+                "Mismatch between grammar features length and number of words in last_in_word mask"
+            )
+
         current_word = 0
 
         expanded_pos = []

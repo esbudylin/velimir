@@ -218,7 +218,7 @@ def compute_mean_ling_accents_per_stanza(
     return res
 
 
-def get_grammar_features(conn, poem_path: str, line_idx: int) -> GrammarFeatures | None:
+def fetch_grammar_features(conn, poem_path: str, line_idx: int) -> GrammarFeatures:
     cursor = conn.execute(
         """SELECT gf.part_of_speech, gf.dep_rels
         FROM grammar_features gf
@@ -229,7 +229,11 @@ def get_grammar_features(conn, poem_path: str, line_idx: int) -> GrammarFeatures
     row = cursor.fetchone()
 
     if row is None:
-        return None
+        raise ValueError(
+            "Can't find grammar features for line %d, poem %s in the db",
+            line_idx,
+            poem_path,
+        )
 
     pos_codes = msgpack.unpackb(row[0])
     deprel_codes = msgpack.unpackb(row[1])
@@ -290,12 +294,16 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     continue
 
                 stanza_stat = stanza_stats[current_stanza][: line.length()]
-                gf = get_grammar_features(conn, poem.path, line.idx)
-                if not gf:
+
+                try:
+                    gf = fetch_grammar_features(conn, poem.path, line.idx)
+                    gf_expanded = gf.expand(syllables.last_in_word)
+                except ValueError as e:
                     logging.error(
-                        "Can't extract grammar features for line %d, poem %s. Skipping",
-                        line.idx,
+                        "Poem %s, Line %d. Failed when processing grammar features: %s",
                         poem.path,
+                        line.idx,
+                        e,
                     )
                     continue
 
@@ -305,7 +313,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     stanza_stat=stanza_stat,
                     meter_class=meter_class,
                     poem_path=poem.path,
-                    grammar=gf.expand(syllables.last_in_word),
+                    grammar=gf_expanded,
                 )
 
     conn.close()
