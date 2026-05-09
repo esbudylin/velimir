@@ -82,7 +82,7 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
 
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS poems (
+        CREATE TABLE poems (
             path TEXT UNIQUE NOT NULL
         )
         """
@@ -90,7 +90,7 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
 
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS grammar_features (
+        CREATE TABLE grammar_features (
             poem_id INTEGER NOT NULL REFERENCES poems(rowid),
             line_idx INTEGER NOT NULL,
             part_of_speech BLOB NOT NULL,
@@ -127,8 +127,6 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
                     (sample.poem_path,),
                 )
                 poem_id_cache[sample.poem_path] = cursor.fetchone()[0]
-
-                logging.info("Poem %s is added to db", sample.poem_path)
 
             poem_id = poem_id_cache[sample.poem_path]
             pos, deprel = serialize_features(sample.features)
