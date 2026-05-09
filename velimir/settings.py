@@ -45,12 +45,10 @@ class LoggingSettings:
     def setup(cls):
         config = asdict(cls())
 
-        log_file = os.environ.get("LOG_FILE")
-        if log_file is not None:
+        if log_file := os.environ.get("LOG_FILE"):
             config["filename"] = log_file
 
-        log_dir = os.path.dirname(config["filename"])
-        if log_dir:
+        if log_dir := os.path.dirname(config["filename"]):
             os.makedirs(log_dir, exist_ok=True)
 
         logging.basicConfig(**config)
