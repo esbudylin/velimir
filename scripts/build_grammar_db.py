@@ -128,6 +128,8 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
                 )
                 poem_id_cache[sample.poem_path] = cursor.fetchone()[0]
 
+                logging.info("Poem %s is added to db", sample.poem_path)
+
             poem_id = poem_id_cache[sample.poem_path]
             pos, deprel = serialize_features(sample.features)
             insert_buffer.append((poem_id, sample.line_idx, pos, deprel))
@@ -141,6 +143,8 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
             insert_buffer,
         )
         conn.commit()
+
+        logging.info("Line batch recorded to db")
 
 
 def main(test_run: bool = False):
