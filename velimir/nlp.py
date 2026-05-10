@@ -1,4 +1,6 @@
 import itertools
+import logging
+import re
 from bisect import bisect_right
 from dataclasses import dataclass
 
@@ -143,37 +145,47 @@ def markup(nlp, lines: list[str]) -> list[GrammarFeatures]:
     joined_lines = " ".join(lines)
     text = " ".join(joined_lines.split())  # normalize spaces
 
-    word_ends = list(
-        itertools.chain.from_iterable(
-            [[False] * len(word) + [True] for word in text.split()]
-        )
-    )
+    # разделяем текст на слова на основе пробелов
+    # оставляем слова с гласными звуками
+    ws_word_ranges = [
+        (m.start(), m.end())
+        for m in re.finditer(r"\S+", text)
+        if vowel_count(m.group())
+    ]
 
     doc = nlp(text)
 
-    for sentence in doc.sentences:
-        for word in sentence.words:
-            if word.start_char is None:
-                continue
+    nlp_words = itertools.chain.from_iterable(
+        sentence.words for sentence in doc.sentences
+    )
 
+    # Лемматизация stanza может отличаться от деления на слова на
+    # основе пробелов. Для случаев, когда stanza выделяет несколько
+    # лемм для одного слова, используем данные только первой леммы
+    for word_start, word_end in ws_word_ranges:
+        found_word = None
+        for word in nlp_words:
             if not vowel_count(word.text):
                 continue
 
-            # лемматизация stanza может отличать от деления на слова на основе пробелов.
-            # игнорируем слова, которые не выделяются в velimir/parsers
-            if word.start_char and not word_ends[word.start_char - 1]:
-                continue
+            if word_start <= word.start_char < word_end:
+                found_word = word
+                break
 
-            line_idx = bisect_right(line_starts, word.start_char) - 1
+        if not found_word:
+            logging.error("Can't find matching nlp word")
+            continue
 
-            # use only the base for composed forms
-            dep_rel_str = word.deprel.split(":")[0]
+        line_idx = bisect_right(line_starts, found_word.start_char) - 1
 
-            pos = from_str_safe(PartOfSpeech, word.upos)
-            dep_rel = from_str_safe(DependencyRelation, dep_rel_str)
+        # use only the base for composed forms
+        dep_rel_str = found_word.deprel.split(":")[0]
 
-            pos_tags[line_idx].append(pos or PartOfSpeech.X)
-            dep_rels[line_idx].append(dep_rel or DependencyRelation.UNKNOWN)
+        pos = from_str_safe(PartOfSpeech, found_word.upos)
+        dep_rel = from_str_safe(DependencyRelation, dep_rel_str)
+
+        pos_tags[line_idx].append(pos or PartOfSpeech.X)
+        dep_rels[line_idx].append(dep_rel or DependencyRelation.UNKNOWN)
 
     return [
         GrammarFeatures(part_of_speech=pos_tags[i], dep_rels=dep_rels[i])

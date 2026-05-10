@@ -112,3 +112,38 @@ class TestLanguageMarkup(unittest.TestCase):
         self.assertEqual(len(result[0].part_of_speech), 1)
         self.assertEqual(result[0].part_of_speech[0], PartOfSpeech.NOUN)
         self.assertEqual(result[0].dep_rels[0], DependencyRelation.ROOT)
+
+    def test_leading_punctuation(self):
+        """Stanza splits «Куда into « (PUNCT) and Куда (ADV). « has no vowels
+        so it is skipped by vowel filter; Куда should be kept as the first
+        content token for the whitespace word «Куда."""
+        result = markup(self.nlp, ["«Куда мир"])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0].part_of_speech), 2)
+        self.assertEqual(
+            [p.code if p else None for p in result[0].part_of_speech],
+            ["ADV", "NOUN"],
+        )
+
+    def test_trailing_punctuation(self):
+        """Stanza splits рекла: into рекла (VERB) and : (PUNCT, no vowels).
+        : is skipped by vowel filter; рекла is kept for the whitespace word."""
+        result = markup(self.nlp, ["Сказала: слово"])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0].part_of_speech), 2)
+        self.assertEqual(
+            [p.code if p else None for p in result[0].part_of_speech],
+            ["VERB", "NOUN"],
+        )
+
+    def test_multiple_sentences(self):
+        result = markup(self.nlp, ["Пришла весна. Снег растаял."])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0].part_of_speech), 4)
+        self.assertEqual(
+            [p.code for p in result[0].part_of_speech],
+            ["VERB", "NOUN", "NOUN", "VERB"],
+        )
