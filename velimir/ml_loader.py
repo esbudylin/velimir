@@ -218,30 +218,57 @@ def compute_mean_ling_accents_per_stanza(
     return res
 
 
-def fetch_grammar_features(conn, poem_path: str, line_idx: int) -> GrammarFeatures:
-    cursor = conn.execute(
-        """SELECT gf.part_of_speech, gf.dep_rels
-        FROM grammar_features gf
-        JOIN poems p ON gf.poem_id = p.rowid
-        WHERE p.path = ? AND gf.line_idx = ?""",
-        (poem_path, line_idx),
-    )
-    row = cursor.fetchone()
+class GrammarDB:
+    def __init__(self):
+        self.conn = sqlite3.connect(GRAMMAR_DB_PATH)
 
-    if row is None:
-        raise ValueError(
-            "Can't find grammar features for line %d, poem %s in the db",
-            line_idx,
-            poem_path,
+        logging.info("Building grammar index")
+
+        # Создаём временную таблицу, чтобы набросить на неё индекс. В
+        # результате содержание исходного файла БД не изменяется. Это
+        # делается для того, чтобы не хранить результат индексации в
+        # репозитории
+
+        self.conn.execute(
+            """
+            CREATE TEMP TABLE grammar_features_tmp
+            AS SELECT * FROM grammar_features
+            """
         )
 
-    pos_codes = msgpack.unpackb(row[0])
-    deprel_codes = msgpack.unpackb(row[1])
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_grammar_features
+            ON grammar_features_tmp(poem_id, line_idx)
+            """
+        )
 
-    return GrammarFeatures(
-        part_of_speech=[PartOfSpeech(c) for c in pos_codes],
-        dep_rels=[DependencyRelation(c) for c in deprel_codes],
-    )
+        logging.info("Index built succesfuly")
+
+    def fetch(self, poem_path: str, line_idx: int) -> GrammarFeatures:
+        cursor = self.conn.execute(
+            """SELECT gf.part_of_speech, gf.dep_rels
+            FROM grammar_features_tmp gf
+            JOIN poems p ON gf.poem_id = p.rowid
+            WHERE p.path = ? AND gf.line_idx = ?""",
+            (poem_path, line_idx),
+        )
+        row = cursor.fetchone()
+
+        if row is None:
+            raise ValueError(
+                "Can't find grammar features for line %d, poem %s in the db",
+                line_idx,
+                poem_path,
+            )
+
+        pos_codes = msgpack.unpackb(row[0])
+        deprel_codes = msgpack.unpackb(row[1])
+
+        return GrammarFeatures(
+            part_of_speech=[PartOfSpeech(c) for c in pos_codes],
+            dep_rels=[DependencyRelation(c) for c in deprel_codes],
+        )
 
 
 def split_samples(
@@ -272,13 +299,7 @@ def split_samples(
 def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
     logging.info("Loading raw samples")
 
-    conn = sqlite3.connect(GRAMMAR_DB_PATH)
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_grammar_features_covering 
-        ON grammar_features(poem_id, line_idx, part_of_speech, dep_rels)
-        """
-    )
+    grammar_db = GrammarDB()
 
     rare_meters_excluded = 0
 
@@ -302,7 +323,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                 stanza_stat = stanza_stats[current_stanza][: line.length()]
 
                 try:
-                    gf = fetch_grammar_features(conn, poem.path, line.idx)
+                    gf = grammar_db.fetch(poem.path, line.idx)
                     gf_expanded = gf.expand(syllables.last_in_word)
                 except ValueError as e:
                     logging.error(
@@ -322,7 +343,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     grammar=gf_expanded,
                 )
 
-    conn.close()
+    grammar_db.conn.close()
 
     logging.info(
         "%d lines are excluded from dataset as having rare meter types",
