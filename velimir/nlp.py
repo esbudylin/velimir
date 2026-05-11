@@ -164,6 +164,10 @@ def markup(nlp, lines: list[str]) -> list[GrammarFeatures]:
     pos_tags: list[list[PartOfSpeech]] = [[] for _ in lines]
     dep_rels: list[list[DependencyRelation]] = [[] for _ in lines]
 
+    # убираем прописные буквы в начале строк,
+    # чтобы уменьшить число ложнопозитивных определений имён собственных
+    lines = [line[0].lower() + line[1:] for line in lines]
+
     joined_lines = " ".join(lines)
     text = " ".join(joined_lines.split())  # normalize spaces
 
