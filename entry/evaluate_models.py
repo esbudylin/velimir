@@ -4,7 +4,7 @@ import torch
 
 from velimir.io import load_models, load_poems_from_msgpack
 from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_samples
-from velimir.settings import LoggingSettings
+from velimir.logger import LoggingSettings
 from velimir.evaluation import evaluate_models
 
 

@@ -14,13 +14,12 @@ from bs4 import BeautifulSoup
 import velimir.accentuator as accentuator
 from velimir.domain_models import InputPoem, SyllableFeatures
 from velimir.io import read_accent_dicts, read_poem_xml
-from velimir.logger import delayed_logger
+from velimir.logger import delayed_logger, LoggingSettings
 from velimir.parsers import extract_lines, extract_syllable_features
 from velimir.settings import (
     ACCENT_DICT_PATHS,
     METADATA_TABLE,
     InputDialect,
-    LoggingSettings,
 )
 
 

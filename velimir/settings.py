@@ -1,7 +1,5 @@
 import csv
-import logging
 import os
-from dataclasses import asdict, dataclass
 
 DATA_DIRECTORY = "data"
 LOGS_DIRECTORY = "logs"
@@ -31,24 +29,3 @@ METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
 
 class InputDialect(csv.unix_dialect):
     delimiter = ";"
-
-
-@dataclass
-class LoggingSettings:
-    filename: str = "main.log"
-    encoding: str = "utf-8"
-    level: int = logging.INFO
-    filemode: str = "w"
-    format: str = "%(asctime)s [%(levelname)s] %(message)s"
-
-    @classmethod
-    def setup(cls):
-        config = asdict(cls())
-
-        if log_file := os.environ.get("LOG_FILE"):
-            config["filename"] = log_file
-
-        if log_dir := os.path.dirname(config["filename"]):
-            os.makedirs(log_dir, exist_ok=True)
-
-        logging.basicConfig(**config)

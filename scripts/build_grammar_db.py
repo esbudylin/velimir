@@ -14,14 +14,13 @@ from bs4 import BeautifulSoup
 from velimir import parsers, accentuator
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
-from velimir.logger import delayed_logger
+from velimir.logger import delayed_logger, LoggingSettings
 from velimir.nlp import GrammarFeatures, initialize, markup
 from velimir.settings import (
     GRAMMAR_DB_PATH,
     GRAMMAR_TEST_DB_PATH,
     METADATA_TABLE,
     InputDialect,
-    LoggingSettings,
 )
 
 

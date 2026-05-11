@@ -4,16 +4,15 @@ import logging
 from typing import Iterator
 
 from velimir.accentuator import build_accent_dict
-from velimir.logger import delayed_logger
 from velimir.domain_models import InputPoem, Poem
+from velimir.io import read_accent_dicts, read_poem_xml, save_poems_as_msgpack
+from velimir.logger import LoggingSettings, delayed_logger
+from velimir.parsers import transform_poem
 from velimir.settings import (
+    ACCENT_DICT_PATHS,
     METADATA_TABLE,
     InputDialect,
-    LoggingSettings,
-    ACCENT_DICT_PATHS,
 )
-from velimir.parsers import transform_poem
-from velimir.io import read_poem_xml, save_poems_as_msgpack, read_accent_dicts
 
 
 def transform_data(csv_reader: csv.DictReader) -> Iterator[Poem]:

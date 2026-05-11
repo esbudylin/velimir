@@ -5,6 +5,7 @@ from itertools import islice
 import torch
 
 from velimir.io import load_poems_from_msgpack
+from velimir.logger import LoggingSettings
 from velimir.ml import train_models
 from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_samples
 from velimir.settings import (
@@ -12,7 +13,6 @@ from velimir.settings import (
     ACCENT_TEST_MODEL,
     METER_MODEL,
     METER_TEST_MODEL,
-    LoggingSettings,
 )
 
 
