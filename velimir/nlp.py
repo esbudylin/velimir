@@ -199,8 +199,9 @@ def markup(nlp, lines: list[str]) -> list[GrammarFeatures]:
                 break
 
         if not found_word:
-            logging.error("Can't find matching nlp word")
-            continue
+            raise ValueError(
+                "Can't find matching nlp word %s", text[word_start:word_end]
+            )
 
         line_idx = bisect_right(line_starts, found_word.start_char) - 1
 

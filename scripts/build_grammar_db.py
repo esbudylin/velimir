@@ -51,7 +51,11 @@ def extract_grammar_features(nlp, poem_path: str, xml: str) -> Iterator[GrammarS
             delayed_logger.record()
             logging.warning("Skipping empty stanza")
 
-    features = markup_stanzas(nlp, verses)
+    try:
+        features = markup_stanzas(nlp, verses)
+    except ValueError as e:
+        logging.error("Error while processing poem %s: %s", poem_path, e)
+        return
 
     for il, gf in zip(input_lines, features):
         yield GrammarSample(poem_path, il.idx, gf)
