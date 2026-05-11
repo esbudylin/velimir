@@ -12,10 +12,10 @@ import msgpack
 from bs4 import BeautifulSoup
 
 from velimir import parsers, accentuator
-from velimir.domain_models import InputPoem
+from velimir.domain_models import InputPoem, InputLine
 from velimir.io import read_poem_xml
 from velimir.logger import delayed_logger, LoggingSettings
-from velimir.nlp import GrammarFeatures, initialize, markup
+from velimir.nlp import GrammarFeatures, initialize, markup_stanzas
 from velimir.settings import (
     GRAMMAR_DB_PATH,
     GRAMMAR_TEST_DB_PATH,
@@ -40,16 +40,21 @@ def extract_grammar_features(nlp, poem_path: str, xml: str) -> Iterator[GrammarS
 
     line_count = count()
 
+    verses: list[list[str]] = []
+    input_lines: list[InputLine] = []
+
     for verse in soup.find_all("p", class_="verse"):
         if stanza := list(parsers.extract_lines(verse, line_count)):
-            features = markup(nlp, [clean_line_for_markup(il.text) for il in stanza])
-            yield from (
-                GrammarSample(poem_path, il.idx, features[i])
-                for i, il in enumerate(stanza)
-            )
+            verses.append([clean_line_for_markup(il.text) for il in stanza])
+            input_lines.extend(stanza)
         else:
             delayed_logger.record()
             logging.warning("Skipping empty stanza")
+
+    features = markup_stanzas(nlp, verses)
+
+    for il, gf in zip(input_lines, features):
+        yield GrammarSample(poem_path, il.idx, gf)
 
 
 def transform_data(nlp, csv_reader: csv.DictReader) -> Iterator[GrammarSample]:

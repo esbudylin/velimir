@@ -132,6 +132,28 @@ def from_str_safe(enum, s):
         return None
 
 
+def markup_stanzas(
+    nlp,
+    verses: list[list[str]],
+) -> list[GrammarFeatures]:
+    MAX_LINES_PER_GROUP = 32
+
+    result = []
+    group_lines: list[str] = []
+
+    for stanza_lines in verses:
+        if group_lines and len(group_lines) + len(stanza_lines) > MAX_LINES_PER_GROUP:
+            result.extend(markup(nlp, group_lines))
+            group_lines = []
+
+        group_lines.extend(stanza_lines)
+
+    if group_lines:
+        result.extend(markup(nlp, group_lines))
+
+    return result
+
+
 def markup(nlp, lines: list[str]) -> list[GrammarFeatures]:
     line_starts = []
     pos = 0
