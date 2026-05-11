@@ -142,6 +142,16 @@ def markup_stanzas(
     group_lines: list[str] = []
 
     for stanza_lines in verses:
+        if len(stanza_lines) > MAX_LINES_PER_GROUP:
+            if group_lines:
+                result.extend(markup(nlp, group_lines))
+                group_lines = []
+
+            for i in range(0, len(stanza_lines), MAX_LINES_PER_GROUP):
+                result.extend(markup(nlp, stanza_lines[i : i + MAX_LINES_PER_GROUP]))
+
+            continue
+
         if group_lines and len(group_lines) + len(stanza_lines) > MAX_LINES_PER_GROUP:
             result.extend(markup(nlp, group_lines))
             group_lines = []
@@ -200,7 +210,7 @@ def markup(nlp, lines: list[str]) -> list[GrammarFeatures]:
 
         if not found_word:
             raise ValueError(
-                "Can't find matching nlp word %s", text[word_start:word_end]
+                f"Can't find matching nlp word {text[word_start:word_end]}"
             )
 
         line_idx = bisect_right(line_starts, found_word.start_char) - 1

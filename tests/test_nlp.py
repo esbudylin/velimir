@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from velimir.nlp import (
     DependencyRelation,
@@ -7,6 +7,7 @@ from velimir.nlp import (
     PartOfSpeech,
     initialize,
     markup,
+    markup_stanzas,
 )
 
 
@@ -32,7 +33,7 @@ def _make_doc(words_by_sentence):
     return doc
 
 
-class TestLanguageMarkup(unittest.TestCase):
+class TestMarkup(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.nlp = initialize()
@@ -147,3 +148,92 @@ class TestLanguageMarkup(unittest.TestCase):
             [p.code for p in result[0].part_of_speech],
             ["VERB", "NOUN", "NOUN", "VERB"],
         )
+
+
+class TestMarkupStanzas(unittest.TestCase):
+    def _make_features(self, line_count):
+        """Return a list of GrammarFeatures for testing."""
+        return [
+            GrammarFeatures(
+                part_of_speech=[PartOfSpeech.NOUN],
+                dep_rels=[DependencyRelation.ROOT],
+            )
+            for _ in range(line_count)
+        ]
+
+    @patch("velimir.nlp.markup")
+    def test_small_stanzas_joined(self, mock_markup):
+        """Stanzas that fit within 32 lines should be processed together."""
+        mock_markup.side_effect = lambda nlp, lines: self._make_features(len(lines))
+
+        verses = [
+            ["line a", "line b"],  # 2 lines
+            ["line c", "line d"],  # 2 lines
+            ["line e"],  # 1 line
+        ]
+
+        nlp = MagicMock()
+        result = markup_stanzas(nlp, verses)
+
+        mock_markup.assert_called_once()
+        self.assertEqual(len(result), 5)
+
+    @patch("velimir.nlp.markup")
+    def test_stanzas_split_by_limit(self, mock_markup):
+        """Stanzas that together exceed 32 lines should be split into groups."""
+        mock_markup.side_effect = lambda nlp, lines: self._make_features(len(lines))
+
+        verses = [
+            ["line"] * 20,  # 20 lines
+            ["line"] * 20,  # 20 lines — together 40 > 32, triggers split
+        ]
+
+        nlp = MagicMock()
+        result = markup_stanzas(nlp, verses)
+
+        self.assertEqual(mock_markup.call_count, 2)
+        self.assertEqual(len(result), 40)
+
+    @patch("velimir.nlp.markup")
+    def test_oversized_stanza_split(self, mock_markup):
+        """A single stanza exceeding 32 lines should be split into chunks."""
+        mock_markup.side_effect = lambda nlp, lines: self._make_features(len(lines))
+
+        verses = [["line"] * 70]  # 70 lines — needs 3 chunks
+
+        nlp = MagicMock()
+        result = markup_stanzas(nlp, verses)
+
+        self.assertEqual(mock_markup.call_count, 3)
+        self.assertEqual(len(result), 70)
+
+        # Verify chunk sizes: 32, 32, 6
+        calls = mock_markup.call_args_list
+        self.assertEqual(len(calls[0][0][1]), 32)
+        self.assertEqual(len(calls[1][0][1]), 32)
+        self.assertEqual(len(calls[2][0][1]), 6)
+
+    @patch("velimir.nlp.markup")
+    def test_oversized_stanza_with_pending_group(self, mock_markup):
+        """Oversized stanza triggers flush of pending group first."""
+        mock_markup.side_effect = lambda nlp, lines: self._make_features(len(lines))
+
+        verses = [
+            ["line"] * 10,  # fits, goes into group
+            ["line"] * 100,  # oversized, triggers flush + split
+        ]
+
+        nlp = MagicMock()
+        result = markup_stanzas(nlp, verses)
+
+        self.assertEqual(len(result), 110)
+
+        calls = mock_markup.call_args_list
+        self.assertEqual(len(calls), 5)
+        # First call: the pending 10-line group
+        self.assertEqual(len(calls[0][0][1]), 10)
+        # Next 4 calls: 32 + 32 + 32 + 4 = 100
+        self.assertEqual(len(calls[1][0][1]), 32)
+        self.assertEqual(len(calls[2][0][1]), 32)
+        self.assertEqual(len(calls[3][0][1]), 32)
+        self.assertEqual(len(calls[4][0][1]), 4)
