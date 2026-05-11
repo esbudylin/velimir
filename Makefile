@@ -1,35 +1,54 @@
+PYTHON ?= python
+LOG_DIR := logs
+
 export PYTHONPATH = .
-export LOG_FILE = logs/main.log
+export LOG_FILE = $(LOG_DIR)/main.log
 
-markup:
-	LOG_FILE=logs/markup.log python entry/markup.py
+define TEST_VERSES
+Все неизменно и все изменилось
+В утреннем холоде странной свободы.
+Долгие годы мне многое снилось,
+Вот я проснулся — и где эти годы!
 
-train:
-	LOG_FILE=logs/train.log python entry/train.py
+Вот я иду по осеннему полю,
+Всё как всегда, и другое, чем прежде:
+Точно меня отпустили на волю
+И отказали в последней надежде.
+endef
+export TEST_VERSES
 
-train-test:
-	LOG_FILE=logs/train-test.log python entry/train.py --test-run
+TO_KEBAB = $(subst _,-,$(1))
 
-evaluate:
-	LOG_FILE=logs/evaluate.log python entry/evaluate_models.py
+define SCRIPT_TARGET
+$(call TO_KEBAB, $(1)):
+	LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py
+endef
+
+define SCRIPT_TARGET_WITH_TESTS
+$(call TO_KEBAB, $(1)):
+	LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py
+
+$(call TO_KEBAB, $(1))-test:
+	LOG_FILE=$(LOG_DIR)/$(1)_test.log $(PYTHON) $(2)/$(1).py --test-run
+endef
+
+$(eval $(call SCRIPT_TARGET,markup,entry))
+
+$(eval $(call SCRIPT_TARGET_WITH_TESTS,train,entry))
+
+$(eval $(call SCRIPT_TARGET,evaluate,entry))
+
+$(eval $(call SCRIPT_TARGET,build_dataset,scripts))
+
+$(eval $(call SCRIPT_TARGET,evaluate_accentuator,scripts))
+
+$(eval $(call SCRIPT_TARGET_WITH_TESTS,build_pos_accent_db,scripts))
+
+$(eval $(call SCRIPT_TARGET_WITH_TESTS,build_grammar_db,scripts))
 
 test:
-	python -m unittest discover tests
+	$(PYTHON) -m unittest discover tests
 
-build-dataset:
-	LOG_FILE=logs/build-dataset.log python scripts/build_dataset.py
+markup-test:
+	echo "$$TEST_VERSES" | LOG_FILE=logs/markup-test.log $(PYTHON) entry/markup.py
 
-build-pos-accent-db:
-	LOG_FILE=logs/build-pos-accent-db.log python scripts/build_pos_accent_db.py
-
-build-pos-accent-db-test:
-	LOG_FILE=logs/build-pos-accent-db-test.log python scripts/build_pos_accent_db.py --test-run
-
-build-grammar-db:
-	LOG_FILE=logs/build-grammar-db.log python scripts/build_grammar_db.py
-
-build-grammar-db-test:
-	LOG_FILE=logs/build-grammar-db-test.log python scripts/build_grammar_db.py --test-run
-
-evaluate-accentuator:
-	LOG_FILE=logs/evaluate-accentuator.log python scripts/evaluate_accentuator.py

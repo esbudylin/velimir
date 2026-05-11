@@ -94,8 +94,8 @@ def format_verse(lines: list[str], processed_lines: list[ProcessedLine | None]) 
 
 
 def main():
-    MeterClassRegistry.initialize()
     LoggingSettings.setup()
+    MeterClassRegistry.initialize()
 
     build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
 
