@@ -36,7 +36,7 @@ $(eval $(call SCRIPT_TARGET,markup,entry))
 
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,train,entry))
 
-$(eval $(call SCRIPT_TARGET,evaluate,entry))
+$(eval $(call SCRIPT_TARGET,evaluate_models,entry))
 
 $(eval $(call SCRIPT_TARGET,build_dataset,scripts))
 

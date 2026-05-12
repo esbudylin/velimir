@@ -257,9 +257,7 @@ class GrammarDB:
 
         if row is None:
             raise ValueError(
-                "Can't find grammar features for line %d, poem %s in the db",
-                line_idx,
-                poem_path,
+                f"Can't find grammar features for line {line_idx}, poem {poem_path} in the db",
             )
 
         pos_codes = msgpack.unpackb(row[0])
