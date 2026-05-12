@@ -11,7 +11,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
 from velimir.domain_models import MeterClass, Poem, SyllableFeatures
-from velimir.nlp import GrammarFeatures, PartOfSpeech
+from velimir.nlp import GrammarFeatures
 from velimir.settings import GRAMMAR_DB_PATH, METER_VOCAB_PATH
 
 
