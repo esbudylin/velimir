@@ -1,6 +1,14 @@
 PYTHON ?= python
 LOG_DIR := logs
 
+V ?= 0
+
+ifeq ($(V),1)
+Q :=
+else
+Q := @
+endif
+
 export PYTHONPATH = .
 export LOG_FILE = $(LOG_DIR)/main.log
 
@@ -21,15 +29,15 @@ TO_KEBAB = $(subst _,-,$(1))
 
 define SCRIPT_TARGET
 $(call TO_KEBAB, $(1)):
-	LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py
+	$(Q)LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py
 endef
 
 define SCRIPT_TARGET_WITH_TESTS
 $(call TO_KEBAB, $(1)):
-	LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py
+	$(Q)LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py
 
 $(call TO_KEBAB, $(1))-test:
-	LOG_FILE=$(LOG_DIR)/$(1)_test.log $(PYTHON) $(2)/$(1).py --test-run
+	$(Q)LOG_FILE=$(LOG_DIR)/$(1)_test.log $(PYTHON) $(2)/$(1).py --test-run
 endef
 
 $(eval $(call SCRIPT_TARGET,markup,entry))
