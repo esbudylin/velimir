@@ -9,7 +9,7 @@ from typing import Iterator
 
 from bs4 import BeautifulSoup
 from pymorphy2 import MorphAnalyzer
-from velimir import accentuator, io
+from velimir import accentuator, io, nlp
 from velimir.domain_models import InputLine, InputPoem
 from velimir.parsers import (
     clean_line,
@@ -22,16 +22,8 @@ from velimir.logger import LoggingSettings
 
 morph_analyzer = MorphAnalyzer()
 
-CYRILLIC_EDGE_RE = re.compile(r"^[^А-Яа-яЁё]+|[^А-Яа-яЁё]+$")
-
 DB_PATH = "data/pos_accent.db"
 TEST_DB_PATH = "data/pos_accent_test.db"
-
-
-@cache
-def extract_part_of_speech(word: str) -> str:
-    pos = sorted(morph_analyzer.parse(word), key=lambda t: -t.score)[0].tag.POS
-    return str(pos) if pos else "UNKNOWN"
 
 
 def extract_lines_from_csv(csv_reader: csv.DictReader) -> Iterator[InputLine]:
@@ -57,11 +49,6 @@ def extract_pos_accent_pairs(poetic_accents, last_in_word, parts_of_speech):
     return pos_accent_pairs
 
 
-def extract_words_for_morph(line: str):
-    clean_word = partial(CYRILLIC_EDGE_RE.sub, "")
-    return [clean_word(w) for w in line.split() if accentuator.vowel_count(w)]
-
-
 def parse_line(line):
     line_formula = parse_line_formula(line.meter)
 
@@ -75,8 +62,8 @@ def parse_line(line):
     poetic_accents = accentuator.extract_accent_mask(line.text)
     last_in_word = extract_word_ending_mask(cleaned_line)
 
-    words = extract_words_for_morph(cleaned_line)
-    parts_of_speech = map(extract_part_of_speech, words)
+    words = nlp.extract_words_for_morph(cleaned_line)
+    parts_of_speech = map(lambda w: nlp.extract_part_of_speech(w).to_str(), words)
 
     pos_accent_pairs = extract_pos_accent_pairs(
         poetic_accents,

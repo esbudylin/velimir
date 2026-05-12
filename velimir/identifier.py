@@ -14,7 +14,7 @@ from .ml_loader import (
     break_into_stanzas,
     compute_mean_ling_accents_per_stanza,
 )
-from .nlp import DependencyRelation, PartOfSpeech
+from .nlp import PartOfSpeech
 
 
 @dataclass
@@ -67,23 +67,21 @@ def extract_input_tensors(
     accent_masks: list[list[bool]],
     word_ending_masks: list[list[bool]],
     part_of_speech: list[list[PartOfSpeech]],
-    dep_rels: list[list[DependencyRelation]],
 ):
     accent_input = []
     pos_input = []
-    deprel_input = []
 
     stanza_stats = compute_mean_ling_accents_per_stanza(
         accent_masks,
         stanza_breaks,
     )
     stanzas = break_into_stanzas(
-        list(zip(accent_masks, word_ending_masks, part_of_speech, dep_rels)),
+        list(zip(accent_masks, word_ending_masks, part_of_speech)),
         stanza_breaks,
     )
 
     for current_stanza, stanza_lines in enumerate(stanzas):
-        for ling_accent_mask, word_ending_mask, pos, deprel in stanza_lines:
+        for ling_accent_mask, word_ending_mask, pos in stanza_lines:
             stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
 
             accent_input.append(
@@ -107,37 +105,31 @@ def extract_input_tensors(
             )
 
             pos_input.append(torch.tensor(pos, dtype=torch.long))
-            deprel_input.append(torch.tensor(deprel, dtype=torch.long))
 
     accent_input_padded = pad_sequence(accent_input, batch_first=True, padding_value=-1)
     pos_inpud_padded = pad_sequence(pos_input, batch_first=True, padding_value=-1)
-    deprel_input_padded = pad_sequence(deprel_input, batch_first=True, padding_value=-1)
 
-    return accent_input_padded, pos_inpud_padded, deprel_input_padded
+    return accent_input_padded, pos_inpud_padded
 
 
-def detect_poetic_accents(
-    model, device, accent_input, meter_pred, pos_input, deprel_input
-):
+def detect_poetic_accents(model, device, accent_input, meter_pred, pos_input):
     accent_input = accent_input.to(device)
     pos_input = pos_input.to(device)
-    deprel_input = deprel_input.to(device)
 
     with torch.no_grad():
-        logits = model(accent_input, meter_pred, pos_input, deprel_input)
+        logits = model(accent_input, meter_pred, pos_input)
         pred = (torch.sigmoid(logits) > 0.5).float()
 
     mask = (accent_input != -1).all(dim=2)
     return pred.masked_fill(~mask, -1).unsqueeze(-1)
 
 
-def detect_meter(model, device, accent_input, pos_input, deprel_input):
+def detect_meter(model, device, accent_input, pos_input):
     accent_input = accent_input.to(device)
     pos_input = pos_input.to(device)
-    deprel_input = deprel_input.to(device)
 
     with torch.no_grad():
-        pred = model(accent_input, pos_input, deprel_input)
+        pred = model(accent_input, pos_input)
 
     return torch.argmax(pred, dim=1)
 
@@ -324,18 +316,16 @@ def process_lines(
     word_ending_masks = [parsers.extract_word_ending_mask(li) for li in lines]
     ling_accent_masks = [accentuator.accent_line(li) for li in lines]
 
-    nlp_pipeline = nlp.initialize()
-    grammar_features = nlp.markup(nlp_pipeline, lines)
+    grammar_features = nlp.markup(lines)
     gf_expanded = [
         gf.expand(wem) for gf, wem in zip(grammar_features, word_ending_masks)
     ]
 
-    accent_input, pos_input, deprel_input = extract_input_tensors(
+    accent_input, pos_input = extract_input_tensors(
         stanza_breaks,
         ling_accent_masks,
         word_ending_masks,
         [gf.part_of_speech for gf in gf_expanded],
-        [gf.dep_rels for gf in gf_expanded],
     )
 
     meter_preds = detect_meter(
@@ -343,7 +333,6 @@ def process_lines(
         device,
         accent_input,
         pos_input,
-        deprel_input,
     )
     poetic_accents = detect_poetic_accents(
         accent_model,
@@ -351,7 +340,6 @@ def process_lines(
         accent_input,
         meter_preds,
         pos_input,
-        deprel_input,
     )
 
     def filter_padding(li):

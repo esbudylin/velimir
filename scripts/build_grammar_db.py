@@ -12,10 +12,10 @@ import msgpack
 from bs4 import BeautifulSoup
 
 from velimir import parsers, accentuator
-from velimir.domain_models import InputPoem, InputLine
+from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import delayed_logger, LoggingSettings
-from velimir.nlp import GrammarFeatures, initialize, markup_stanzas
+from velimir.nlp import GrammarFeatures, markup
 from velimir.settings import (
     GRAMMAR_DB_PATH,
     GRAMMAR_TEST_DB_PATH,
@@ -35,33 +35,24 @@ def clean_line_for_markup(line):
     return parsers.clean_line(accentuator.remove_accent_marks(line))
 
 
-def extract_grammar_features(nlp, poem_path: str, xml: str) -> Iterator[GrammarSample]:
+def extract_grammar_features(poem_path: str, xml: str) -> Iterator[GrammarSample]:
     soup = BeautifulSoup(xml, "xml")
 
     line_count = count()
 
-    verses: list[list[str]] = []
-    input_lines: list[InputLine] = []
-
     for verse in soup.find_all("p", class_="verse"):
         if stanza := list(parsers.extract_lines(verse, line_count)):
-            verses.append([clean_line_for_markup(il.text) for il in stanza])
-            input_lines.extend(stanza)
+            features = markup([clean_line_for_markup(il.text) for il in stanza])
+            yield from (
+                GrammarSample(poem_path, il.idx, features[i])
+                for i, il in enumerate(stanza)
+            )
         else:
             delayed_logger.record()
             logging.warning("Skipping empty stanza")
 
-    try:
-        features = markup_stanzas(nlp, verses)
-    except ValueError as e:
-        logging.error("Error while processing poem %s: %s", poem_path, e)
-        return
 
-    for il, gf in zip(input_lines, features):
-        yield GrammarSample(poem_path, il.idx, gf)
-
-
-def transform_data(nlp, csv_reader: csv.DictReader) -> Iterator[GrammarSample]:
+def transform_data(csv_reader: csv.DictReader) -> Iterator[GrammarSample]:
     for row in csv_reader:
         poem = InputPoem.from_row(row)
 
@@ -72,17 +63,11 @@ def transform_data(nlp, csv_reader: csv.DictReader) -> Iterator[GrammarSample]:
         xml_str = read_poem_xml(poem.path)
 
         try:
-            yield from extract_grammar_features(nlp, poem.path, xml_str)
+            yield from extract_grammar_features(poem.path, xml_str)
         except Exception as error:
             delayed_logger.record()
             logging.exception(error)
             continue
-
-
-def serialize_features(features: GrammarFeatures):
-    pos_codes = [int(pos) for pos in features.part_of_speech]
-    deprel_codes = [int(dep) for dep in features.dep_rels]
-    return msgpack.packb(pos_codes), msgpack.packb(deprel_codes)
 
 
 def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
@@ -101,8 +86,7 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
         CREATE TABLE grammar_features (
             poem_id INTEGER NOT NULL REFERENCES poems(rowid),
             line_idx INTEGER NOT NULL,
-            part_of_speech BLOB NOT NULL,
-            dep_rels BLOB NOT NULL
+            features BLOB NOT NULL
         )
         """
     )
@@ -138,14 +122,15 @@ def write_into_sqlite(conn, samples: Iterator[GrammarSample]):
                 poem_id_cache[sample.poem_path] = row[0]
 
             poem_id = poem_id_cache[sample.poem_path]
-            pos, deprel = serialize_features(sample.features)
-            insert_buffer.append((poem_id, sample.line_idx, pos, deprel))
+            serialized_features = msgpack.packb(sample.features.encode())
+
+            insert_buffer.append((poem_id, sample.line_idx, serialized_features))
 
         cursor.executemany(
             """
                 INSERT INTO grammar_features
-                    (poem_id, line_idx, part_of_speech, dep_rels)
-                VALUES (?, ?, ?, ?)
+                    (poem_id, line_idx, features)
+                VALUES (?, ?, ?)
                 """,
             insert_buffer,
         )
@@ -164,15 +149,13 @@ def main(test_run: bool = False):
 
     conn = sqlite3.connect(db_path)
 
-    nlp = initialize()
-
     with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:
         input_reader = csv.DictReader(csv_file, dialect=InputDialect)
 
         if test_run:
             input_reader = itertools.islice(input_reader, 2)
 
-        transformed_data = transform_data(nlp, input_reader)
+        transformed_data = transform_data(input_reader)
         write_into_sqlite(conn, transformed_data)
 
     conn.close()

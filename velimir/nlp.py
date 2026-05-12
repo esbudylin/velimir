@@ -1,81 +1,36 @@
-import itertools
-import logging
 import re
-from bisect import bisect_right
 from dataclasses import dataclass
+from functools import cache, partial
 
-import stanza
+from pymorphy2 import MorphAnalyzer
 
 from .accentuator import vowel_count
 from .domain_models import CodeIntEnum
 
+morph_analyzer = MorphAnalyzer()
+
+CYRILLIC_EDGE_RE = re.compile(r"^[^А-Яа-яЁё]+|[^А-Яа-яЁё]+$")
+
 
 class PartOfSpeech(CodeIntEnum):
-    ADJ = 1, "ADJ"  # adjective
-    ADP = 2, "ADP"  # adposition
-    ADV = 3, "ADV"  # adverb
-    AUX = 4, "AUX"  # auxiliary
-    CCONJ = 5, "CCONJ"  # coordinating conjunction
-    DET = 6, "DET"  # determiner
-    INTJ = 7, "INTJ"  # interjection
-    NOUN = 8, "NOUN"  # noun
-    NUM = 9, "NUM"  # numeral
-    PART = 10, "PART"  # particle
-    PRON = 11, "PRON"  # pronoun
-    PROPN = 12, "PROPN"  # proper noun
-    SCONJ = 13, "SCONJ"  # subordinating conjunction
-    VERB = 14, "VERB"  # verb
-    X = 0, "X"  # other
-
-
-class DependencyRelation(CodeIntEnum):
-    # Core arguments
-    NSUBJ = 1, "nsubj"
-    OBJ = 2, "obj"
-    IOBJ = 3, "iobj"
-    CSUBJ = 4, "csubj"
-    CCOMP = 5, "ccomp"
-    XCOMP = 6, "xcomp"
-
-    # Non-core dependents
-    OBL = 7, "obl"
-    VOCATIVE = 8, "vocative"
-    EXPL = 9, "expl"
-    ADVCL = 10, "advcl"
-    ADVMOD = 11, "advmod"
-    DISCOURSE = 12, "discourse"
-    AUX = 13, "aux"
-    COP = 14, "cop"
-    MARK = 15, "mark"
-
-    # Nominal dependents
-    NMOD = 16, "nmod"
-    APPOS = 17, "appos"
-    NUMMOD = 18, "nummod"
-    ACL = 19, "acl"
-    AMOD = 20, "amod"
-    DET = 21, "det"
-    CASE = 22, "case"
-
-    # Coordination
-    CONJ = 23, "conj"
-    CC = 24, "cc"
-
-    # Multiword expressions
-    FIXED = 25, "fixed"
-    FLAT = 26, "flat"
-    COMPOUND = 27, "compound"
-
-    # Loose / special
-    LIST = 28, "list"
-    PARATAXIS = 29, "parataxis"
-    ORPHAN = 30, "orphan"
-
-    # Root of the sentence
-    ROOT = 31, "root"
-
-    # Fallback
-    UNKNOWN = 0, "_"
+    UNKNOWN = (0, "UNKNOWN")
+    NOUN = (1, "NOUN")  # имя существительное
+    ADJF = (2, "ADJF")  # имя прилагательное (полное)
+    ADJS = (3, "ADJS")  # имя прилагательное (краткое)
+    COMP = (4, "COMP")  # компаратив
+    VERB = (5, "VERB")  # глагол (личная форма)
+    INFN = (6, "INFN")  # глагол (инфинитив)
+    PRTF = (7, "PRTF")  # причастие (полное)
+    PRTS = (8, "PRTS")  # причастие (краткое)
+    GRND = (9, "GRND")  # деепричастие
+    NUMR = (10, "NUMR")  # числительное
+    ADVB = (11, "ADVB")  # наречие
+    NPRO = (12, "NPRO")  # местоимение-существительное
+    PRED = (13, "PRED")  # предикатив
+    PREP = (14, "PREP")  # предлог
+    CONJ = (15, "CONJ")  # союз
+    PRCL = (16, "PRCL")  # частица
+    INTJ = (17, "INTJ")  # междометие
 
 
 @dataclass(slots=True)
@@ -86,11 +41,6 @@ class GrammarFeatures:
     """
 
     part_of_speech: list[PartOfSpeech]
-    dep_rels: list[DependencyRelation]
-
-    def __post_init__(self):
-        if len(self.part_of_speech) != len(self.dep_rels):
-            raise ValueError("part_of_speech and dep_rels must be of same length")
 
     def expand(self, last_in_word: list[bool]):
         if sum(last_in_word) != len(self.part_of_speech):
@@ -101,28 +51,21 @@ class GrammarFeatures:
         current_word = 0
 
         expanded_pos = []
-        expanded_deprels = []
 
         for is_end in last_in_word:
             expanded_pos.append(self.part_of_speech[current_word])
-            expanded_deprels.append(self.dep_rels[current_word])
 
             if is_end:
                 current_word += 1
 
-        return GrammarFeatures(expanded_pos, expanded_deprels)
+        return GrammarFeatures(expanded_pos)
 
+    def encode(self):
+        return self.part_of_speech
 
-def initialize():
-    stanza.download(
-        lang="ru",
-        download_json=False,
-    )
-
-    return stanza.Pipeline(
-        lang="ru",
-        download_method=stanza.DownloadMethod.REUSE_RESOURCES,
-    )
+    @classmethod
+    def decode(cls, data):
+        return cls(part_of_speech=data)
 
 
 def from_str_safe(enum, s):
@@ -132,99 +75,22 @@ def from_str_safe(enum, s):
         return None
 
 
-def markup_stanzas(
-    nlp,
-    verses: list[list[str]],
-) -> list[GrammarFeatures]:
-    MAX_LINES_PER_GROUP = 32
-
-    result = []
-    group_lines: list[str] = []
-
-    for stanza_lines in verses:
-        if len(stanza_lines) > MAX_LINES_PER_GROUP:
-            if group_lines:
-                result.extend(markup(nlp, group_lines))
-                group_lines = []
-
-            for i in range(0, len(stanza_lines), MAX_LINES_PER_GROUP):
-                result.extend(markup(nlp, stanza_lines[i : i + MAX_LINES_PER_GROUP]))
-
-            continue
-
-        if group_lines and len(group_lines) + len(stanza_lines) > MAX_LINES_PER_GROUP:
-            result.extend(markup(nlp, group_lines))
-            group_lines = []
-
-        group_lines.extend(stanza_lines)
-
-    if group_lines:
-        result.extend(markup(nlp, group_lines))
-
-    return result
+def extract_words_for_morph(line: str):
+    clean_word = partial(CYRILLIC_EDGE_RE.sub, "")
+    return [clean_word(w) for w in line.split() if vowel_count(w)]
 
 
-def markup(nlp, lines: list[str]) -> list[GrammarFeatures]:
-    line_starts = []
-    pos = 0
+@cache
+def extract_part_of_speech(word: str) -> PartOfSpeech:
+    pos = sorted(morph_analyzer.parse(word), key=lambda t: -t.score)[0].tag.POS
+    return from_str_safe(PartOfSpeech, str(pos)) or PartOfSpeech.UNKNOWN
+
+
+def markup(lines: list[str]) -> list[GrammarFeatures]:
+    res = []
+
     for line in lines:
-        line_starts.append(pos)
-        pos += len(line) + 1
+        pos = map(extract_part_of_speech, extract_words_for_morph(line))
+        res.append(GrammarFeatures(part_of_speech=list(pos)))
 
-    pos_tags: list[list[PartOfSpeech]] = [[] for _ in lines]
-    dep_rels: list[list[DependencyRelation]] = [[] for _ in lines]
-
-    # убираем прописные буквы в начале строк,
-    # чтобы уменьшить число ложнопозитивных определений имён собственных
-    lines = [line[0].lower() + line[1:] for line in lines]
-
-    joined_lines = " ".join(lines)
-    text = " ".join(joined_lines.split())  # normalize spaces
-
-    # разделяем текст на слова на основе пробелов
-    # оставляем слова с гласными звуками
-    ws_word_ranges = [
-        (m.start(), m.end())
-        for m in re.finditer(r"\S+", text)
-        if vowel_count(m.group())
-    ]
-
-    doc = nlp(text)
-
-    nlp_words = itertools.chain.from_iterable(
-        sentence.words for sentence in doc.sentences
-    )
-
-    # Лемматизация stanza может отличаться от деления на слова на
-    # основе пробелов. Для случаев, когда stanza выделяет несколько
-    # лемм для одного слова, используем данные только первой леммы
-    for word_start, word_end in ws_word_ranges:
-        found_word = None
-        for word in nlp_words:
-            if not vowel_count(word.text):
-                continue
-
-            if word_start <= word.start_char < word_end:
-                found_word = word
-                break
-
-        if not found_word:
-            raise ValueError(
-                f"Can't find matching nlp word {text[word_start:word_end]}"
-            )
-
-        line_idx = bisect_right(line_starts, found_word.start_char) - 1
-
-        # use only the base for composed forms
-        dep_rel_str = found_word.deprel.split(":")[0]
-
-        pos = from_str_safe(PartOfSpeech, found_word.upos)
-        dep_rel = from_str_safe(DependencyRelation, dep_rel_str)
-
-        pos_tags[line_idx].append(pos or PartOfSpeech.X)
-        dep_rels[line_idx].append(dep_rel or DependencyRelation.UNKNOWN)
-
-    return [
-        GrammarFeatures(part_of_speech=pos_tags[i], dep_rels=dep_rels[i])
-        for i in range(len(lines))
-    ]
+    return res

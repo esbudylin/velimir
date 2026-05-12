@@ -11,7 +11,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
 from velimir.domain_models import MeterClass, Poem, SyllableFeatures
-from velimir.nlp import DependencyRelation, GrammarFeatures, PartOfSpeech
+from velimir.nlp import GrammarFeatures, PartOfSpeech
 from velimir.settings import GRAMMAR_DB_PATH, METER_VOCAB_PATH
 
 
@@ -34,7 +34,6 @@ class RawSample:
 class Sample:
     accent_input: torch.Tensor
     part_of_speech_input: torch.Tensor
-    deprel_input: torch.Tensor
     poetic_accents: torch.Tensor
     meter_class: torch.Tensor
 
@@ -62,7 +61,6 @@ class PoetryDataset(Dataset):
             poetic = torch.tensor(syllables.poetic_accents, dtype=torch.float32)
 
             pos = torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
-            deprel = torch.tensor(rs.grammar.dep_rels, dtype=torch.long)
 
             self.samples.append(
                 Sample(
@@ -70,7 +68,6 @@ class PoetryDataset(Dataset):
                     poetic_accents=poetic,
                     meter_class=meter_class_t,
                     part_of_speech_input=pos,
-                    deprel_input=deprel,
                 )
             )
 
@@ -151,7 +148,6 @@ def collate(batch: list[Sample]):
     poetic = [b.poetic_accents for b in batch]
     meters = [b.meter_class for b in batch]
     pos = [b.part_of_speech_input for b in batch]
-    deprel = [b.deprel_input for b in batch]
 
     accent_input = pad_sequence(
         accent_input,
@@ -168,18 +164,12 @@ def collate(batch: list[Sample]):
         batch_first=True,
         padding_value=-1,
     )
-    deprel = pad_sequence(
-        deprel,
-        batch_first=True,
-        padding_value=-1,
-    )
 
     return Sample(
         accent_input=accent_input,
         poetic_accents=poetic,
         meter_class=torch.stack(meters),
         part_of_speech_input=pos,
-        deprel_input=deprel,
     )
 
 
@@ -247,7 +237,7 @@ class GrammarDB:
 
     def fetch(self, poem_path: str, line_idx: int) -> GrammarFeatures:
         cursor = self.conn.execute(
-            """SELECT gf.part_of_speech, gf.dep_rels
+            """SELECT gf.features
             FROM grammar_features_tmp gf
             JOIN poems p ON gf.poem_id = p.rowid
             WHERE p.path = ? AND gf.line_idx = ?""",
@@ -260,13 +250,9 @@ class GrammarDB:
                 f"Can't find grammar features for line {line_idx}, poem {poem_path} in the db",
             )
 
-        pos_codes = msgpack.unpackb(row[0])
-        deprel_codes = msgpack.unpackb(row[1])
+        serialized_features = msgpack.unpackb(row[0])
 
-        return GrammarFeatures(
-            part_of_speech=[PartOfSpeech(c) for c in pos_codes],
-            dep_rels=[DependencyRelation(c) for c in deprel_codes],
-        )
+        return GrammarFeatures.decode(serialized_features)
 
 
 def split_samples(
