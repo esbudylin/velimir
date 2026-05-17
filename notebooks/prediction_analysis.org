@@ -14,15 +14,15 @@
 #+end_src
 
 #+RESULTS:
-| 2026-05-12 12:57:18 | 628 [INFO] Using device: cpu                                               |
-| 2026-05-12 12:57:18 | 643 [INFO] Loading raw samples                                             |
-| 2026-05-12 12:57:18 | 644 [INFO] Building grammar index                                          |
-| 2026-05-12 12:57:19 | 425 [INFO] Index built succesfuly                                          |
-| 2026-05-12 12:58:14 | 019 [INFO] 3010 lines are excluded from dataset as having rare meter types |
-| 2026-05-12 12:58:19 | 347 [INFO] Loading poetry dataset                                          |
-| 2026-05-12 12:58:20 | 444 [INFO] Dataset loading finished. 57264 samples created                 |
-| 2026-05-12 12:59:09 | 922 [INFO] accent_accuracy=0.985123                                        |
-| 2026-05-12 12:59:09 | 922 [INFO] meter_accuracy=0.942110                                         |
+| 2026-05-17 11:49:51 | 543 [INFO] Using device: cpu                                               |
+| 2026-05-17 11:49:51 | 564 [INFO] Loading raw samples                                             |
+| 2026-05-17 11:49:51 | 564 [INFO] Building grammar index                                          |
+| 2026-05-17 11:49:52 | 355 [INFO] Index built succesfuly                                          |
+| 2026-05-17 11:50:55 | 180 [INFO] 3010 lines are excluded from dataset as having rare meter types |
+| 2026-05-17 11:51:01 | 164 [INFO] Loading poetry dataset                                          |
+| 2026-05-17 11:51:02 | 292 [INFO] Dataset loading finished. 57264 samples created                 |
+| 2026-05-17 11:52:01 | 653 [INFO] accent_accuracy=0.985123                                        |
+| 2026-05-17 11:52:01 | 653 [INFO] meter_accuracy=0.942110                                         |
 
 Процент попаданий для предсказаний метра и ритма
 
@@ -163,62 +163,6 @@ NB: точность для ударений в логе выше, т.к. при
 | Я*    |             0.5 |          0.429 |                    0.833 |                      0.25 |    14 |
 | Пен   |             0.5 |            0.3 |                    0.667 |                     0.429 |    10 |
 | Аф~Аф |             1.0 |          0.833 |                      1.0 |                       1.0 |     6 |
-
-Частота ошибок по парам предсказание/цель
-#+begin_src sqlite
-  CREATE VIEW error_strata AS
-    SELECT
-    meter_class_pred AS mc_pred, meter_class_target AS mc_target,
-    meter_pred || ' ' || caesura_pred AS pred,
-    meter_target || ' ' || caesura_target AS target,
-    COUNT(*) cnt,
-    ROUND((COUNT(*) * 1.0) / (SUM(COUNT(*)) OVER()), 3) AS freq
-    FROM predictions
-    WHERE meter_class_target <> meter_class_pred
-    GROUP BY meter_class_target, meter_class_pred
-    ORDER BY cnt DESC
-#+end_src
-
-#+RESULTS:
-
-#+begin_src sqlite
-  SELECT * FROM error_strata WHERE freq > 0.01
-#+end_src
-
-#+RESULTS:
-| mc_pred | mc_target | pred    | target | cnt |  freq |
-|---------+-----------+---------+--------+-----+-------|
-|       8 |         3 | Ак      | Дк     | 142 | 0.043 |
-|       3 |         0 | Дк      | Я      | 136 | 0.041 |
-|       6 |         1 | Тк      | Х      | 133 |  0.04 |
-|       6 |         3 | Тк      | Дк     | 131 |  0.04 |
-|       6 |         0 | Тк      | Я      | 126 | 0.038 |
-|       4 |         0 | Аф      | Я      | 120 | 0.036 |
-|       2 |         3 | Ан      | Дк     | 111 | 0.033 |
-|       3 |         2 | Дк      | Ан     |  99 |  0.03 |
-|       1 |         2 | Х       | Ан     |  98 |  0.03 |
-|       1 |         3 | Х       | Дк     |  94 | 0.028 |
-|       3 |         1 | Дк      | Х      |  87 | 0.026 |
-|       5 |         3 | Д       | Дк     |  83 | 0.025 |
-|       3 |         4 | Дк      | Аф     |  76 | 0.023 |
-|      16 |         1 | Х*      | Х      |  71 | 0.021 |
-|       2 |         1 | Ан      | Х      |  63 | 0.019 |
-|       4 |         3 | Аф      | Дк     |  62 | 0.019 |
-|      18 |         0 | Я*      | Я      |  61 | 0.018 |
-|       0 |         3 | Я       | Дк     |  57 | 0.017 |
-|      10 |         0 | Я~Я 1/2 | Я      |  56 | 0.017 |
-|       3 |         6 | Дк      | Тк     |  56 | 0.017 |
-|       3 |         5 | Дк      | Д      |  50 | 0.015 |
-|      12 |         3 | Х~Х 1/2 | Дк     |  49 | 0.015 |
-|       3 |        11 | Дк      | Л      |  48 | 0.014 |
-|       5 |         1 | Д       | Х      |  47 | 0.014 |
-|       1 |         6 | Х       | Тк     |  47 | 0.014 |
-|       0 |         4 | Я       | Аф     |  45 | 0.014 |
-|       1 |         5 | Х       | Д      |  43 | 0.013 |
-|       5 |         0 | Д       | Я      |  42 | 0.013 |
-|      13 |         3 | Д~Д 1/2 | Дк     |  40 | 0.012 |
-|       6 |         2 | Тк      | Ан     |  37 | 0.011 |
-|       8 |         6 | Ак      | Тк     |  37 | 0.011 |
 
 Частота присутствия цезуры
 #+begin_src sqlite
