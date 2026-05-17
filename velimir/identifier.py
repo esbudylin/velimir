@@ -316,9 +316,8 @@ def process_lines(
     word_ending_masks = [parsers.extract_word_ending_mask(li) for li in lines]
     ling_accent_masks = [accentuator.accent_line(li) for li in lines]
 
-    grammar_features = nlp.markup(lines)
     gf_expanded = [
-        gf.expand(wem) for gf, wem in zip(grammar_features, word_ending_masks)
+        gf.expand(wem) for gf, wem in zip(map(nlp.markup, lines), word_ending_masks)
     ]
 
     accent_input, pos_input = extract_input_tensors(

@@ -207,7 +207,7 @@ def parse_line(line: InputLine, line_formula: LineFormula) -> Line:
 
 
 def extract_lines(soup, line_count: Iterator[int] | None = None) -> Iterator[InputLine]:
-    for idx, line in zip(line_count or count(), soup.find_all("line")):
+    for line, idx in zip(soup.find_all("line"), line_count or count()):
         if meter := line.get("meter"):
             text = collect_line_text(line)
 

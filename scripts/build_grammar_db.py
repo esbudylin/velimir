@@ -42,10 +42,13 @@ def extract_grammar_features(poem_path: str, xml: str) -> Iterator[GrammarSample
 
     for verse in soup.find_all("p", class_="verse"):
         if stanza := list(parsers.extract_lines(verse, line_count)):
-            features = markup([clean_line_for_markup(il.text) for il in stanza])
             yield from (
-                GrammarSample(poem_path, il.idx, features[i])
-                for i, il in enumerate(stanza)
+                GrammarSample(
+                    poem_path,
+                    il.idx,
+                    markup(clean_line_for_markup(il.text)),
+                )
+                for il in stanza
             )
         else:
             delayed_logger.record()

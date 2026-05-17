@@ -86,11 +86,6 @@ def extract_part_of_speech(word: str) -> PartOfSpeech:
     return from_str_safe(PartOfSpeech, str(pos)) or PartOfSpeech.UNKNOWN
 
 
-def markup(lines: list[str]) -> list[GrammarFeatures]:
-    res = []
-
-    for line in lines:
-        pos = map(extract_part_of_speech, extract_words_for_morph(line))
-        res.append(GrammarFeatures(part_of_speech=list(pos)))
-
-    return res
+def markup(line: str) -> GrammarFeatures:
+    pos = map(extract_part_of_speech, extract_words_for_morph(line))
+    return GrammarFeatures(part_of_speech=list(pos))

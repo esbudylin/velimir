@@ -2,9 +2,7 @@ import argparse
 import csv
 import itertools
 import os
-import re
 import sqlite3
-from functools import cache, partial
 from typing import Iterator
 
 from bs4 import BeautifulSoup
