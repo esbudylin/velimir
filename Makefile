@@ -54,6 +54,10 @@ $(eval $(call SCRIPT_TARGET_WITH_TESTS,build_pos_accent_db,scripts))
 
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,build_grammar_db,scripts))
 
+$(eval $(call SCRIPT_TARGET,export_onnx,scripts))
+
+$(eval $(call SCRIPT_TARGET,verify_onnx,scripts))
+
 test:
 	$(PYTHON) -m unittest discover tests
 

@@ -15,6 +15,9 @@ METER_MODEL = os.path.join(MODELS_DIRECTORY, "meter")
 ACCENT_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "accent-test")
 METER_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "meter-test")
 
+ACCENT_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "accent.onnx")
+METER_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "meter.onnx")
+
 ACCENT_DICT_DIR = os.path.join(DATA_DIRECTORY, "accent_dicts")
 ACCENT_DICT_PATHS = [
     os.path.join(ACCENT_DICT_DIR, n)
