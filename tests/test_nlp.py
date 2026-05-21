@@ -9,59 +9,47 @@ from velimir.nlp import (
 
 class TestMarkup(unittest.TestCase):
     def test_basic_functionality(self):
-        result = markup(["пришла весна"])
+        result = markup("пришла весна")
 
-        self.assertEqual(len(result), 1)
-        self.assertIsInstance(result[0], GrammarFeatures)
-        self.assertEqual(len(result[0].part_of_speech), 2)
-        self.assertEqual(result[0].part_of_speech[0], PartOfSpeech.VERB)
-        self.assertEqual(result[0].part_of_speech[1], PartOfSpeech.NOUN)
-
-    def test_multi_line(self):
-        result = markup(["пришла весна, и", "снег растаял"])
-
-        self.assertEqual(len(result), 2)
-        self.assertEqual(
-            [p.code for p in result[0].part_of_speech],
-            ["VERB", "NOUN", "CONJ"],
-        )
-        self.assertEqual(
-            [p.code for p in result[1].part_of_speech],
-            ["NOUN", "VERB"],
-        )
+        self.assertIsInstance(result, GrammarFeatures)
+        self.assertEqual(len(result.part_of_speech), 2)
+        self.assertEqual(result.part_of_speech[0], PartOfSpeech.VERB)
+        self.assertEqual(result.part_of_speech[1], PartOfSpeech.NOUN)
 
     def test_words_without_vowels_are_skipped(self):
-        result = markup(["в дом"])
+        result = markup("в дом")
 
-        self.assertEqual(len(result[0].part_of_speech), 1)
-        self.assertEqual(result[0].part_of_speech[0], PartOfSpeech.NOUN)
+        self.assertEqual(len(result.part_of_speech), 1)
+        self.assertEqual(result.part_of_speech[0], PartOfSpeech.NOUN)
 
     def test_leading_punctuation(self):
-        result = markup(["«Куда мир"])
+        result = markup("«Куда мир")
 
-        self.assertEqual(len(result), 1)
-        self.assertEqual(len(result[0].part_of_speech), 2)
+        self.assertEqual(len(result.part_of_speech), 2)
         self.assertEqual(
-            [p.code if p else None for p in result[0].part_of_speech],
-            ["CONJ", "NOUN"],
+            result.part_of_speech,
+            [PartOfSpeech.CONJ, PartOfSpeech.NOUN],
         )
 
     def test_trailing_punctuation(self):
-        result = markup(["Сказала: слово"])
+        result = markup("Сказала: слово")
 
-        self.assertEqual(len(result), 1)
-        self.assertEqual(len(result[0].part_of_speech), 2)
+        self.assertEqual(len(result.part_of_speech), 2)
         self.assertEqual(
-            [p.code if p else None for p in result[0].part_of_speech],
-            ["VERB", "NOUN"],
+            result.part_of_speech,
+            [PartOfSpeech.VERB, PartOfSpeech.NOUN],
         )
 
     def test_multiple_sentences(self):
-        result = markup(["Пришла весна. Снег растаял."])
+        result = markup("Пришла весна. Снег растаял.")
 
-        self.assertEqual(len(result), 1)
-        self.assertEqual(len(result[0].part_of_speech), 4)
+        self.assertEqual(len(result.part_of_speech), 4)
         self.assertEqual(
-            [p.code for p in result[0].part_of_speech],
-            ["VERB", "NOUN", "NOUN", "VERB"],
+            result.part_of_speech,
+            [
+                PartOfSpeech.VERB,
+                PartOfSpeech.NOUN,
+                PartOfSpeech.NOUN,
+                PartOfSpeech.VERB,
+            ],
         )
