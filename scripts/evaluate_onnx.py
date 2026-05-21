@@ -11,10 +11,10 @@ from velimir.ml_loader import (
     get_loader,
     split_samples,
 )
-from velimir.onnx_inference import load_onnx_models
+from velimir.onnx import load_onnx_models
 
 
-def _verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch):
+def verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch):
     accent_input = batch.accent_input
     pos_input = batch.part_of_speech_input
 
@@ -53,7 +53,9 @@ def _verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch):
 
     accent_pred_pt = (torch.sigmoid(accent_pt_out) > 0.5).float()
     accent_pred_onnx = (torch.sigmoid(accent_onnx_out) > 0.5).float()
-    accent_agreement = (accent_pred_pt[mask] == accent_pred_onnx[mask]).float().mean().item()
+    accent_agreement = (
+        (accent_pred_pt[mask] == accent_pred_onnx[mask]).float().mean().item()
+    )
     logging.info("Accent prediction agreement on batch: %.4f", accent_agreement)
 
 
@@ -68,7 +70,7 @@ def verify():
 
     loader = get_loader(test_set, batch_size=16, shuffle=False)
     batch = next(iter(loader))
-    _verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch)
+    verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch)
 
     logging.info("=== PyTorch Evaluation ===")
     results_pt = evaluate_models(accent_pt, meter_pt, test_set)
@@ -83,7 +85,9 @@ def verify():
     logging.info("=== Accuracy Comparison ===")
     for k in results_pt:
         diff = abs(results_pt[k] - results_onnx[k])
-        logging.info("%s: pt=%.6f onnx=%.6f diff=%.6f", k, results_pt[k], results_onnx[k], diff)
+        logging.info(
+            "%s: pt=%.6f onnx=%.6f diff=%.6f", k, results_pt[k], results_onnx[k], diff
+        )
 
 
 if __name__ == "__main__":

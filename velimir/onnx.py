@@ -1,6 +1,6 @@
+import onnxruntime as ort
 import torch
 import torch.nn.functional as F
-import onnxruntime as ort
 
 MAX_SEQ_LEN = 128
 

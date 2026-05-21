@@ -46,7 +46,7 @@ class AccentModel(nn.Module):
         """
 
         mask = (accent_input != -1).any(dim=-1)  # (B, T)
-        lengths = mask.sum(dim=1).cpu()
+        lengths = mask.sum(dim=1)
 
         _, T, _ = accent_input.shape
 
@@ -158,7 +158,7 @@ class MeterModel(nn.Module):
 
         _, T, _ = accent_input.shape
 
-        lengths = mask.sum(dim=1).cpu()
+        lengths = mask.sum(dim=1)
         x = accent_input.masked_fill(~mask.unsqueeze(-1), 0.0)
 
         pos_emb = self.pos_emb(pos_input + 1)
