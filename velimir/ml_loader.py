@@ -1,4 +1,3 @@
-import json
 import logging
 import random
 import sqlite3
@@ -10,9 +9,10 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from velimir.domain_models import MeterClass, Poem, SyllableFeatures
+from velimir.domain_models import Poem, SyllableFeatures
 from velimir.nlp import GrammarFeatures
-from velimir.settings import GRAMMAR_DB_PATH, METER_VOCAB_PATH
+from velimir.settings import GRAMMAR_DB_PATH
+from velimir.ml_preprocess import MeterClassRegistry, break_into_stanzas, compute_mean_ling_accents_per_stanza
 
 
 def get_loader(poems, **kwargs):
@@ -83,65 +83,6 @@ class PoetryDataset(Dataset):
         return self.samples[idx]
 
 
-class MeterClassRegistry:
-    _vocab: list[MeterClass] = None
-    _mc_to_idx: dict[MeterClass, int] = None
-    _counts: list[int] = None
-    _weights: torch.Tensor = None
-
-    @classmethod
-    def initialize(cls):
-        if cls._vocab is not None:
-            return  # already initialized
-
-        vocab = []
-        counts = []
-
-        with open(METER_VOCAB_PATH, "r") as f:
-            for line in f:
-                data = json.loads(line)
-
-                mc = MeterClass.from_dict(data)
-                mc_count = data["count"]
-
-                vocab.append(mc)
-                counts.append(mc_count)
-
-        cls._vocab = vocab
-        cls._counts = counts
-        cls._mc_to_idx = {mc: idx for idx, mc in enumerate(vocab)}
-
-    @classmethod
-    def mc_to_int(cls, mc: MeterClass) -> int | None:
-        return cls._mc_to_idx.get(mc)
-
-    @classmethod
-    def int_to_mc(cls, i: int) -> MeterClass:
-        if i < 0:
-            raise ValueError("Meter class index cannot be negative")
-
-        return cls._vocab[i]
-
-    @classmethod
-    def num(cls) -> int:
-        return len(cls._vocab)
-
-    @classmethod
-    def get_weights(cls) -> torch.Tensor:
-        if cls._weights is not None:
-            return cls._weights
-
-        counts = torch.tensor(cls._counts, dtype=torch.float32)
-        counts = torch.clamp(counts, min=1)
-
-        # sqrt inv
-        weights = 1.0 / torch.sqrt(counts)
-
-        weights = weights / weights.sum()
-
-        cls._weights = weights
-        return weights
-
 
 def collate(batch: list[Sample]):
     accent_input = [b.accent_input for b in batch]
@@ -173,39 +114,12 @@ def collate(batch: list[Sample]):
     )
 
 
-def break_into_stanzas(lines: list, stanza_breaks: list[int]):
-    for i, start in enumerate(stanza_breaks):
-        end = stanza_breaks[i + 1] if i + 1 < len(stanza_breaks) else len(lines)
-        yield lines[start:end]
-
-
-def compute_mean_ling_accents_per_stanza(
-    ling_accent_masks,
-    stanza_breaks: list[int],
-) -> list[list[float]]:
-    stanzas = break_into_stanzas(ling_accent_masks, stanza_breaks)
-
-    res = []
-
-    for stanza in stanzas:
-        if not stanza:
-            continue
-
-        max_len = max(len(line) for line in stanza)
-
-        sums = [0] * max_len
-        counts = [0] * max_len
-
-        for line in stanza:
-            for i, val in enumerate(line):
-                sums[i] += val
-                counts[i] += 1
-
-        mean = [sums[i] / counts[i] if counts[i] else 0.0 for i in range(max_len)]
-
-        res.append(mean)
-
-    return res
+def get_meter_weights() -> torch.Tensor:
+    counts = torch.tensor(MeterClassRegistry._counts, dtype=torch.float32)
+    counts = torch.clamp(counts, min=1)
+    weights = 1.0 / torch.sqrt(counts)
+    weights = weights / weights.sum()
+    return weights
 
 
 class GrammarDB:

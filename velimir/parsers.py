@@ -135,19 +135,6 @@ def parse_line_formula(formula: str) -> LineFormula | None:
     return LineFormulaVisitor().visit(tree)
 
 
-def extract_word_ending_mask(text: str) -> list[bool]:
-    result = []
-
-    for word in text.split():
-        word_vowels = list(filter(lambda c: accentuator.is_vowel(c), word))
-
-        if word_vowels:
-            result += [False] * (len(word_vowels) - 1)
-            result.append(True)
-
-    return result
-
-
 def clean_line(s: str) -> str:
     # non-breaking spaces
     s = s.replace("\xa0", " ")
@@ -173,7 +160,7 @@ def extract_syllable_features(
 
     return SyllableFeatures(
         poetic_accents=poetic_accents,
-        last_in_word=extract_word_ending_mask(cleaned_line),
+        last_in_word=accentuator.extract_word_ending_mask(cleaned_line),
         linguistic_accents=accentuator.accent_line(cleaned_line),
     )
 

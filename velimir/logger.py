@@ -45,10 +45,5 @@ class LoggingSettings:
 
         logging.basicConfig(**config)
 
-        # supress stanza logging to stdout
-        import stanza
-
-        stanza.logger.removeHandler(stanza.log_handler)
-
 
 delayed_logger = DelayedLogRecord()

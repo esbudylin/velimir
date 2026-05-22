@@ -3,13 +3,11 @@ import logging
 from dataclasses import dataclass
 from fractions import Fraction
 
-import torch
-from torch.nn.utils.rnn import pad_sequence
+import numpy as np
 
-from . import accentuator, nlp, parsers
+from . import accentuator, nlp
 from .domain_models import Clausula, Meter, MeterClass, MeterType
-from .io import load_models
-from .ml_loader import (
+from .ml_preprocess import (
     MeterClassRegistry,
     break_into_stanzas,
     compute_mean_ling_accents_per_stanza,
@@ -62,6 +60,21 @@ class ProcessedLine:
                 raise ValueError("Invalid caesura sequence length")
 
 
+def pad_and_stack(arrays, pad_value=-1):
+    max_len = max(a.shape[0] for a in arrays)
+
+    result = np.full(
+        (len(arrays), max_len, *arrays[0].shape[1:]),
+        pad_value,
+        dtype=arrays[0].dtype,
+    )
+
+    for i, a in enumerate(arrays):
+        result[i, : a.shape[0]] = a
+
+    return result
+
+
 def extract_input_tensors(
     stanza_breaks: list[int],
     accent_masks: list[list[bool]],
@@ -85,53 +98,35 @@ def extract_input_tensors(
             stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
 
             accent_input.append(
-                torch.stack(
+                np.stack(
                     [
-                        torch.tensor(
-                            stanza_stat,
-                            dtype=torch.float32,
-                        ),
-                        torch.tensor(
-                            ling_accent_mask,
-                            dtype=torch.float32,
-                        ),
-                        torch.tensor(
-                            word_ending_mask,
-                            dtype=torch.float32,
-                        ),
+                        np.array(stanza_stat, dtype=np.float32),
+                        np.array(ling_accent_mask, dtype=np.float32),
+                        np.array(word_ending_mask, dtype=np.float32),
                     ],
-                    dim=1,
+                    axis=1,
                 )
             )
 
-            pos_input.append(torch.tensor(pos, dtype=torch.long))
+            pos_input.append(np.array(pos, dtype=np.int64))
 
-    accent_input_padded = pad_sequence(accent_input, batch_first=True, padding_value=-1)
-    pos_inpud_padded = pad_sequence(pos_input, batch_first=True, padding_value=-1)
+    accent_input_padded = pad_and_stack(accent_input, pad_value=-1)
+    pos_input_padded = pad_and_stack(pos_input, pad_value=-1)
 
-    return accent_input_padded, pos_inpud_padded
-
-
-def detect_poetic_accents(model, device, accent_input, meter_pred, pos_input):
-    accent_input = accent_input.to(device)
-    pos_input = pos_input.to(device)
-
-    with torch.no_grad():
-        logits = model(accent_input, meter_pred, pos_input)
-        pred = (torch.sigmoid(logits) > 0.5).float()
-
-    mask = (accent_input != -1).all(dim=2)
-    return pred.masked_fill(~mask, -1).unsqueeze(-1)
+    return accent_input_padded, pos_input_padded
 
 
-def detect_meter(model, device, accent_input, pos_input):
-    accent_input = accent_input.to(device)
-    pos_input = pos_input.to(device)
+def detect_poetic_accents(model, accent_input, meter_pred, pos_input):
+    logits = model(accent_input, meter_pred, pos_input)
+    pred = (1.0 / (1.0 + np.exp(-logits)) > 0.5).astype(np.float32)
+    mask = (accent_input != -1).all(axis=2)
+    pred[~mask] = -1
+    return pred[..., np.newaxis]
 
-    with torch.no_grad():
-        pred = model(accent_input, pos_input)
 
-    return torch.argmax(pred, dim=1)
+def detect_meter(model, accent_input, pos_input):
+    logits = model(accent_input, pos_input)
+    return np.argmax(logits, axis=1)
 
 
 def extract_meter_accent_mask(
@@ -305,15 +300,12 @@ def process_line(
 
 
 def process_lines(
+    accent_model,
+    meter_model,
     lines: list[str],
     stanza_breaks: list[int],
 ) -> list[ProcessedLine | None]:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logging.info("Using device: %s", device)
-
-    accent_model, meter_model = load_models(device)
-
-    word_ending_masks = [parsers.extract_word_ending_mask(li) for li in lines]
+    word_ending_masks = [accentuator.extract_word_ending_mask(li) for li in lines]
     ling_accent_masks = [accentuator.accent_line(li) for li in lines]
 
     gf_expanded = [
@@ -329,20 +321,16 @@ def process_lines(
 
     meter_preds = detect_meter(
         meter_model,
-        device,
         accent_input,
         pos_input,
     )
+
     poetic_accents = detect_poetic_accents(
         accent_model,
-        device,
         accent_input,
         meter_preds,
         pos_input,
     )
-
-    def filter_padding(li):
-        return list(filter(lambda n: n != -1, li))
 
     meters_list = []
     for i in range(len(lines)):
@@ -354,7 +342,7 @@ def process_lines(
     poetic_accents_list = []
     for mask in poetic_accents:
         valid_mask = mask[mask != -1]
-        poetic_accents_list.append(valid_mask.cpu().numpy().tolist())
+        poetic_accents_list.append(valid_mask.squeeze().tolist())
 
     res = []
     for i, (mc, pmask, wmask) in enumerate(

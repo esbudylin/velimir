@@ -4,8 +4,7 @@ import torch
 
 from velimir.io import load_models
 from velimir.logger import LoggingSettings
-from velimir.ml import AccentModel, MeterModel
-from velimir.ml_loader import MeterClassRegistry
+from velimir.ml_preprocess import MeterClassRegistry
 from velimir.settings import ACCENT_ONNX_MODEL, METER_ONNX_MODEL
 
 MAX_SEQ_LEN = 128

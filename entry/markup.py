@@ -4,7 +4,8 @@ import sys
 from velimir.accentuator import build_accent_dict, is_vowel, stress_mark_ord
 from velimir.identifier import ProcessedLine, process_lines
 from velimir.io import read_accent_dicts
-from velimir.ml_loader import MeterClassRegistry
+from velimir.ml_preprocess import MeterClassRegistry
+from velimir.onnx import load_onnx_models
 from velimir.settings import ACCENT_DICT_PATHS
 from velimir.logger import LoggingSettings
 
@@ -107,7 +108,14 @@ def main():
 
     flat_lines, stanza_breaks = flatten_verses(verses)
 
-    processed_flat = process_lines(flat_lines, stanza_breaks)
+    accent_model, meter_model = load_onnx_models()
+
+    processed_flat = process_lines(
+        accent_model,
+        meter_model,
+        flat_lines,
+        stanza_breaks,
+    )
 
     if len(processed_flat) != len(flat_lines):
         logging.error(

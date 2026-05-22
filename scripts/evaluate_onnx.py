@@ -73,12 +73,14 @@ def verify():
     verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch)
 
     logging.info("=== PyTorch Evaluation ===")
-    results_pt = evaluate_models(accent_pt, meter_pt, test_set)
+    accent_pt.eval()
+    meter_pt.eval()
+    results_pt = evaluate_models(accent_pt, meter_pt, test_set, device)
     for k, v in results_pt.items():
         logging.info("%s=%f", k, v)
 
     logging.info("=== ONNX Evaluation ===")
-    results_onnx = evaluate_models(accent_onnx, meter_onnx, test_set)
+    results_onnx = evaluate_models(accent_onnx, meter_onnx, test_set, device)
     for k, v in results_onnx.items():
         logging.info("%s=%f", k, v)
 

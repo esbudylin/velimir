@@ -65,14 +65,10 @@ def evaluate_models(
     accent_model,
     meter_model,
     raw_samples: list[RawSample],
+    device: torch.device,
     batch_size: int = 16,
 ):
-    device = next(accent_model.parameters()).device
-
     loader = get_loader(raw_samples, batch_size=batch_size, shuffle=False)
-
-    accent_model.eval()
-    meter_model.eval()
 
     conn = init_db()
     cursor = conn.cursor()

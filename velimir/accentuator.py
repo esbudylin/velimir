@@ -149,6 +149,16 @@ def build_accent_dict(rows: Iterator[str]):
                 )
 
 
+def is_vowel(char):
+    vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
+
+    return char in vowels
+
+
+def vowel_count(word):
+    return sum(map(is_vowel, word))
+
+
 def accent_line(line: str) -> list[bool]:
     words_nacc = extract_neuro_accents(line)
 
@@ -281,14 +291,17 @@ def extract_accent_mask(text: str) -> list[bool]:
     return result
 
 
-def is_vowel(char):
-    vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
+def extract_word_ending_mask(text: str) -> list[bool]:
+    result = []
 
-    return char in vowels
+    for word in text.split():
+        word_vowels = list(filter(lambda c: is_vowel(c), word))
 
+        if word_vowels:
+            result += [False] * (len(word_vowels) - 1)
+            result.append(True)
 
-def vowel_count(word):
-    return sum(map(is_vowel, word))
+    return result
 
 
 def remove_accent_marks(text: str) -> str:

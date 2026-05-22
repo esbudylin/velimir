@@ -2,12 +2,8 @@ import os
 from itertools import islice
 from typing import Iterator
 
-import torch
-import msgpack
-
 from .domain_models import Poem
 from .settings import OUTPUT_FILE, TEXTS_DIR, ACCENT_MODEL, METER_MODEL
-from .ml import AccentModel, MeterModel
 
 
 def read_poem_xml(text_path):
@@ -18,6 +14,8 @@ def read_poem_xml(text_path):
 
 
 def save_poems_as_msgpack(data: Iterator[Poem]):
+    import msgpack
+
     batch_size = 500
 
     with open(OUTPUT_FILE, "wb") as f:
@@ -35,6 +33,8 @@ def save_poems_as_msgpack(data: Iterator[Poem]):
 
 
 def load_poems_from_msgpack() -> Iterator[Poem]:
+    import msgpack
+
     with open(OUTPUT_FILE, "rb") as f:
         unpacker = msgpack.Unpacker(f, raw=False)
         for batch in unpacker:
@@ -50,6 +50,8 @@ def read_accent_dicts(filenames):
 
 
 def load_model(accent_type, model_path, device):
+    import torch
+
     model = accent_type().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
@@ -58,6 +60,8 @@ def load_model(accent_type, model_path, device):
 
 
 def load_models(device):
+    from .ml import AccentModel, MeterModel
+
     accent_model = load_model(AccentModel, ACCENT_MODEL, device)
     meter_model = load_model(MeterModel, METER_MODEL, device)
 

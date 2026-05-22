@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .ml_loader import MeterClassRegistry, get_loader
+from .ml_loader import MeterClassRegistry, get_loader, get_meter_weights
 from .nlp import PartOfSpeech
 
 
@@ -187,7 +187,7 @@ def train_meter(model, loader, optimizer, device):
     model.train()
     total_loss = 0
 
-    class_weights = MeterClassRegistry.get_weights().to(device, non_blocking=True)
+    class_weights = get_meter_weights().to(device, non_blocking=True)
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     for batch in loader:
@@ -224,7 +224,7 @@ def eval_meter(model, loader, device):
     model.eval()
     total_loss = 0.0
 
-    class_weights = MeterClassRegistry.get_weights().to(device, non_blocking=True)
+    class_weights = get_meter_weights().to(device, non_blocking=True)
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     with torch.no_grad():

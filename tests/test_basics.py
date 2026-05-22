@@ -7,7 +7,12 @@ from bs4 import BeautifulSoup
 from parameterized import parameterized
 
 from velimir import cyrlat
-from velimir.accentuator import accent_line, build_accent_dict, extract_accent_mask
+from velimir.accentuator import (
+    accent_line,
+    build_accent_dict,
+    extract_accent_mask,
+    extract_word_ending_mask,
+)
 from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
 from velimir.identifier import decode_caesura_positions
 from velimir.io import read_accent_dicts
@@ -15,7 +20,6 @@ from velimir.parsers import (
     extract_lines,
     extract_syllable_features,
     transform_poem,
-    extract_word_ending_mask,
 )
 from velimir.settings import ACCENT_DICT_PATHS
 

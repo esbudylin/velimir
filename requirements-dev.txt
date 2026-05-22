@@ -1,0 +1,7 @@
+parameterized==0.9.0
+beautifulsoup4==4.14.3
+lxml==4.9.3
+parsimonious==0.10.0
+msgpack==1.0.6
+torch==2.10.0
+onnx==1.21.0
