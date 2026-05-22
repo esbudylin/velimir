@@ -5,9 +5,8 @@ import torch
 from velimir.io import load_models
 from velimir.logger import LoggingSettings
 from velimir.ml_preprocess import MeterClassRegistry
+from velimir.onnx import MAX_SEQ_LEN
 from velimir.settings import ACCENT_ONNX_MODEL, METER_ONNX_MODEL
-
-MAX_SEQ_LEN = 128
 
 
 def make_dummy_accent_inputs():
