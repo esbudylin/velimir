@@ -6,11 +6,14 @@ Velimir is an ML-based tool for detecting rhythm and meter in Russian
 poetry.
 
 ** Usage
-You will need Python 3.10 to run the project. The python dependencies
-are listed in ~requirements.txt~.
-
 Velimir exposes several commands as its entry points. To use them,
 clone the repository and run them via the ~make~ utility.
+
+You will need Python 3.10 to run the project. If you only intend to
+run the ~markup~ target, you will need to install the dependencies
+listed in ~requirements.txt~. For anything else, you will also need
+dependencies from the ~requirements-dev.txt~ file. Installing the
+dependencies requires ~git~.
 
 ** Entry points
 + ~markup~
