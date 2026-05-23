@@ -42,7 +42,11 @@ class OnnxAccent:
 
     def __call__(self, accent_input, meter_class, pos_input):
         orig_T = accent_input.shape[1]
-        is_torch = hasattr(accent_input, 'cpu')
+        try:
+            import torch
+            is_torch = isinstance(accent_input, torch.Tensor)
+        except ImportError:
+            is_torch = False
 
         accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
         pos_input = pad_to_length(pos_input, MAX_SEQ_LEN)
@@ -61,7 +65,6 @@ class OnnxAccent:
             result = result[:, :orig_T]
 
         if is_torch:
-            import torch
             return torch.from_numpy(result)
         return result
 
@@ -71,7 +74,11 @@ class OnnxMeter:
         self.session = ort.InferenceSession(onnx_path, providers=available_providers())
 
     def __call__(self, accent_input, pos_input):
-        is_torch = hasattr(accent_input, 'cpu')
+        try:
+            import torch
+            is_torch = isinstance(accent_input, torch.Tensor)
+        except ImportError:
+            is_torch = False
 
         accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
         pos_input = pad_to_length(pos_input, MAX_SEQ_LEN)
@@ -85,7 +92,6 @@ class OnnxMeter:
         )
 
         if is_torch:
-            import torch
             return torch.from_numpy(outputs[0])
         return outputs[0]
 

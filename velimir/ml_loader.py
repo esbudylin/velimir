@@ -12,7 +12,11 @@ from torch.utils.data import DataLoader, Dataset
 from velimir.domain_models import Poem, SyllableFeatures
 from velimir.nlp import GrammarFeatures
 from velimir.settings import GRAMMAR_DB_PATH
-from velimir.ml_preprocess import MeterClassRegistry, break_into_stanzas, compute_mean_ling_accents_per_stanza
+from velimir.ml_preprocess import (
+    MeterClassRegistry,
+    break_into_stanzas,
+    compute_mean_ling_accents_per_stanza,
+)
 
 
 def get_loader(poems, **kwargs):
@@ -83,7 +87,6 @@ class PoetryDataset(Dataset):
         return self.samples[idx]
 
 
-
 def collate(batch: list[Sample]):
     accent_input = [b.accent_input for b in batch]
     poetic = [b.poetic_accents for b in batch]
@@ -147,7 +150,7 @@ class GrammarDB:
             """
         )
 
-        logging.info("Index built succesfuly")
+        logging.info("Index built successfully")
 
     def fetch(self, poem_path: str, line_idx: int) -> GrammarFeatures:
         cursor = self.conn.execute(

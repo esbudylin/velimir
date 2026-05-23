@@ -64,8 +64,8 @@ def caesura_to_str(li):
 def evaluate_models(
     accent_model,
     meter_model,
-    raw_samples: list[RawSample],
     device: torch.device,
+    raw_samples: list[RawSample],
     batch_size: int = 16,
 ):
     loader = get_loader(raw_samples, batch_size=batch_size, shuffle=False)

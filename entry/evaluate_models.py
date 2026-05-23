@@ -19,7 +19,7 @@ def evaluate():
     poems = load_poems_from_msgpack()
     _, _, test_set = split_samples(fetch_raw_samples(poems))
 
-    evaluation_results = evaluate_models(accent_model, meter_model, test_set, device)
+    evaluation_results = evaluate_models(accent_model, meter_model, device, test_set)
 
     for k, v in evaluation_results.items():
         logging.info("%s=%f", k, v)
