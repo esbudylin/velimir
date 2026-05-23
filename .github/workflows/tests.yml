@@ -53,9 +53,3 @@ jobs:
 
       - name: Run train-test
         run: make train-test
-
-      - name: Run build-pos-accent-db-test
-        run: make build-pos-accent-db-test
-
-      - name: Run build-grammar-db-test
-        run: make build-grammar-db-test

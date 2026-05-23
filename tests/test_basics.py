@@ -198,14 +198,11 @@ class TestParseLine(unittest.TestCase):
 
 
 class TestEncoding(unittest.TestCase):
-    def setUp(self):
-        self.xml_path = "data/rnc/texts/xix/1830/1830-001.xml"
-
     def test_data_round_trip(self):
-        with open(self.xml_path, "r", encoding="utf8") as f:
-            xml = f.read()
+        path = "mock_path.xml"
+        xml = multiple_stanzas
 
-        poem = Poem(path=self.xml_path, **transform_poem(xml))
+        poem = Poem(path=path, **transform_poem(xml))
 
         encoded = poem.encode()
         decoded = Poem.decode(encoded)
