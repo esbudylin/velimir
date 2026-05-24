@@ -1,6 +1,7 @@
 data/rnc
 __pycache__
 .venv
+.venv-min
 logs/
 data/models/accent-test
 data/models/meter-test

@@ -99,12 +99,10 @@
 : None
 
 #+begin_src python :results value
-  from itertools import count
-
   from bitarray import bitarray
   from bs4 import BeautifulSoup
 
-  from velimir.parsers import extract_lines, extract_syllable_features
+  from velimir.parsers import extract_syllable_features, parse_input_lines
   from velimir.io import read_poem_xml
   from velimir.evaluation import meters_to_str
   from velimir.ml_loader import MeterClassRegistry
@@ -148,16 +146,9 @@
           target_class, pred_class = map(MeterClassRegistry.int_to_mc, (target_class, pred_class))
 
           poem_xml = read_poem_xml(poem_path)
-          soup = BeautifulSoup(poem_xml, "xml")
-
-          lines = []
-          line_count = count()
-
-          for verse in soup.find_all("p", class_="verse"):
-              if stanza := list(extract_lines(verse, line_count)):
-                  lines.extend(stanza)
-                  
-          line = next(line for line in lines if line.idx == line_id)
+                 
+          input_lines, _ = parse_input_lines(poem_xml)
+          line = next(line for line in input_lines if line.idx == line_id)
 
           caesura_to_str = lambda c: "-".join(map(str, c.caesura)) or '-'
 

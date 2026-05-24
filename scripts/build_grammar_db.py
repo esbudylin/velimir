@@ -5,11 +5,8 @@ import logging
 import os
 import sqlite3
 from dataclasses import dataclass
-from itertools import count
-from typing import Iterator
 
 import msgpack
-from bs4 import BeautifulSoup
 
 from velimir import parsers, accentuator
 from velimir.domain_models import InputPoem
@@ -36,23 +33,16 @@ def clean_line_for_markup(line):
 
 
 def extract_grammar_features(poem_path: str, xml: str) -> Iterator[GrammarSample]:
-    soup = BeautifulSoup(xml, "xml")
+    input_lines, _ = parsers.parse_input_lines(xml)
 
-    line_count = count()
-
-    for verse in soup.find_all("p", class_="verse"):
-        if stanza := list(parsers.extract_lines(verse, line_count)):
-            yield from (
-                GrammarSample(
-                    poem_path,
-                    il.idx,
-                    markup(clean_line_for_markup(il.text)),
-                )
-                for il in stanza
-            )
-        else:
-            delayed_logger.record()
-            logging.warning("Skipping empty stanza")
+    yield from (
+        GrammarSample(
+            poem_path,
+            il.idx,
+            markup(clean_line_for_markup(il.text)),
+        )
+        for il in input_lines
+    )
 
 
 def transform_data(csv_reader: csv.DictReader) -> Iterator[GrammarSample]:

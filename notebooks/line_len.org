@@ -1,0 +1,168 @@
+#+PROPERTY: header-args :dir ..
+#+PROPERTY: header-args:python :session line-len
+
+#+begin_src python
+  from bs4 import BeautifulSoup
+
+  from velimir.parsers import parse_input_lines
+  from velimir.io import read_poem_xml
+
+  def lookup_line_by_id(poem_path: str, target_line: int):
+      xml = read_poem_xml(poem_path)
+
+      input_lines, _ = parse_input_lines(xml)
+
+      line = next(line for line in input_lines if line.idx == target_line)
+                  
+      return line.text
+#+end_src
+
+#+RESULTS:
+: None
+
+#+begin_src python :results output
+  from collections import Counter
+
+  from velimir.io import load_poems_from_msgpack
+
+
+  line_lengths = []
+  long_lines_data = []
+
+  for poem in load_poems_from_msgpack():
+      for line in poem.lines:
+          line_len = line.length()
+
+          line_lengths.append(line_len)
+
+  print(f"Total lines: {len(line_lengths)}")
+  print(f"Min length: {min(line_lengths)}")
+  print(f"Max length: {max(line_lengths)}")
+#+end_src
+
+#+RESULTS:
+: Total lines: 2866233
+: Min length: 1
+: Max length: 89
+
+#+begin_src python :results output
+  import numpy as np
+
+  PERCENTILE = 99.999
+  percentile_res = np.percentile(line_lengths, PERCENTILE)
+
+  print(f"{PERCENTILE} percentile: {percentile_res}")
+#+end_src
+
+#+RESULTS:
+: 99.999 percentile: 39.0
+
+#+begin_src python :results output
+  import logging
+
+  logging.disable(logging.CRITICAL)
+
+  outliers = []
+
+  for poem in load_poems_from_msgpack():
+      for line in poem.lines:
+          line_len = line.length()
+
+          if line_len > percentile_res:
+              outliers.append({
+                  "path": poem.path,
+                  "line_idx": line.idx,
+                  "length": line_len,
+                  "text": lookup_line_by_id(poem.path, line.idx)[:200],
+              })
+
+
+  outlier_lengths = [x["length"] for x in outliers]
+
+  print("\n=== OUTLIER STATS ===")
+  print(f"Outlier count: {len(outliers)}")
+
+  if outlier_lengths:
+      print(f"Min outlier length: {min(outlier_lengths)}")
+      print(f"Max outlier length: {max(outlier_lengths)}")
+      print(f"Mean outlier length: {np.mean(outlier_lengths):.2f}")
+      print(f"Median outlier length: {np.median(outlier_lengths):.2f}")
+#+end_src
+
+#+RESULTS:
+: 
+: === OUTLIER STATS ===
+: Outlier count: 26
+: Min outlier length: 40
+: Max outlier length: 89
+: Mean outlier length: 51.42
+: Median outlier length: 48.50
+
+#+begin_src python :results output
+  from collections import defaultdict
+
+  def stem_leaf(data, stem_size=10):
+      """
+      stem_size=10 means:
+        stem = tens digit (or groups of 10)
+        leaf = units digit
+      """
+      stems = defaultdict(list)
+
+      for x in sorted(data):
+          stem = x // stem_size
+          leaf = x % stem_size
+          stems[stem].append(leaf)
+
+      print("\nStem-and-Leaf Plot (stem=//10, leaf=%10)\n")
+      for stem in sorted(stems):
+          leaves = " ".join(str(leaf) for leaf in stems[stem])
+          print(f"{stem:>3} | {leaves}")
+
+
+  # replace your frequency block with:
+  stem_leaf(outlier_lengths, stem_size=10)
+#+end_src
+
+#+RESULTS:
+: 
+: Stem-and-Leaf Plot (stem=//10, leaf=%10)
+: 
+:   4 | 0 0 0 1 2 2 3 3 4 4 5 7 8 9 9
+:   5 | 0 2 3 9
+:   6 | 0 1 3 3 4 6
+:   8 | 9
+
+#+begin_src python :results output
+  import json
+
+  outliers_sorted = sorted(outliers, key=lambda x: x["length"], reverse=True)
+
+  output_path = "/tmp/outliers.json"
+
+  with open(output_path, "w", encoding="utf-8") as f:
+      json.dump(outliers_sorted, f, ensure_ascii=False, indent=2)
+
+  print(f"Wrote {len(outliers_sorted)} outliers (sorted by length desc) to {output_path}")
+#+end_src
+
+#+RESULTS:
+: Wrote 26 outliers (sorted by length desc) to /tmp/outliers.json
+
+#+begin_src python :results graphics file value :file /tmp/line_lengths.svg
+  import matplotlib.pyplot as plt
+
+  plt.figure(figsize=(12, 6))
+  plt.hist(line_lengths, bins=range(min(line_lengths), 25))
+
+  plt.xlabel("Line length")
+  plt.ylabel("Count")
+  plt.title("Distribution of poem line lengths")
+
+  plt.grid(True)
+
+  plt
+#+end_src
+
+#+RESULTS:
+[[file:../../../../../tmp/line_lengths.svg]]

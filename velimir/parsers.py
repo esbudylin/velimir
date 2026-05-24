@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import cache
 from itertools import count
-from typing import Iterator
+from typing import Iterable, Iterator
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
@@ -95,7 +95,7 @@ class LineFormulaVisitor(NodeVisitor):
         return visited_children or node
 
 
-def transform_poem(xml: str) -> dict:
+def parse_input_lines(xml: str) -> tuple[list[InputLine], list[int]]:
     soup = BeautifulSoup(xml, "xml")
 
     line_count = count()
@@ -103,12 +103,20 @@ def transform_poem(xml: str) -> dict:
     stanza_breaks = []
 
     for verse in soup.find_all("p", class_="verse"):
-        if stanza := list(parse_lines(extract_lines(verse, line_count))):
+        if stanza := list(extract_lines(verse, line_count)):
             stanza_breaks.append(len(lines))
             lines.extend(stanza)
         else:
             delayed_logger.record()
             logging.warning("Skipping empty stanza")
+
+    return lines, stanza_breaks
+
+
+def transform_poem(xml: str) -> dict:
+    input_lines, stanza_breaks = parse_input_lines(xml)
+
+    lines = list(parse_lines(input_lines))
 
     return dict(
         lines=lines,
@@ -165,12 +173,32 @@ def extract_syllable_features(
     )
 
 
+def extract_text_until_next_line(element) -> str:
+    parts = []
+    for child in element.contents:
+        if isinstance(child, Tag) and child.name == "line":
+            break
+        if isinstance(child, NavigableString):
+            parts.append(str(child))
+        elif isinstance(child, Tag):
+            parts.append(extract_text_until_next_line(child))
+    return "".join(parts)
+
+
 def collect_line_text(line_tag) -> str:
     parts = []
     for node in line_tag.next_siblings:
-        if node.name == "line":
+        if isinstance(node, Tag) and node.name == "line":
             break
-        parts.append(node.get_text())
+
+        if isinstance(node, NavigableString):
+            parts.append(str(node))
+        elif isinstance(node, Tag):
+            if node.find("line") is not None:
+                parts.append(extract_text_until_next_line(node))
+                break
+            else:
+                parts.append(node.get_text())
 
     return "".join(parts).strip()
 
@@ -214,7 +242,7 @@ def extract_lines(soup, line_count: Iterator[int] | None = None) -> Iterator[Inp
             yield InputLine(idx=idx, text=text, meter=meter.strip())
 
 
-def parse_lines(lines: Iterator[InputLine]) -> Iterator[Line]:
+def parse_lines(lines: Iterable[InputLine]) -> Iterator[Line]:
     for line in lines:
         if line_formula := parse_line_formula(line.meter):
             try:
