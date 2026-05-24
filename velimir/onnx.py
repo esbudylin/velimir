@@ -1,7 +1,7 @@
 import numpy as np
 import onnxruntime as ort
 
-MAX_SEQ_LEN = 128
+MAX_SEQ_LEN = 32
 
 
 def available_providers():
@@ -44,6 +44,7 @@ class OnnxAccent:
         orig_T = accent_input.shape[1]
         try:
             import torch
+
             is_torch = isinstance(accent_input, torch.Tensor)
         except ImportError:
             is_torch = False
@@ -76,6 +77,7 @@ class OnnxMeter:
     def __call__(self, accent_input, pos_input):
         try:
             import torch
+
             is_torch = isinstance(accent_input, torch.Tensor)
         except ImportError:
             is_torch = False
