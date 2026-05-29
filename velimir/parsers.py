@@ -158,11 +158,12 @@ def extract_syllable_features(
     rhythm_accents: list[bool] = None,
 ) -> SyllableFeatures:
     poetic_accents = accentuator.extract_accent_mask(line)
+    rhythm_accents = rhythm_accents or []
 
     if not sum(poetic_accents) and sum(rhythm_accents):
         # Ударения не размечены
         # Используем разметку ритма вместо них
-        poetic_accents = rhythm_accents or []
+        poetic_accents = rhythm_accents
 
     cleaned_line = clean_line(accentuator.remove_accent_marks(line))
 
