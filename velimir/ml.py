@@ -6,7 +6,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .ml_loader import MeterClassRegistry, get_loader, get_meter_weights
+from .ml_loader import (
+    MeterClassRegistry,
+    get_loader,
+    get_meter_weights,
+    get_refiner_loader,
+)
 from .nlp import PartOfSpeech
 
 
@@ -294,7 +299,7 @@ class StanzaRefiner(nn.Module):
         return self.head(out)
 
 
-def train_refiner(model, loader, optimizer, device):
+def train_refiner(model, loader, optimizer, device, meter_model):
     model.train()
     total_loss = 0
 
@@ -304,7 +309,7 @@ def train_refiner(model, loader, optimizer, device):
     for batch in loader:
         optimizer.zero_grad()
 
-        loss = refiner_forward_loss(model, batch, loss_fn, device)
+        loss = refiner_forward_loss(model, batch, loss_fn, device, meter_model)
 
         if torch.isnan(loss) or torch.isinf(loss):
             logging.error("Refiner model: skipping invalid stanza")
@@ -319,10 +324,13 @@ def train_refiner(model, loader, optimizer, device):
     return total_loss / len(loader)
 
 
-def refiner_forward_loss(model, stanza, loss_fn, device):
-    accent_input = stanza.accent_input.to(device, non_blocking=True)
-    meter_target = stanza.meter_target.to(device, non_blocking=True)
-    meter_logits = stanza.meter_logits.to(device, non_blocking=True)
+def refiner_forward_loss(model, batch, loss_fn, device, meter_model):
+    accent_input = batch.accent_input.to(device, non_blocking=True)
+    meter_target = batch.meter_target.to(device, non_blocking=True)
+    pos_input = batch.pos_input.to(device, non_blocking=True)
+
+    with torch.no_grad():
+        meter_logits = meter_model(accent_input, pos_input)
 
     refined = model(accent_input, meter_logits)
 
@@ -331,7 +339,7 @@ def refiner_forward_loss(model, stanza, loss_fn, device):
     return loss
 
 
-def eval_refiner(model, loader, device):
+def eval_refiner(model, loader, device, meter_model):
     model.eval()
     total_loss = 0.0
 
@@ -340,7 +348,7 @@ def eval_refiner(model, loader, device):
 
     with torch.no_grad():
         for batch in loader:
-            loss = refiner_forward_loss(model, batch, loss_fn, device)
+            loss = refiner_forward_loss(model, batch, loss_fn, device, meter_model)
             total_loss += loss.item()
 
     return total_loss / len(loader)
@@ -430,3 +438,46 @@ def train_models(
     )
 
     return accent_state_dict, meter_state_dict
+
+
+def train_refiner_model(
+    train_chunks,
+    val_chunks,
+    meter_state_dict,
+    max_epochs=100,
+    patience=3,
+    num_workers=4,
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    meter_model = MeterModel().to(device)
+    meter_model.load_state_dict(meter_state_dict)
+    meter_model.eval()
+    for param in meter_model.parameters():
+        param.requires_grad = False
+
+    model = StanzaRefiner().to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+
+    train_loader = get_refiner_loader(
+        train_chunks,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    val_loader = get_refiner_loader(
+        val_chunks,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    state_dict = train_model(
+        model,
+        partial(train_refiner, model, train_loader, optimizer, device, meter_model),
+        partial(eval_refiner, model, val_loader, device, meter_model),
+        scheduler=scheduler,
+        max_epochs=max_epochs,
+        patience=patience,
+    )
+
+    return state_dict

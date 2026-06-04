@@ -20,7 +20,7 @@ from velimir.ml_preprocess import (
 
 
 def get_loader(poems, **kwargs):
-    dataset = PoetryDataset(poems)
+    dataset = LineDataset(poems)
     return DataLoader(dataset, collate_fn=collate, **kwargs)
 
 
@@ -28,6 +28,7 @@ def get_loader(poems, **kwargs):
 class RawSample:
     poem_path: str
     line_idx: int
+    chunk_idx: int
     meter_class: int
     stanza_stat: list[float]
     syllables: SyllableFeatures
@@ -42,27 +43,18 @@ class Sample:
     meter_class: torch.Tensor
 
 
-class PoetryDataset(Dataset):
+class LineDataset(Dataset):
     def __init__(self, raw_samples: list[RawSample]):
         logging.info("Loading poetry dataset")
 
         self.samples: list[Sample] = []
 
         for rs in raw_samples:
-            syllables = rs.syllables
-
             meter_class_t = torch.tensor(rs.meter_class, dtype=torch.long)
 
-            accent_input = torch.stack(
-                [
-                    torch.tensor(rs.stanza_stat, dtype=torch.float32),
-                    torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
-                    torch.tensor(syllables.last_in_word, dtype=torch.float32),
-                ],
-                dim=1,
-            )
+            accent_input = make_accent_input(rs)
 
-            poetic = torch.tensor(syllables.poetic_accents, dtype=torch.float32)
+            poetic = torch.tensor(rs.syllables.poetic_accents, dtype=torch.float32)
 
             pos = torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
 
@@ -117,12 +109,69 @@ def collate(batch: list[Sample]):
     )
 
 
-def get_meter_weights() -> torch.Tensor:
-    counts = torch.tensor(MeterClassRegistry._counts, dtype=torch.float32)
-    counts = torch.clamp(counts, min=1)
-    weights = 1.0 / torch.sqrt(counts)
-    weights = weights / weights.sum()
-    return weights
+@dataclass(slots=True)
+class RefinerSample:
+    accent_input: torch.Tensor
+    meter_target: torch.Tensor
+    pos_input: torch.Tensor
+
+
+class RefinerDataset(Dataset):
+    def __init__(self, chunks: list[list[RawSample]]):
+        logging.info("Loading refiner dataset")
+
+        self.samples: list[RefinerSample] = []
+
+        for chunk_lines in chunks:
+            accent_tensors = []
+            pos_tensors = []
+            meter_targets = []
+
+            for rs in chunk_lines:
+                accent_tensors.append(make_accent_input(rs))
+                pos_tensors.append(
+                    torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
+                )
+                meter_targets.append(rs.meter_class)
+
+            accent_padded = pad_sequence(
+                accent_tensors, batch_first=True, padding_value=-1
+            )
+            pos_padded = pad_sequence(pos_tensors, batch_first=True, padding_value=-1)
+            meter_target = torch.tensor(meter_targets, dtype=torch.long)
+
+            self.samples.append(
+                RefinerSample(
+                    accent_input=accent_padded,
+                    pos_input=pos_padded,
+                    meter_target=meter_target,
+                )
+            )
+
+        logging.info(
+            "Refiner dataset loading finished. %d chunks created",
+            len(self.samples),
+        )
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx]
+
+
+def collate_refiner(batch: list[RefinerSample]):
+    return batch[0]
+
+
+def get_refiner_loader(chunks, **kwargs):
+    dataset = RefinerDataset(chunks)
+    return DataLoader(
+        dataset,
+        collate_fn=collate_refiner,
+        batch_size=1,
+        **kwargs,
+    )
 
 
 class GrammarDB:
@@ -172,29 +221,79 @@ class GrammarDB:
         return GrammarFeatures.decode(serialized_features)
 
 
-def split_samples(
-    raw_samples: Iterator[RawSample],
+def get_meter_weights() -> torch.Tensor:
+    counts = torch.tensor(MeterClassRegistry._counts, dtype=torch.float32)
+    counts = torch.clamp(counts, min=1)
+    weights = 1.0 / torch.sqrt(counts)
+    weights = weights / weights.sum()
+    return weights
+
+
+def make_accent_input(rs: RawSample) -> torch.Tensor:
+    syllables = rs.syllables
+    return torch.stack(
+        [
+            torch.tensor(rs.stanza_stat, dtype=torch.float32),
+            torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
+            torch.tensor(syllables.last_in_word, dtype=torch.float32),
+        ],
+        dim=1,
+    )
+
+
+def split_lines(
+    raw_samples: list[RawSample],
     test_ratio: float = 0.02,
     val_ratio: float = 0.02,
     seed: int = 42,
-) -> tuple[list, list, list]:
-    samples_l = list(raw_samples)
+) -> tuple[list[RawSample], list[RawSample], list[RawSample]]:
+    train_chunks, val_chunks, test_chunks = split_chunks(
+        raw_samples, test_ratio, val_ratio, seed
+    )
 
-    rng = random.Random(seed)
-    rng.shuffle(samples_l)
-
-    n = len(samples_l)
-
-    test_size = int(n * test_ratio)
-    val_size = int(n * val_ratio)
-
-    train_size = n - test_size - val_size
-
-    train_set = samples_l[:train_size]
-    val_set = samples_l[train_size : train_size + val_size]
-    test_set = samples_l[train_size + val_size :]
+    train_set = [rs for chunk in train_chunks for rs in chunk]
+    val_set = [rs for chunk in val_chunks for rs in chunk]
+    test_set = [rs for chunk in test_chunks for rs in chunk]
 
     return train_set, val_set, test_set
+
+
+def split_chunks(
+    raw_samples: list[RawSample],
+    test_ratio: float = 0.02,
+    val_ratio: float = 0.02,
+    seed: int = 42,
+) -> tuple[list[list[RawSample]], list[list[RawSample]], list[list[RawSample]]]:
+    all_chunks: list[list[RawSample]] = []
+    current_key = None
+    current_chunk: list[RawSample] = []
+
+    for rs in raw_samples:
+        key = (rs.poem_path, rs.chunk_idx)
+        if key != current_key:
+            if current_chunk:
+                all_chunks.append(current_chunk)
+            current_chunk = [rs]
+            current_key = key
+        else:
+            current_chunk.append(rs)
+
+    if current_chunk:
+        all_chunks.append(current_chunk)
+
+    rng = random.Random(seed)
+    rng.shuffle(all_chunks)
+
+    n = len(all_chunks)
+    test_size = int(n * test_ratio)
+    val_size = int(n * val_ratio)
+    train_size = n - test_size - val_size
+
+    train_chunks = all_chunks[:train_size]
+    val_chunks = all_chunks[train_size : train_size + val_size]
+    test_chunks = all_chunks[train_size + val_size :]
+
+    return train_chunks, val_chunks, test_chunks
 
 
 def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
@@ -237,6 +336,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
 
                 yield RawSample(
                     line_idx=line.idx,
+                    chunk_idx=chunk_idx,
                     syllables=syllables,
                     stanza_stat=stanza_stat,
                     meter_class=meter_class,

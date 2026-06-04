@@ -3,7 +3,7 @@ import logging
 import torch
 
 from velimir.io import load_models, load_poems_from_msgpack
-from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_samples
+from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_lines
 from velimir.logger import LoggingSettings
 from velimir.evaluation import evaluate_models
 
@@ -17,7 +17,7 @@ def evaluate():
     meter_model.eval()
 
     poems = load_poems_from_msgpack()
-    _, _, test_set = split_samples(fetch_raw_samples(poems))
+    _, _, test_set = split_lines(fetch_raw_samples(poems))
 
     evaluation_results = evaluate_models(accent_model, meter_model, device, test_set)
 

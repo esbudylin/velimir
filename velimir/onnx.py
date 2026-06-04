@@ -93,7 +93,10 @@ class OnnxMeter:
         pos_input = pad_to_length(pos_input, MAX_SEQ_LEN)
         outputs = self.session.run(
             None,
-            {"accent_input": accent_input, "pos_input": pos_input},
+            {
+                "accent_input": accent_input,
+                "pos_input": pos_input,
+            },
         )
         return outputs[0]
 
@@ -107,7 +110,10 @@ class OnnxRefiner:
         accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
         outputs = self.session.run(
             None,
-            {"accent_input": accent_input, "meter_logits": meter_logits},
+            {
+                "accent_input": accent_input,
+                "meter_logits": meter_logits,
+            },
         )
         return outputs[0]
 

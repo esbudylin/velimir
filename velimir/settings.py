@@ -15,6 +15,7 @@ REFINER_MODEL = os.path.join(MODELS_DIRECTORY, "refiner")
 
 ACCENT_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "accent-test")
 METER_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "meter-test")
+REFINER_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "refiner-test")
 
 ACCENT_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "accent.onnx")
 METER_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "meter.onnx")

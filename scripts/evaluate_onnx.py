@@ -9,7 +9,7 @@ from velimir.ml_loader import (
     MeterClassRegistry,
     fetch_raw_samples,
     get_loader,
-    split_samples,
+    split_lines,
 )
 from velimir.onnx import load_onnx_models
 
@@ -62,11 +62,11 @@ def verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch):
 def verify():
     device = torch.device("cpu")
 
-    accent_pt, meter_pt = load_models(device)
+    accent_pt, meter_pt, _ = load_models(device)
     accent_onnx, meter_onnx = load_onnx_models()
 
     poems = load_poems_from_msgpack()
-    _, _, test_set = split_samples(fetch_raw_samples(poems))
+    _, _, test_set = split_lines(fetch_raw_samples(poems))
 
     loader = get_loader(test_set, batch_size=16, shuffle=False)
     batch = next(iter(loader))
