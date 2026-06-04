@@ -3,7 +3,7 @@ from itertools import islice
 from typing import Iterator
 
 from .domain_models import Poem
-from .settings import OUTPUT_FILE, TEXTS_DIR, ACCENT_MODEL, METER_MODEL
+from .settings import OUTPUT_FILE, TEXTS_DIR, ACCENT_MODEL, METER_MODEL, REFINER_MODEL
 
 
 def read_poem_xml(text_path):
@@ -60,9 +60,10 @@ def load_model(accent_type, model_path, device):
 
 
 def load_models(device):
-    from .ml import AccentModel, MeterModel
+    from .ml import AccentModel, MeterModel, StanzaRefiner
 
     accent_model = load_model(AccentModel, ACCENT_MODEL, device)
     meter_model = load_model(MeterModel, METER_MODEL, device)
+    refiner_model = load_model(StanzaRefiner, REFINER_MODEL, device)
 
-    return accent_model, meter_model
+    return accent_model, meter_model, refiner_model

@@ -98,7 +98,38 @@ class OnnxMeter:
         return outputs[0]
 
 
-def load_onnx_models():
-    from velimir.settings import ACCENT_ONNX_MODEL, METER_ONNX_MODEL
+class OnnxRefiner:
+    def __init__(self, onnx_path: str):
+        self.session = ort.InferenceSession(onnx_path, providers=available_providers())
 
-    return OnnxAccent(ACCENT_ONNX_MODEL), OnnxMeter(METER_ONNX_MODEL)
+    def __call__(self, accent_input, meter_logits):
+        try:
+            import torch
+
+            is_torch = isinstance(accent_input, torch.Tensor)
+        except ImportError:
+            is_torch = False
+
+        accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
+
+        outputs = self.session.run(
+            None,
+            {
+                "accent_input": to_numpy(accent_input),
+                "meter_logits": to_numpy(meter_logits),
+            },
+        )
+
+        if is_torch:
+            return torch.from_numpy(outputs[0])
+        return outputs[0]
+
+
+def load_onnx_models():
+    from velimir.settings import ACCENT_ONNX_MODEL, METER_ONNX_MODEL, REFINER_ONNX_MODEL
+
+    return (
+        OnnxAccent(ACCENT_ONNX_MODEL),
+        OnnxMeter(METER_ONNX_MODEL),
+        OnnxRefiner(REFINER_ONNX_MODEL),
+    )

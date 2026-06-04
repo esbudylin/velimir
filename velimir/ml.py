@@ -183,6 +183,64 @@ class MeterModel(nn.Module):
         return self.fc(pooled)
 
 
+class StanzaRefiner(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        hidden = 128
+        num_classes = MeterClassRegistry.num()
+
+        self.line_encoder = nn.LSTM(
+            input_size=3,
+            hidden_size=hidden,
+            batch_first=True,
+            bidirectional=True,
+            num_layers=1,
+        )
+        self.line_attn = nn.Linear(hidden * 2, 1)
+
+        self.stanza_encoder = nn.LSTM(
+            input_size=hidden * 2 + num_classes,
+            hidden_size=hidden,
+            batch_first=True,
+            bidirectional=True,
+            num_layers=2,
+        )
+
+        self.head = nn.Sequential(
+            nn.Linear(hidden * 2, hidden),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden, num_classes),
+        )
+
+    def forward(self, accent_input, meter_logits):
+        N, T, _ = accent_input.shape
+
+        syllable_mask = (accent_input != -1).any(dim=-1)
+        lengths = syllable_mask.sum(dim=1)
+
+        x = accent_input.masked_fill(~syllable_mask.unsqueeze(-1), 0.0)
+
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x, lengths, batch_first=True, enforce_sorted=False
+        )
+        out, _ = self.line_encoder(packed)
+        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True, total_length=T)
+
+        scores = self.line_attn(out).squeeze(-1)
+        scores = scores.masked_fill(~syllable_mask, -1e9)
+        weights = torch.softmax(scores, dim=-1)
+        line_enc = (out * weights.unsqueeze(-1)).sum(dim=1)
+
+        x = torch.cat([line_enc, meter_logits], dim=-1).unsqueeze(0)
+
+        out, _ = self.stanza_encoder(x)
+        out = out.squeeze(0)
+
+        return self.head(out)
+
+
 def train_meter(model, loader, optimizer, device):
     model.train()
     total_loss = 0
@@ -234,6 +292,111 @@ def eval_meter(model, loader, device):
             total_loss += loss.item()
 
     return total_loss / len(loader)
+
+
+def refiner_forward_loss(model, stanza, loss_fn, device):
+    accent_input = stanza.accent_input.to(device, non_blocking=True)
+    meter_target = stanza.meter_target.to(device, non_blocking=True)
+    meter_logits = stanza.meter_logits.to(device, non_blocking=True)
+
+    refined = model(accent_input, meter_logits)
+
+    loss = loss_fn(refined, meter_target)
+
+    return loss
+
+
+def train_refiner(model, loader, optimizer, device):
+    model.train()
+    total_loss = 0
+
+    class_weights = get_meter_weights().to(device, non_blocking=True)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+
+    for batch in loader:
+        optimizer.zero_grad()
+
+        loss = refiner_forward_loss(model, batch, loss_fn, device)
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            logging.error("Refiner model: skipping invalid stanza")
+            continue
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+        optimizer.step()
+        total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
+def eval_refiner(model, loader, device):
+    model.eval()
+    total_loss = 0.0
+
+    class_weights = get_meter_weights().to(device, non_blocking=True)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+
+    with torch.no_grad():
+        for batch in loader:
+            loss = refiner_forward_loss(model, batch, loss_fn, device)
+            total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
+def evaluate_refiner(model, loader, device):
+    model.eval()
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for batch in loader:
+            accent_input = batch.accent_input.to(device)
+            meter_target = batch.meter_target.to(device)
+            meter_logits = batch.meter_logits.to(device)
+
+            refined = model(accent_input, meter_logits)
+            pred = refined.argmax(dim=-1)
+
+            correct += (pred == meter_target).sum().item()
+            total += meter_target.numel()
+
+    return correct / total if total else 0
+
+
+def detect_meter_refined(meter_model, refiner_model, accent_input, pos_input, stanza_breaks):
+    import numpy as np
+
+    from .ml_preprocess import break_into_stanzas as _break_stanzas
+
+    if isinstance(accent_input, np.ndarray):
+        accent_input = torch.from_numpy(accent_input)
+    if isinstance(pos_input, np.ndarray):
+        pos_input = torch.from_numpy(pos_input)
+
+    with torch.no_grad():
+        base_logits = meter_model(accent_input, pos_input)
+
+    result = np.full(len(accent_input), -1, dtype=np.int64)
+
+    line_indices = list(range(len(accent_input)))
+    stanzas = list(_break_stanzas(line_indices, stanza_breaks))
+
+    for stanza_lines in stanzas:
+        indices = torch.tensor(stanza_lines)
+
+        stanza_accent = accent_input[indices]
+        stanza_logits = base_logits[indices]
+
+        refined = refiner_model(stanza_accent, stanza_logits)
+        preds = refined.argmax(dim=-1).cpu().numpy()
+
+        for j, line_idx in enumerate(stanza_lines):
+            result[line_idx] = preds[j]
+
+    return result
 
 
 def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):

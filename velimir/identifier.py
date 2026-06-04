@@ -124,9 +124,33 @@ def detect_poetic_accents(model, accent_input, meter_pred, pos_input):
     return pred[..., np.newaxis]
 
 
-def detect_meter(model, accent_input, pos_input):
-    logits = model(accent_input, pos_input)
-    return np.argmax(logits, axis=1)
+def detect_meter(
+    meter_model,
+    refiner_model,
+    accent_input,
+    pos_input,
+    stanza_breaks,
+):
+    base_logits = meter_model(accent_input, pos_input)
+
+    refined_preds = np.full(len(accent_input), -1, dtype=np.int64)
+
+    line_indices = list(range(len(accent_input)))
+    stanzas = list(break_into_stanzas(line_indices, stanza_breaks))
+
+    for stanza_lines in stanzas:
+        indices = np.array(stanza_lines)
+
+        stanza_accent = accent_input[indices]
+        stanza_logits = base_logits[indices]
+
+        refined = refiner_model(stanza_accent, stanza_logits)
+        stanza_preds = np.argmax(refined, axis=1)
+
+        for j, line_idx in enumerate(stanza_lines):
+            refined_preds[line_idx] = stanza_preds[j]
+
+    return refined_preds
 
 
 def extract_meter_accent_mask(
@@ -302,6 +326,7 @@ def process_line(
 def process_lines(
     accent_model,
     meter_model,
+    refiner_model,
     lines: list[str],
     stanza_breaks: list[int],
 ) -> list[ProcessedLine | None]:
@@ -319,24 +344,25 @@ def process_lines(
         [gf.part_of_speech for gf in gf_expanded],
     )
 
-    meter_preds = detect_meter(
+    refined_meter_preds = detect_meter(
         meter_model,
+        refiner_model,
         accent_input,
         pos_input,
+        stanza_breaks,
     )
 
     poetic_accents = detect_poetic_accents(
         accent_model,
         accent_input,
-        meter_preds,
+        refined_meter_preds,
         pos_input,
     )
 
     meters_list = []
     for i in range(len(lines)):
-        mi = meter_preds[i]
+        mi = refined_meter_preds[i]
         mc = MeterClassRegistry.int_to_mc(mi)
-
         meters_list.append(mc)
 
     poetic_accents_list = []

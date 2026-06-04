@@ -12,7 +12,7 @@ def evaluate():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device: %s", device)
 
-    accent_model, meter_model = load_models(device)
+    accent_model, meter_model, _ = load_models(device)
     accent_model.eval()
     meter_model.eval()
 
