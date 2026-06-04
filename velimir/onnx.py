@@ -1,3 +1,5 @@
+import functools
+
 import numpy as np
 import onnxruntime as ort
 
@@ -36,37 +38,48 @@ def pad_to_length(arr, target_length, pad_value=-1):
     return arr[:, :target_length]
 
 
+def onnx_call(func):
+    @functools.wraps(func)
+    def wrapper(self, *args):
+        try:
+            import torch
+
+            is_torch = any(isinstance(a, torch.Tensor) for a in args)
+        except ImportError:
+            is_torch = False
+
+        numpy_args = tuple(to_numpy(a) for a in args)
+
+        result = func(self, *numpy_args)
+
+        if is_torch:
+            return torch.from_numpy(result)
+
+        return result
+
+    return wrapper
+
+
 class OnnxAccent:
     def __init__(self, onnx_path: str):
         self.session = ort.InferenceSession(onnx_path, providers=available_providers())
 
+    @onnx_call
     def __call__(self, accent_input, meter_class, pos_input):
         orig_T = accent_input.shape[1]
-        try:
-            import torch
-
-            is_torch = isinstance(accent_input, torch.Tensor)
-        except ImportError:
-            is_torch = False
-
         accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
         pos_input = pad_to_length(pos_input, MAX_SEQ_LEN)
-
         outputs = self.session.run(
             None,
             {
-                "accent_input": to_numpy(accent_input),
-                "meter_class": to_numpy(meter_class),
-                "pos_input": to_numpy(pos_input),
+                "accent_input": accent_input,
+                "meter_class": meter_class,
+                "pos_input": pos_input,
             },
         )
-
         result = outputs[0]
         if result.shape[1] > orig_T:
             result = result[:, :orig_T]
-
-        if is_torch:
-            return torch.from_numpy(result)
         return result
 
 
@@ -74,27 +87,14 @@ class OnnxMeter:
     def __init__(self, onnx_path: str):
         self.session = ort.InferenceSession(onnx_path, providers=available_providers())
 
+    @onnx_call
     def __call__(self, accent_input, pos_input):
-        try:
-            import torch
-
-            is_torch = isinstance(accent_input, torch.Tensor)
-        except ImportError:
-            is_torch = False
-
         accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
         pos_input = pad_to_length(pos_input, MAX_SEQ_LEN)
-
         outputs = self.session.run(
             None,
-            {
-                "accent_input": to_numpy(accent_input),
-                "pos_input": to_numpy(pos_input),
-            },
+            {"accent_input": accent_input, "pos_input": pos_input},
         )
-
-        if is_torch:
-            return torch.from_numpy(outputs[0])
         return outputs[0]
 
 
@@ -102,26 +102,13 @@ class OnnxRefiner:
     def __init__(self, onnx_path: str):
         self.session = ort.InferenceSession(onnx_path, providers=available_providers())
 
+    @onnx_call
     def __call__(self, accent_input, meter_logits):
-        try:
-            import torch
-
-            is_torch = isinstance(accent_input, torch.Tensor)
-        except ImportError:
-            is_torch = False
-
         accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
-
         outputs = self.session.run(
             None,
-            {
-                "accent_input": to_numpy(accent_input),
-                "meter_logits": to_numpy(meter_logits),
-            },
+            {"accent_input": accent_input, "meter_logits": meter_logits},
         )
-
-        if is_torch:
-            return torch.from_numpy(outputs[0])
         return outputs[0]
 
 

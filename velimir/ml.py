@@ -183,6 +183,59 @@ class MeterModel(nn.Module):
         return self.fc(pooled)
 
 
+def train_meter(model, loader, optimizer, device):
+    model.train()
+    total_loss = 0
+
+    class_weights = get_meter_weights().to(device, non_blocking=True)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+
+    for batch in loader:
+        optimizer.zero_grad()
+
+        loss = meter_forward_loss(model, batch, loss_fn, device)
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            logging.error("Meter model: skipping invalid batch")
+            continue
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+        optimizer.step()
+        total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
+def meter_forward_loss(model, batch, loss_fn, device):
+    accent_input = batch.accent_input.to(device, non_blocking=True)
+    pos_input = batch.part_of_speech_input.to(device, non_blocking=True)
+    meter_target = batch.meter_class.to(device, non_blocking=True)
+
+    logits = model(accent_input, pos_input)
+
+    loss = loss_fn(logits, meter_target)
+
+    return loss
+
+
+def eval_meter(model, loader, device):
+    model.eval()
+    total_loss = 0.0
+
+    class_weights = get_meter_weights().to(device, non_blocking=True)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+
+    with torch.no_grad():
+        for batch in loader:
+            loss = meter_forward_loss(model, batch, loss_fn, device)
+
+            total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
 class StanzaRefiner(nn.Module):
     def __init__(self):
         super().__init__()
@@ -241,71 +294,6 @@ class StanzaRefiner(nn.Module):
         return self.head(out)
 
 
-def train_meter(model, loader, optimizer, device):
-    model.train()
-    total_loss = 0
-
-    class_weights = get_meter_weights().to(device, non_blocking=True)
-    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
-
-    for batch in loader:
-        optimizer.zero_grad()
-
-        loss = meter_forward_loss(model, batch, loss_fn, device)
-
-        if torch.isnan(loss) or torch.isinf(loss):
-            logging.error("Meter model: skipping invalid batch")
-            continue
-
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
-        optimizer.step()
-        total_loss += loss.item()
-
-    return total_loss / len(loader)
-
-
-def meter_forward_loss(model, batch, loss_fn, device):
-    accent_input = batch.accent_input.to(device, non_blocking=True)
-    pos_input = batch.part_of_speech_input.to(device, non_blocking=True)
-    meter_target = batch.meter_class.to(device, non_blocking=True)
-
-    logits = model(accent_input, pos_input)
-
-    loss = loss_fn(logits, meter_target)
-
-    return loss
-
-
-def eval_meter(model, loader, device):
-    model.eval()
-    total_loss = 0.0
-
-    class_weights = get_meter_weights().to(device, non_blocking=True)
-    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
-
-    with torch.no_grad():
-        for batch in loader:
-            loss = meter_forward_loss(model, batch, loss_fn, device)
-
-            total_loss += loss.item()
-
-    return total_loss / len(loader)
-
-
-def refiner_forward_loss(model, stanza, loss_fn, device):
-    accent_input = stanza.accent_input.to(device, non_blocking=True)
-    meter_target = stanza.meter_target.to(device, non_blocking=True)
-    meter_logits = stanza.meter_logits.to(device, non_blocking=True)
-
-    refined = model(accent_input, meter_logits)
-
-    loss = loss_fn(refined, meter_target)
-
-    return loss
-
-
 def train_refiner(model, loader, optimizer, device):
     model.train()
     total_loss = 0
@@ -331,6 +319,18 @@ def train_refiner(model, loader, optimizer, device):
     return total_loss / len(loader)
 
 
+def refiner_forward_loss(model, stanza, loss_fn, device):
+    accent_input = stanza.accent_input.to(device, non_blocking=True)
+    meter_target = stanza.meter_target.to(device, non_blocking=True)
+    meter_logits = stanza.meter_logits.to(device, non_blocking=True)
+
+    refined = model(accent_input, meter_logits)
+
+    loss = loss_fn(refined, meter_target)
+
+    return loss
+
+
 def eval_refiner(model, loader, device):
     model.eval()
     total_loss = 0.0
@@ -344,59 +344,6 @@ def eval_refiner(model, loader, device):
             total_loss += loss.item()
 
     return total_loss / len(loader)
-
-
-def evaluate_refiner(model, loader, device):
-    model.eval()
-    correct = 0
-    total = 0
-
-    with torch.no_grad():
-        for batch in loader:
-            accent_input = batch.accent_input.to(device)
-            meter_target = batch.meter_target.to(device)
-            meter_logits = batch.meter_logits.to(device)
-
-            refined = model(accent_input, meter_logits)
-            pred = refined.argmax(dim=-1)
-
-            correct += (pred == meter_target).sum().item()
-            total += meter_target.numel()
-
-    return correct / total if total else 0
-
-
-def detect_meter_refined(meter_model, refiner_model, accent_input, pos_input, stanza_breaks):
-    import numpy as np
-
-    from .ml_preprocess import break_into_stanzas as _break_stanzas
-
-    if isinstance(accent_input, np.ndarray):
-        accent_input = torch.from_numpy(accent_input)
-    if isinstance(pos_input, np.ndarray):
-        pos_input = torch.from_numpy(pos_input)
-
-    with torch.no_grad():
-        base_logits = meter_model(accent_input, pos_input)
-
-    result = np.full(len(accent_input), -1, dtype=np.int64)
-
-    line_indices = list(range(len(accent_input)))
-    stanzas = list(_break_stanzas(line_indices, stanza_breaks))
-
-    for stanza_lines in stanzas:
-        indices = torch.tensor(stanza_lines)
-
-        stanza_accent = accent_input[indices]
-        stanza_logits = base_logits[indices]
-
-        refined = refiner_model(stanza_accent, stanza_logits)
-        preds = refined.argmax(dim=-1).cpu().numpy()
-
-        for j, line_idx in enumerate(stanza_lines):
-            result[line_idx] = preds[j]
-
-    return result
 
 
 def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
