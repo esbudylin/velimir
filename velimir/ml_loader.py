@@ -263,7 +263,7 @@ def split_chunks(
     test_ratio: float = 0.02,
     val_ratio: float = 0.02,
     seed: int = 42,
-) -> tuple[list[list[RawSample]], list[list[RawSample]], list[list[RawSample]]]:
+):
     all_chunks: list[list[RawSample]] = []
     current_key = None
     current_chunk: list[RawSample] = []

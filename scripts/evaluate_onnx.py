@@ -2,19 +2,25 @@ import logging
 
 import torch
 
-from velimir.evaluation import evaluate_models
+from velimir.evaluation import evaluate_models, evaluate_refiner_models, init_db
 from velimir.io import load_models, load_poems_from_msgpack
 from velimir.logger import LoggingSettings
 from velimir.ml_loader import (
     MeterClassRegistry,
     fetch_raw_samples,
     get_loader,
-    split_lines,
+    split_chunks,
 )
 from velimir.onnx import load_onnx_models
 
 
-def verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch):
+def verify_single_batch(
+    accent_pt,
+    meter_pt,
+    accent_onnx,
+    meter_onnx,
+    batch,
+):
     accent_input = batch.accent_input
     pos_input = batch.part_of_speech_input
 
@@ -59,28 +65,62 @@ def verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch):
     logging.info("Accent prediction agreement on batch: %.4f", accent_agreement)
 
 
+def run_evaluation(models, device, test_set, test_chunks):
+    accent, meter, refiner = models
+
+    conn = init_db(":memory:")
+
+    base_results = evaluate_models(accent, meter, device, test_set, conn)
+    refiner_results = evaluate_refiner_models(
+        accent, meter, refiner, device, test_chunks, conn
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {**base_results, **refiner_results}
+
+
 def verify():
     device = torch.device("cpu")
 
-    accent_pt, meter_pt, _ = load_models(device)
-    accent_onnx, meter_onnx = load_onnx_models()
+    accent_pt, meter_pt, refiner_pt = load_models(device)
+    accent_onnx, meter_onnx, refiner_onnx = load_onnx_models()
 
     poems = load_poems_from_msgpack()
-    _, _, test_set = split_lines(fetch_raw_samples(poems))
+    _, _, test_chunks = split_chunks(fetch_raw_samples(poems))
+    test_set = [rs for chunk in test_chunks for rs in chunk]
 
     loader = get_loader(test_set, batch_size=16, shuffle=False)
     batch = next(iter(loader))
-    verify_single_batch(accent_pt, meter_pt, accent_onnx, meter_onnx, batch)
+    verify_single_batch(
+        accent_pt,
+        meter_pt,
+        accent_onnx,
+        meter_onnx,
+        batch,
+    )
 
     logging.info("=== PyTorch Evaluation ===")
     accent_pt.eval()
     meter_pt.eval()
-    results_pt = evaluate_models(accent_pt, meter_pt, device, test_set)
+    refiner_pt.eval()
+    results_pt = run_evaluation(
+        (accent_pt, meter_pt, refiner_pt),
+        device,
+        test_set,
+        test_chunks,
+    )
     for k, v in results_pt.items():
         logging.info("%s=%f", k, v)
 
     logging.info("=== ONNX Evaluation ===")
-    results_onnx = evaluate_models(accent_onnx, meter_onnx, device, test_set)
+    results_onnx = run_evaluation(
+        (accent_onnx, meter_onnx, refiner_onnx),
+        device,
+        test_set,
+        test_chunks,
+    )
     for k, v in results_onnx.items():
         logging.info("%s=%f", k, v)
 
@@ -88,7 +128,11 @@ def verify():
     for k in results_pt:
         diff = abs(results_pt[k] - results_onnx[k])
         logging.info(
-            "%s: pt=%.6f onnx=%.6f diff=%.6f", k, results_pt[k], results_onnx[k], diff
+            "%s: pt=%.6f onnx=%.6f diff=%.6f",
+            k,
+            results_pt[k],
+            results_onnx[k],
+            diff,
         )
 
 
