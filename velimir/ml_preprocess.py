@@ -44,30 +44,64 @@ class MeterClassRegistry:
         return len(cls._vocab)
 
 
-def break_into_stanzas(lines: list, stanza_breaks: list[int]):
+def break_into_chunks(
+    lines: list[str],
+    stanza_breaks: list[int],
+):
+    target_size = 12
+
+    chunk = []
+
     for i, start in enumerate(stanza_breaks):
         end = stanza_breaks[i + 1] if i + 1 < len(stanza_breaks) else len(lines)
-        yield lines[start:end]
+        stanza = lines[start:end]
+
+        # Split oversized stanzas.
+        if len(stanza) > target_size:
+            if chunk:
+                yield chunk
+                chunk = []
+
+            for j in range(0, len(stanza), target_size):
+                yield stanza[j : j + target_size]
+            continue
+
+        if not chunk:
+            chunk = list(stanza)
+            continue
+
+        current_size = len(chunk)
+        merged_size = current_size + len(stanza)
+
+        # If merging gets us closer to target, do it.
+        if abs(merged_size - target_size) <= abs(current_size - target_size):
+            chunk.extend(stanza)
+        else:
+            yield chunk
+            chunk = list(stanza)
+
+    if chunk:
+        yield chunk
 
 
 def compute_mean_ling_accents_per_stanza(
     ling_accent_masks,
     stanza_breaks: list[int],
 ) -> list[list[float]]:
-    stanzas = break_into_stanzas(ling_accent_masks, stanza_breaks)
+    chunks = break_into_chunks(ling_accent_masks, stanza_breaks)
 
     res = []
 
-    for stanza in stanzas:
-        if not stanza:
+    for chunk in chunks:
+        if not chunk:
             continue
 
-        max_len = max(len(line) for line in stanza)
+        max_len = max(len(line) for line in chunk)
 
         sums = [0] * max_len
         counts = [0] * max_len
 
-        for line in stanza:
+        for line in chunk:
             for i, val in enumerate(line):
                 sums[i] += val
                 counts[i] += 1

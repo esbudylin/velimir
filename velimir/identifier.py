@@ -9,7 +9,7 @@ from . import accentuator, nlp
 from .domain_models import Clausula, Meter, MeterClass, MeterType
 from .ml_preprocess import (
     MeterClassRegistry,
-    break_into_stanzas,
+    break_into_chunks,
     compute_mean_ling_accents_per_stanza,
 )
 from .nlp import PartOfSpeech
@@ -88,7 +88,7 @@ def extract_input_tensors(
         accent_masks,
         stanza_breaks,
     )
-    stanzas = break_into_stanzas(
+    stanzas = break_into_chunks(
         list(zip(accent_masks, word_ending_masks, part_of_speech)),
         stanza_breaks,
     )
@@ -136,7 +136,7 @@ def detect_meter(
     refined_preds = np.full(len(accent_input), -1, dtype=np.int64)
 
     line_indices = list(range(len(accent_input)))
-    stanzas = list(break_into_stanzas(line_indices, stanza_breaks))
+    stanzas = list(break_into_chunks(line_indices, stanza_breaks))
 
     for stanza_lines in stanzas:
         indices = np.array(stanza_lines)

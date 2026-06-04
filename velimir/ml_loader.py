@@ -14,7 +14,7 @@ from velimir.nlp import GrammarFeatures
 from velimir.settings import GRAMMAR_DB_PATH
 from velimir.ml_preprocess import (
     MeterClassRegistry,
-    break_into_stanzas,
+    break_into_chunks,
     compute_mean_ling_accents_per_stanza,
 )
 
@@ -209,10 +209,10 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
             [li.syllables.linguistic_accents for li in poem.lines],
             poem.stanza_breaks,
         )
-        stanzas = break_into_stanzas(poem.lines, poem.stanza_breaks)
+        chunks = break_into_chunks(poem.lines, poem.stanza_breaks)
 
-        for current_stanza, stanza in enumerate(stanzas):
-            for line in stanza:
+        for chunk_idx, chunk in enumerate(chunks):
+            for line in chunk:
                 syllables = line.syllables
                 meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
 
@@ -221,7 +221,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     rare_meters_excluded += 1
                     continue
 
-                stanza_stat = stanza_stats[current_stanza][: line.length()]
+                stanza_stat = stanza_stats[chunk_idx][: line.length()]
 
                 try:
                     gf = grammar_db.fetch(poem.path, line.idx)
