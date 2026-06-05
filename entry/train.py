@@ -23,7 +23,7 @@ from velimir.settings import (
 )
 
 
-def train(test_run: bool = False):
+def train(test_run: bool = False, refiner_only: bool = False):
     logging.info("Loading poems from msgpack")
 
     training_kwargs = {}
@@ -51,12 +51,26 @@ def train(test_run: bool = False):
     train_chunks, val_chunks, _ = split_chunks(raw_samples)
     training_set, validation_set, _ = split_lines(raw_samples)
 
-    logging.info("Training is starting...")
-    accent_state_dict, meter_state_dict = train_models(
-        training_set,
-        validation_set,
-        **training_kwargs,
-    )
+    if not refiner_only:
+        logging.info("Training is starting...")
+        accent_state_dict, meter_state_dict = train_models(
+            training_set,
+            validation_set,
+            **training_kwargs,
+        )
+
+        logging.info("Saving accent/meter models...")
+
+        if test_run:
+            torch.save(accent_state_dict, ACCENT_TEST_MODEL)
+            torch.save(meter_state_dict, METER_TEST_MODEL)
+        else:
+            torch.save(accent_state_dict, ACCENT_MODEL)
+            torch.save(meter_state_dict, METER_MODEL)
+    else:
+        logging.info("Skipping accent/meter training, loading pre-trained meter model...")
+        meter_model_path = METER_TEST_MODEL if test_run else METER_MODEL
+        meter_state_dict = torch.load(meter_model_path)
 
     logging.info("Training refiner model...")
     refiner_state_dict = train_refiner_model(
@@ -66,15 +80,11 @@ def train(test_run: bool = False):
         **refiner_training_kwargs,
     )
 
-    logging.info("Saving trained models...")
+    logging.info("Saving refiner model...")
 
     if test_run:
-        torch.save(accent_state_dict, ACCENT_TEST_MODEL)
-        torch.save(meter_state_dict, METER_TEST_MODEL)
         torch.save(refiner_state_dict, REFINER_TEST_MODEL)
     else:
-        torch.save(accent_state_dict, ACCENT_MODEL)
-        torch.save(meter_state_dict, METER_MODEL)
         torch.save(refiner_state_dict, REFINER_MODEL)
 
 
@@ -85,9 +95,14 @@ if __name__ == "__main__":
         action="store_true",
         help="Run training on a small subset of data for testing purposes",
     )
+    parser.add_argument(
+        "--refiner-only",
+        action="store_true",
+        help="Skip accent/meter training and train only the refiner model",
+    )
     args = parser.parse_args()
 
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
-    train(test_run=args.test_run)
+    train(test_run=args.test_run, refiner_only=args.refiner_only)
