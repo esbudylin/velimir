@@ -51,7 +51,7 @@ class AccentModel(nn.Module):
         """
 
         mask = (accent_input != -1).any(dim=-1)  # (B, T)
-        lengths = mask.sum(dim=1)
+        lengths = mask.sum(dim=1).to(dtype=torch.int64, device="cpu")
 
         _, T, _ = accent_input.shape
 
@@ -163,7 +163,7 @@ class MeterModel(nn.Module):
 
         _, T, _ = accent_input.shape
 
-        lengths = mask.sum(dim=1)
+        lengths = mask.sum(dim=1).to(dtype=torch.int64, device="cpu")
         x = accent_input.masked_fill(~mask.unsqueeze(-1), 0.0)
 
         pos_emb = self.pos_emb(pos_input + 1)
@@ -276,7 +276,7 @@ class StanzaRefiner(nn.Module):
         N, T, _ = accent_input.shape
 
         syllable_mask = (accent_input != -1).any(dim=-1)
-        lengths = syllable_mask.sum(dim=1)
+        lengths = syllable_mask.sum(dim=1).to(dtype=torch.int64, device="cpu")
 
         x = accent_input.masked_fill(~syllable_mask.unsqueeze(-1), 0.0)
 
