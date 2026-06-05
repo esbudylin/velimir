@@ -463,12 +463,12 @@ def train_refiner_model(
     train_loader = get_refiner_loader(
         train_chunks,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=False,
     )
     val_loader = get_refiner_loader(
         val_chunks,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=False,
     )
 
     state_dict = train_model(
