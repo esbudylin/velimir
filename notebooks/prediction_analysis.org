@@ -1,28 +1,27 @@
 #+PROPERTY: header-args :dir ..
 #+PROPERTY: header-args:sqlite :db data/predictions.db :colnames yes
 
-Собираем данные.
-#+begin_src sh
-  make evaluate-models
-#+end_src
-
-#+RESULTS:
-
 Лог сборки данных.
 #+begin_src sh
   cat logs/evaluate_models.log
 #+end_src
 
 #+RESULTS:
-| 2026-05-29 18:57:35 | 331 [INFO] Using device: cpu                               |
-| 2026-05-29 18:57:35 | 396 [INFO] Loading raw samples                             |
-| 2026-05-29 18:57:35 | 398 [INFO] Building grammar index                          |
-| 2026-05-29 18:57:36 | 240 [INFO] Index built successfully                        |
-| 2026-05-29 18:58:33 | 184 [INFO] 3010 lines are excluded from dataset            |
-| 2026-05-29 18:58:38 | 502 [INFO] Loading poetry dataset                          |
-| 2026-05-29 18:58:40 | 070 [INFO] Dataset loading finished. 57264 samples created |
-| 2026-05-29 18:59:29 | 215 [INFO] accent_accuracy=0.985899                        |
-| 2026-05-29 18:59:29 | 216 [INFO] meter_accuracy=0.944712                         |
+| 2026-06-05 17:21:59 | 476 [INFO] Using device: cpu                                               |
+| 2026-06-05 17:21:59 | 515 [INFO] Loading raw samples                                             |
+| 2026-06-05 17:21:59 | 515 [INFO] Building grammar index                                          |
+| 2026-06-05 17:22:00 | 293 [INFO] Index built successfully                                        |
+| 2026-06-05 17:22:57 | 355 [INFO] 3010 lines are excluded from dataset as having rare meter types |
+| 2026-06-05 17:22:58 | 736 [INFO] Loading poetry dataset                                          |
+| 2026-06-05 17:23:00 | 033 [INFO] Dataset loading finished. 57087 samples created                 |
+| 2026-06-05 17:23:21 | 902 [INFO] Loading poetry dataset                                          |
+| 2026-06-05 17:23:23 | 312 [INFO] Dataset loading finished. 57087 samples created                 |
+| 2026-06-05 17:23:55 | 114 [INFO] meter_accuracy=0.944821                                         |
+| 2026-06-05 17:23:55 | 114 [INFO] accent_accuracy=0.986040                                        |
+| 2026-06-05 17:24:54 | 052 [INFO] Loading poetry dataset                                          |
+| 2026-06-05 17:24:55 | 467 [INFO] Dataset loading finished. 57087 samples created                 |
+| 2026-06-05 17:25:36 | 249 [INFO] refiner_meter_accuracy=0.950987                                 |
+| 2026-06-05 17:25:36 | 250 [INFO] refiner_accent_accuracy=0.987484                                |
 
 Процент попаданий для предсказаний метра и ритма
 
@@ -42,6 +41,22 @@ NB: точность для ударений в логе выше, т.к. при
 | accent_ok | meter_ok |
 |-----------+----------|
 |      0.94 |    0.945 |
+
+#+begin_src sqlite
+  SELECT
+    ROUND(AVG(rp.accent_target != rp.accent_pred AND p.accent_target = p.accent_pred), 3) as accent_spoiled_by_refinement,
+    ROUND(AVG(rp.accent_target = rp.accent_pred AND p.accent_target != p.accent_pred), 3) as accent_improved_by_refinement,
+    ROUND(AVG(rp.meter_target != rp.meter_pred AND p.meter_target = p.meter_pred), 3) as meter_spoiled_by_refinement,
+    ROUND(AVG(rp.meter_target = rp.meter_pred AND p.meter_target != p.meter_pred), 3) as meter_improved_by_refinement
+  FROM refiner_predictions rp
+      JOIN predictions p
+      ON p.poem_path = rp.poem_path AND p.line_idx = rp.line_idx
+#+end_src
+
+#+RESULTS:
+| accent_spoiled_by_refinement | accent_improved_by_refinement | meter_spoiled_by_refinement | meter_improved_by_refinement |
+|------------------------------+-------------------------------+-----------------------------+------------------------------|
+|                        0.006 |                         0.012 |                       0.011 |                        0.017 |
 
 Процент попаданий метра и ритма, распределённый по наиболее частым метрам
 #+name: accuracy_per_meter
