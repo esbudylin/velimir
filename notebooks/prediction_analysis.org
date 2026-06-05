@@ -7,21 +7,21 @@
 #+end_src
 
 #+RESULTS:
-| 2026-06-05 17:21:59 | 476 [INFO] Using device: cpu                                               |
-| 2026-06-05 17:21:59 | 515 [INFO] Loading raw samples                                             |
-| 2026-06-05 17:21:59 | 515 [INFO] Building grammar index                                          |
-| 2026-06-05 17:22:00 | 293 [INFO] Index built successfully                                        |
-| 2026-06-05 17:22:57 | 355 [INFO] 3010 lines are excluded from dataset as having rare meter types |
-| 2026-06-05 17:22:58 | 736 [INFO] Loading poetry dataset                                          |
-| 2026-06-05 17:23:00 | 033 [INFO] Dataset loading finished. 57087 samples created                 |
-| 2026-06-05 17:23:21 | 902 [INFO] Loading poetry dataset                                          |
-| 2026-06-05 17:23:23 | 312 [INFO] Dataset loading finished. 57087 samples created                 |
-| 2026-06-05 17:23:55 | 114 [INFO] meter_accuracy=0.944821                                         |
-| 2026-06-05 17:23:55 | 114 [INFO] accent_accuracy=0.986040                                        |
-| 2026-06-05 17:24:54 | 052 [INFO] Loading poetry dataset                                          |
-| 2026-06-05 17:24:55 | 467 [INFO] Dataset loading finished. 57087 samples created                 |
-| 2026-06-05 17:25:36 | 249 [INFO] refiner_meter_accuracy=0.950987                                 |
-| 2026-06-05 17:25:36 | 250 [INFO] refiner_accent_accuracy=0.987484                                |
+| 2026-06-05 21:20:30 | 369 [INFO] Using device: cpu                                               |
+| 2026-06-05 21:20:30 | 425 [INFO] Loading raw samples                                             |
+| 2026-06-05 21:20:30 | 426 [INFO] Building grammar index                                          |
+| 2026-06-05 21:20:31 | 224 [INFO] Index built successfully                                        |
+| 2026-06-05 21:21:27 | 912 [INFO] 3010 lines are excluded from dataset as having rare meter types |
+| 2026-06-05 21:21:29 | 297 [INFO] Loading poetry dataset                                          |
+| 2026-06-05 21:21:30 | 556 [INFO] Dataset loading finished. 57087 samples created                 |
+| 2026-06-05 21:21:47 | 780 [INFO] Loading poetry dataset                                          |
+| 2026-06-05 21:21:49 | 056 [INFO] Dataset loading finished. 57087 samples created                 |
+| 2026-06-05 21:22:13 | 708 [INFO] meter_accuracy=0.944821                                         |
+| 2026-06-05 21:22:13 | 708 [INFO] accent_accuracy=0.986040                                        |
+| 2026-06-05 21:22:45 | 301 [INFO] Loading poetry dataset                                          |
+| 2026-06-05 21:22:46 | 800 [INFO] Dataset loading finished. 57087 samples created                 |
+| 2026-06-05 21:23:12 | 490 [INFO] refiner_meter_accuracy=0.947379                                 |
+| 2026-06-05 21:23:12 | 490 [INFO] refiner_accent_accuracy=0.986051                                |
 
 Процент попаданий для предсказаний метра и ритма
 
@@ -56,7 +56,7 @@ NB: точность для ударений в логе выше, т.к. при
 #+RESULTS:
 | accent_spoiled_by_refinement | accent_improved_by_refinement | meter_spoiled_by_refinement | meter_improved_by_refinement |
 |------------------------------+-------------------------------+-----------------------------+------------------------------|
-|                        0.006 |                         0.012 |                       0.011 |                        0.017 |
+|                        0.008 |                         0.008 |                        0.01 |                        0.013 |
 
 Процент попаданий метра и ритма, распределённый по наиболее частым метрам
 #+name: accuracy_per_meter
@@ -193,31 +193,6 @@ NB: точность для ударений в логе выше, т.к. при
 |------------+----------+-----------|
 |      0.899 |    0.885 |     0.869 |
 
-View для сбора ошибок при определении метра
-#+begin_src sqlite
-  DROP VIEW IF EXISTS meter_errors
-#+end_src
-
-#+RESULTS:
-
-#+begin_src sqlite
-  CREATE VIEW meter_errors AS
-  SELECT
-      meter_class_target,
-      meter_class_pred,
-      meter_target,
-      caesura_target,
-      meter_pred,
-      caesura_pred,
-      accent_pred == accent_target AS accent_ok,
-      COUNT(*) as cnt
-  FROM predictions
-  WHERE meter_target <> meter_pred
-  GROUP BY meter_class_target, meter_class_pred, accent_ok;
-#+end_src
-
-#+RESULTS:
-
 Ошибочные строки с разметкой по стратам
 #+begin_src sqlite
   DROP VIEW IF EXISTS error_details;
@@ -235,7 +210,7 @@ View для сбора ошибок при определении метра
           WHEN meter_pred IN ('Я', 'Х', 'Аф', 'Ан', 'Д') THEN 'syllabo_tonic'
           ELSE 'other'
       END AS stratum
-  FROM predictions p
+  FROM refiner_predictions p
   WHERE meter_class_target <> meter_class_pred;
 #+end_src
 
@@ -271,26 +246,27 @@ View для сбора ошибок при определении метра
 #+RESULTS:
 | meter_class_target | meter_target | total_errors | caesura_pct | tonic_pct | syllabo_tonic_pct | other_pct |
 |--------------------+--------------+--------------+-------------+-----------+-------------------+-----------|
-|                  3 | Дк           |          920 |       0.187 |    0.2967 |            0.4076 |    0.1087 |
-|                  0 | Я            |          695 |      0.1022 |    0.3942 |            0.3194 |    0.1842 |
-|                  1 | Х            |          444 |      0.0405 |    0.4482 |            0.3401 |    0.1712 |
-|                  2 | Ан           |          300 |        0.11 |    0.4767 |              0.35 |    0.0633 |
-|                  6 | Тк           |          224 |       0.125 |    0.3616 |            0.4464 |     0.067 |
-|                  4 | Аф           |          198 |      0.0303 |    0.4848 |            0.3737 |    0.1111 |
-|                  5 | Д            |          160 |         0.0 |       0.4 |            0.4063 |    0.1938 |
-|                 11 | Л            |           69 |       0.058 |    0.7536 |            0.1594 |     0.029 |
-|                  8 | Ак           |           53 |      0.1321 |    0.6415 |            0.2075 |    0.0189 |
-|                  9 | С            |           32 |      0.0313 |    0.3438 |             0.625 |       0.0 |
-|                 12 | Х~Х          |           19 |      0.1579 |    0.6316 |            0.2105 |       0.0 |
-|                 10 | Я~Я          |           11 |         0.0 |    0.6364 |            0.1818 |    0.1818 |
-|                 14 | Ан~Ан        |            8 |        0.25 |       0.5 |             0.125 |     0.125 |
-|                  7 | Гек          |            8 |       0.125 |     0.625 |              0.25 |       0.0 |
-|                 13 | Д~Д          |            7 |      0.1429 |    0.4286 |            0.2857 |    0.1429 |
-|                 18 | Я*           |            6 |         0.0 |    0.3333 |            0.6667 |       0.0 |
-|                 16 | Х*           |            4 |         0.0 |      0.25 |              0.75 |       0.0 |
-|                 19 | Пен          |            3 |         1.0 |       0.0 |               0.0 |       0.0 |
-|                 17 | Дк           |            3 |         0.0 |       1.0 |               0.0 |       0.0 |
-|                 20 | Аф~Аф        |            1 |         0.0 |       0.0 |               1.0 |       0.0 |
+|                  3 | Дк           |         1000 |       0.132 |      0.25 |             0.303 |     0.315 |
+|                  0 | Я            |          384 |      0.0521 |    0.4505 |            0.3177 |    0.1797 |
+|                  1 | Х            |          348 |      0.0115 |    0.4052 |            0.3534 |    0.2299 |
+|                  6 | Тк           |          252 |      0.1429 |    0.4603 |            0.3571 |    0.0397 |
+|                  5 | Д            |          213 |      0.0047 |    0.2723 |            0.4085 |    0.3146 |
+|                  4 | Аф           |          179 |      0.0056 |    0.3631 |            0.4693 |     0.162 |
+|                  2 | Ан           |          163 |      0.1411 |    0.6626 |            0.1718 |    0.0245 |
+|                  8 | Ак           |           70 |      0.0857 |    0.7714 |            0.1286 |    0.0143 |
+|                  9 | С            |           57 |      0.3509 |       0.0 |            0.6316 |    0.0175 |
+|                 11 | Л            |           52 |         0.0 |    0.8462 |            0.1538 |       0.0 |
+|                 10 | Я~Я          |           18 |         0.0 |    0.7222 |            0.2222 |    0.0556 |
+|                 17 | Дк           |           13 |      0.1538 |    0.5385 |            0.0769 |    0.2308 |
+|                 14 | Ан~Ан        |           12 |         1.0 |       0.0 |               0.0 |       0.0 |
+|                 16 | Х*           |           10 |         0.0 |       0.0 |               1.0 |       0.0 |
+|                  7 | Гек          |            8 |         0.0 |     0.625 |             0.375 |       0.0 |
+|                 19 | Пен          |            5 |         0.4 |       0.0 |               0.4 |       0.2 |
+|                 13 | Д~Д          |            5 |         0.0 |       0.8 |               0.0 |       0.2 |
+|                 18 | Я*           |            4 |         0.0 |       0.0 |               1.0 |       0.0 |
+|                 12 | Х~Х          |            2 |         0.0 |       0.0 |               1.0 |       0.0 |
+|                 21 | Ан~Ан        |            1 |         0.0 |       0.0 |               1.0 |       0.0 |
+|                 20 | Аф~Аф        |            1 |         0.0 |       1.0 |               0.0 |       0.0 |
 |                 15 | Х~Х          |            1 |         0.0 |       1.0 |               0.0 |       0.0 |
 
 Распределение правильных предсказаний метра по количеству стоп в строке

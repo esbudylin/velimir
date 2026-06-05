@@ -124,12 +124,46 @@ def detect_poetic_accents(model, accent_input, meter_pred, pos_input):
     return pred[..., np.newaxis]
 
 
+def logic_refine(stanza_logits, threshold=0.75):
+    logits = stanza_logits - stanza_logits.max(axis=1, keepdims=True)
+    probs = np.exp(logits)
+    probs /= probs.sum(axis=1, keepdims=True)
+    max_probs = probs.max(axis=1)
+
+    top3_indices = np.argpartition(-stanza_logits, 3, axis=1)[:, :3]
+    top3_sorted = top3_indices[
+        np.arange(len(stanza_logits))[:, None],
+        np.argsort(
+            -stanza_logits[np.arange(len(stanza_logits))[:, None], top3_indices], axis=1
+        ),
+    ]
+
+    top1 = np.argmax(stanza_logits, axis=1)
+    result = top1.copy()
+    N = len(stanza_logits)
+
+    confident = top1[max_probs >= threshold]
+    if len(confident) == 0:
+        return result
+
+    unique, counts = np.unique(confident, return_counts=True)
+    winner = unique[np.argmax(counts)]
+
+    for i in range(N):
+        if max_probs[i] >= threshold:
+            continue
+        if winner in top3_sorted[i]:
+            result[i] = winner
+
+    return result
+
+
 def detect_meter(
     meter_model,
-    refiner_model,
     accent_input,
     pos_input,
     stanza_breaks,
+    refiner=logic_refine,
 ):
     base_logits = meter_model(accent_input, pos_input)
 
@@ -140,13 +174,8 @@ def detect_meter(
 
     for stanza_lines in stanzas:
         indices = np.array(stanza_lines)
-
-        stanza_accent = accent_input[indices]
         stanza_logits = base_logits[indices]
-        ling_stanza = stanza_accent[..., 1:2]
-
-        refined = refiner_model(ling_stanza, stanza_logits)
-        stanza_preds = np.argmax(refined, axis=1)
+        stanza_preds = refiner(stanza_logits)
 
         for j, line_idx in enumerate(stanza_lines):
             refined_preds[line_idx] = stanza_preds[j]
@@ -327,9 +356,9 @@ def process_line(
 def process_lines(
     accent_model,
     meter_model,
-    refiner_model,
     lines: list[str],
     stanza_breaks: list[int],
+    refiner=logic_refine,
 ) -> list[ProcessedLine | None]:
     word_ending_masks = [accentuator.extract_word_ending_mask(li) for li in lines]
     ling_accent_masks = [accentuator.accent_line(li) for li in lines]
@@ -347,10 +376,10 @@ def process_lines(
 
     refined_meter_preds = detect_meter(
         meter_model,
-        refiner_model,
         accent_input,
         pos_input,
         stanza_breaks,
+        refiner,
     )
 
     poetic_accents = detect_poetic_accents(
