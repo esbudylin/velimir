@@ -446,7 +446,7 @@ def train_refiner_model(
     meter_state_dict,
     max_epochs=100,
     patience=3,
-    num_workers=4,
+    num_workers=0,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
