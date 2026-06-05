@@ -6,6 +6,7 @@ from typing import Iterator
 
 import msgpack
 import torch
+import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
@@ -161,7 +162,35 @@ class RefinerDataset(Dataset):
 
 
 def collate_refiner(batch: list[RefinerSample]):
-    return batch[0]
+    line_counts = [s.accent_input.shape[0] for s in batch]
+    max_T = max(s.accent_input.shape[1] for s in batch)
+
+    all_accent = []
+    all_pos = []
+    all_meter = []
+
+    for s in batch:
+        N, T, _ = s.accent_input.shape
+        if T < max_T:
+            pad_a = F.pad(s.accent_input, (0, 0, 0, max_T - T), value=-1)
+            pad_p = F.pad(s.pos_input, (0, max_T - T), value=-1)
+        else:
+            pad_a = s.accent_input
+            pad_p = s.pos_input
+        all_accent.append(pad_a)
+        all_pos.append(pad_p)
+        all_meter.append(s.meter_target)
+
+    accent_input = torch.cat(all_accent, dim=0)
+    pos_input = torch.cat(all_pos, dim=0)
+    meter_target = pad_sequence(all_meter, batch_first=True, padding_value=-1)
+
+    sample = RefinerSample(
+        accent_input=accent_input,
+        pos_input=pos_input,
+        meter_target=meter_target,
+    )
+    return sample, torch.tensor(line_counts, dtype=torch.long)
 
 
 def get_refiner_loader(chunks, **kwargs):
@@ -169,7 +198,6 @@ def get_refiner_loader(chunks, **kwargs):
     return DataLoader(
         dataset,
         collate_fn=collate_refiner,
-        batch_size=1,
         **kwargs,
     )
 

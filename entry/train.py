@@ -39,6 +39,7 @@ def train(test_run: bool = False, refiner_only: bool = False):
         training_kwargs["max_epochs"] = 5
 
         refiner_training_kwargs["max_epochs"] = 5
+        refiner_training_kwargs["batch_size"] = 8
 
         logging.info(
             "Test run enabled: using a small subset (%d) of lines",
@@ -68,7 +69,9 @@ def train(test_run: bool = False, refiner_only: bool = False):
             torch.save(accent_state_dict, ACCENT_MODEL)
             torch.save(meter_state_dict, METER_MODEL)
     else:
-        logging.info("Skipping accent/meter training, loading pre-trained meter model...")
+        logging.info(
+            "Skipping accent/meter training, loading pre-trained meter model..."
+        )
         meter_model_path = METER_TEST_MODEL if test_run else METER_MODEL
         meter_state_dict = torch.load(meter_model_path)
 

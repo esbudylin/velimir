@@ -143,8 +143,9 @@ def detect_meter(
 
         stanza_accent = accent_input[indices]
         stanza_logits = base_logits[indices]
+        ling_stanza = stanza_accent[..., 1:2]
 
-        refined = refiner_model(stanza_accent, stanza_logits)
+        refined = refiner_model(ling_stanza, stanza_logits)
         stanza_preds = np.argmax(refined, axis=1)
 
         for j, line_idx in enumerate(stanza_lines):

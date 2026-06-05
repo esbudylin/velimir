@@ -5,6 +5,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 
 from .ml_loader import (
     MeterClassRegistry,
@@ -249,7 +250,7 @@ class StanzaRefiner(nn.Module):
         num_classes = MeterClassRegistry.num()
 
         self.line_encoder = nn.LSTM(
-            input_size=3,
+            input_size=1,
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,
@@ -272,8 +273,8 @@ class StanzaRefiner(nn.Module):
             nn.Linear(hidden, num_classes),
         )
 
-    def forward(self, accent_input, meter_logits):
-        N, T, _ = accent_input.shape
+    def forward(self, accent_input, meter_logits, line_counts=None):
+        total_N, T, _ = accent_input.shape
 
         syllable_mask = (accent_input != -1).any(dim=-1)
         lengths = syllable_mask.sum(dim=1).to(dtype=torch.int64, device="cpu")
@@ -291,10 +292,30 @@ class StanzaRefiner(nn.Module):
         weights = torch.softmax(scores, dim=-1)
         line_enc = (out * weights.unsqueeze(-1)).sum(dim=1)
 
-        x = torch.cat([line_enc, meter_logits], dim=-1).unsqueeze(0)
+        if line_counts is None:
+            x = torch.cat([line_enc, meter_logits], dim=-1).unsqueeze(0)
+            out, _ = self.stanza_encoder(x)
+            out = out.squeeze(0)
+            return self.head(out)
 
-        out, _ = self.stanza_encoder(x)
-        out = out.squeeze(0)
+        enc_chunks = list(torch.split(line_enc, line_counts.tolist()))
+        meter_chunks = list(torch.split(meter_logits, line_counts.tolist()))
+
+        max_N = max(line_counts).item()
+
+        line_enc_padded = pad_sequence(enc_chunks, batch_first=True)
+        meter_padded = pad_sequence(meter_chunks, batch_first=True)
+
+        x = torch.cat([line_enc_padded, meter_padded], dim=-1)
+
+        stanza_lengths = line_counts.to(dtype=torch.int64, device="cpu")
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x, stanza_lengths, batch_first=True, enforce_sorted=False
+        )
+        out, _ = self.stanza_encoder(packed)
+        out, _ = nn.utils.rnn.pad_packed_sequence(
+            out, batch_first=True, total_length=max_N
+        )
 
         return self.head(out)
 
@@ -306,10 +327,12 @@ def train_refiner(model, loader, optimizer, device, meter_model):
     class_weights = get_meter_weights().to(device, non_blocking=True)
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
-    for batch in loader:
+    for batch, line_counts in loader:
         optimizer.zero_grad()
 
-        loss = refiner_forward_loss(model, batch, loss_fn, device, meter_model)
+        loss = refiner_forward_loss(
+            model, batch, line_counts, loss_fn, device, meter_model
+        )
 
         if torch.isnan(loss) or torch.isinf(loss):
             logging.error("Refiner model: skipping invalid stanza")
@@ -324,17 +347,20 @@ def train_refiner(model, loader, optimizer, device, meter_model):
     return total_loss / len(loader)
 
 
-def refiner_forward_loss(model, batch, loss_fn, device, meter_model):
+def refiner_forward_loss(model, batch, line_counts, loss_fn, device, meter_model):
     accent_input = batch.accent_input.to(device, non_blocking=True)
     meter_target = batch.meter_target.to(device, non_blocking=True)
     pos_input = batch.pos_input.to(device, non_blocking=True)
+    line_counts = line_counts.to(device)
 
     with torch.no_grad():
         meter_logits = meter_model(accent_input, pos_input)
 
-    refined = model(accent_input, meter_logits)
+    ling_accents = accent_input[:, :, 1:2]
+    refined = model(ling_accents, meter_logits, line_counts)
 
-    loss = loss_fn(refined, meter_target)
+    mask = meter_target != -1
+    loss = loss_fn(refined[mask], meter_target[mask])
 
     return loss
 
@@ -347,8 +373,10 @@ def eval_refiner(model, loader, device, meter_model):
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     with torch.no_grad():
-        for batch in loader:
-            loss = refiner_forward_loss(model, batch, loss_fn, device, meter_model)
+        for batch, line_counts in loader:
+            loss = refiner_forward_loss(
+                model, batch, line_counts, loss_fn, device, meter_model
+            )
             total_loss += loss.item()
 
     return total_loss / len(loader)
@@ -446,7 +474,8 @@ def train_refiner_model(
     meter_state_dict,
     max_epochs=100,
     patience=3,
-    num_workers=0,
+    num_workers=4,
+    batch_size=128,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -463,12 +492,14 @@ def train_refiner_model(
     train_loader = get_refiner_loader(
         train_chunks,
         num_workers=num_workers,
-        pin_memory=False,
+        pin_memory=True,
+        batch_size=batch_size,
     )
     val_loader = get_refiner_loader(
         val_chunks,
         num_workers=num_workers,
-        pin_memory=False,
+        pin_memory=True,
+        batch_size=batch_size,
     )
 
     state_dict = train_model(

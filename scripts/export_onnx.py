@@ -26,7 +26,7 @@ def make_dummy_meter_inputs():
 
 def make_dummy_refiner_inputs():
     B = 2
-    accent_input = torch.zeros(B, MAX_SEQ_LEN, 3)
+    accent_input = torch.zeros(B, MAX_SEQ_LEN, 1)
     meter_logits = torch.zeros(B, MeterClassRegistry.num())
     return accent_input, meter_logits
 

@@ -140,6 +140,8 @@ def evaluate_accent_pass(
             accent_logits = accent_model(accent_input, batch_meter_preds, pos_input)
             accent_pred = (torch.sigmoid(accent_logits) > 0.5).float()
 
+            max_len = accent_logits.size(1)
+            poetic_target = poetic_target[:, :max_len]
             mask = poetic_target != -1
             correct += (accent_pred[mask] == poetic_target[mask]).sum().item()
             total += mask.sum().item()
@@ -165,9 +167,7 @@ def build_accent_rows(
 ):
     rows = []
     for rs, rp, rt, mi in zip(samples, rhythms_pred, rhythms_target, meter_pred_ints):
-        rows.append(
-            make_row(rs, rp, rt, mi, rs.meter_class)
-        )
+        rows.append(make_row(rs, rp, rt, mi, rs.meter_class))
     return rows
 
 
@@ -217,12 +217,14 @@ def evaluate_models(
 
             meter_offset += n
 
-    accent_accuracy, rhythms_pred, rhythms_target, meter_pred_ints = evaluate_accent_pass(
-        accent_model,
-        device,
-        raw_samples,
-        meter_preds,
-        batch_size,
+    accent_accuracy, rhythms_pred, rhythms_target, meter_pred_ints = (
+        evaluate_accent_pass(
+            accent_model,
+            device,
+            raw_samples,
+            meter_preds,
+            batch_size,
+        )
     )
 
     rows = build_accent_rows(raw_samples, rhythms_pred, rhythms_target, meter_pred_ints)
@@ -271,7 +273,8 @@ def evaluate_refiner_models(
             ).to(device)
 
             base_logits = meter_model(accent_input, pos_input)
-            refined = refiner_model(accent_input, base_logits)
+            ling_accent = accent_input[:, :, 1:2]
+            refined = refiner_model(ling_accent, base_logits)
             preds = torch.argmax(refined, dim=1)
 
             for local_idx in range(len(chunk_lines)):
@@ -281,20 +284,22 @@ def evaluate_refiner_models(
             meter_total += len(meter_targets)
             global_offset += len(chunk_lines)
 
-    refiner_meter_accuracy = meter_correct / meter_total if meter_total else 0.0
+    meter_accuracy = meter_correct / meter_total if meter_total else 0.0
 
-    refiner_accent_accuracy, rhythms_pred, rhythms_target, meter_pred_ints = evaluate_accent_pass(
-        accent_model,
-        device,
-        samples,
-        refined_meter_preds,
-        batch_size,
+    accent_accuracy, rhythms_pred, rhythms_target, meter_pred_ints = (
+        evaluate_accent_pass(
+            accent_model,
+            device,
+            samples,
+            refined_meter_preds,
+            batch_size,
+        )
     )
 
     rows = build_accent_rows(samples, rhythms_pred, rhythms_target, meter_pred_ints)
     write_rows(conn, "refiner_predictions", rows)
 
     return {
-        "refiner_meter_accuracy": refiner_meter_accuracy,
-        "refiner_accent_accuracy": refiner_accent_accuracy,
+        "refiner_meter_accuracy": meter_accuracy,
+        "refiner_accent_accuracy": accent_accuracy,
     }
