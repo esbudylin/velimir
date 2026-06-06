@@ -14,8 +14,8 @@ from velimir.nlp import GrammarFeatures
 from velimir.settings import GRAMMAR_DB_PATH
 from velimir.ml_preprocess import (
     MeterClassRegistry,
-    break_into_stanzas,
-    compute_mean_ling_accents_per_stanza,
+    break_into_chunks,
+    compute_mean_ling_accents_per_chunk,
 )
 
 
@@ -29,7 +29,7 @@ class RawSample:
     poem_path: str
     line_idx: int
     meter_class: int
-    stanza_stat: list[float]
+    chunk_stat: list[float]
     syllables: SyllableFeatures
     grammar: GrammarFeatures
 
@@ -55,7 +55,7 @@ class PoetryDataset(Dataset):
 
             accent_input = torch.stack(
                 [
-                    torch.tensor(rs.stanza_stat, dtype=torch.float32),
+                    torch.tensor(rs.chunk_stat, dtype=torch.float32),
                     torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
                     torch.tensor(syllables.last_in_word, dtype=torch.float32),
                 ],
@@ -205,14 +205,14 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
     rare_meters_excluded = 0
 
     for poem in poems:
-        stanza_stats = compute_mean_ling_accents_per_stanza(
+        chunk_stats = compute_mean_ling_accents_per_chunk(
             [li.syllables.linguistic_accents for li in poem.lines],
             poem.stanza_breaks,
         )
-        stanzas = break_into_stanzas(poem.lines, poem.stanza_breaks)
+        chunks = break_into_chunks(poem.lines, poem.stanza_breaks)
 
-        for current_stanza, stanza in enumerate(stanzas):
-            for line in stanza:
+        for chunk_idx, chunk in enumerate(chunks):
+            for line in chunk:
                 syllables = line.syllables
                 meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
 
@@ -221,7 +221,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     rare_meters_excluded += 1
                     continue
 
-                stanza_stat = stanza_stats[current_stanza][: line.length()]
+                chunk_stat = chunk_stats[chunk_idx][: line.length()]
 
                 try:
                     gf = grammar_db.fetch(poem.path, line.idx)
@@ -238,7 +238,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                 yield RawSample(
                     line_idx=line.idx,
                     syllables=syllables,
-                    stanza_stat=stanza_stat,
+                    chunk_stat=chunk_stat,
                     meter_class=meter_class,
                     poem_path=poem.path,
                     grammar=gf_expanded,

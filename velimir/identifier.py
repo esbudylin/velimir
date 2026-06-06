@@ -9,8 +9,8 @@ from . import accentuator, nlp
 from .domain_models import Clausula, Meter, MeterClass, MeterType
 from .ml_preprocess import (
     MeterClassRegistry,
-    break_into_stanzas,
-    compute_mean_ling_accents_per_stanza,
+    break_into_chunks,
+    compute_mean_ling_accents_per_chunk,
 )
 from .nlp import PartOfSpeech
 
@@ -84,18 +84,18 @@ def extract_input_tensors(
     accent_input = []
     pos_input = []
 
-    stanza_stats = compute_mean_ling_accents_per_stanza(
+    chunk_stats = compute_mean_ling_accents_per_chunk(
         accent_masks,
         stanza_breaks,
     )
-    stanzas = break_into_stanzas(
+    chunks = break_into_chunks(
         list(zip(accent_masks, word_ending_masks, part_of_speech)),
         stanza_breaks,
     )
 
-    for current_stanza, stanza_lines in enumerate(stanzas):
-        for ling_accent_mask, word_ending_mask, pos in stanza_lines:
-            stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
+    for chunk_idx, chunk in enumerate(chunks):
+        for ling_accent_mask, word_ending_mask, pos in chunk:
+            stanza_stat = chunk_stats[chunk_idx][: len(ling_accent_mask)]
 
             accent_input.append(
                 np.stack(
