@@ -16,7 +16,6 @@ from velimir.settings import GRAMMAR_DB_PATH
 from velimir.ml_preprocess import (
     MeterClassRegistry,
     break_into_chunks,
-    compute_mean_ling_accents_per_stanza,
 )
 
 
@@ -26,7 +25,6 @@ class RawSample:
     line_idx: int
     chunk_idx: int
     meter_class: int
-    stanza_stat: list[float]
     syllables: SyllableFeatures
     grammar: GrammarFeatures
 
@@ -35,7 +33,6 @@ def make_accent_input(rs: RawSample) -> torch.Tensor:
     syllables = rs.syllables
     return torch.stack(
         [
-            torch.tensor(rs.stanza_stat, dtype=torch.float32),
             torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
             torch.tensor(syllables.last_in_word, dtype=torch.float32),
         ],
@@ -106,10 +103,6 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
     rare_meters_excluded = 0
 
     for poem in poems:
-        stanza_stats = compute_mean_ling_accents_per_stanza(
-            [li.syllables.linguistic_accents for li in poem.lines],
-            poem.stanza_breaks,
-        )
         chunks = break_into_chunks(poem.lines, poem.stanza_breaks)
 
         for chunk_idx, chunk in enumerate(chunks):
@@ -120,8 +113,6 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                 if meter_class is None:
                     rare_meters_excluded += 1
                     continue
-
-                stanza_stat = stanza_stats[chunk_idx][: line.length()]
 
                 try:
                     gf = grammar_db.fetch(poem.path, line.idx)
@@ -139,7 +130,6 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
                     line_idx=line.idx,
                     chunk_idx=chunk_idx,
                     syllables=syllables,
-                    stanza_stat=stanza_stat,
                     meter_class=meter_class,
                     poem_path=poem.path,
                     grammar=gf_expanded,

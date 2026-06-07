@@ -28,7 +28,7 @@ class UnifiedModel(nn.Module):
         self.meter_emb = nn.Embedding(num_classes, meter_emb_dim)
 
         self.line_encoder = nn.LSTM(
-            input_size=3 + pos_emb_dim,
+            input_size=2 + pos_emb_dim,
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,

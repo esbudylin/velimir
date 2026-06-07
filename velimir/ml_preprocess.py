@@ -82,32 +82,3 @@ def break_into_chunks(
 
     if chunk:
         yield chunk
-
-
-def compute_mean_ling_accents_per_stanza(
-    ling_accent_masks,
-    stanza_breaks: list[int],
-) -> list[list[float]]:
-    chunks = break_into_chunks(ling_accent_masks, stanza_breaks)
-
-    res = []
-
-    for chunk in chunks:
-        if not chunk:
-            continue
-
-        max_len = max(len(line) for line in chunk)
-
-        sums = [0] * max_len
-        counts = [0] * max_len
-
-        for line in chunk:
-            for i, val in enumerate(line):
-                sums[i] += val
-                counts[i] += 1
-
-        mean = [sums[i] / counts[i] if counts[i] else 0.0 for i in range(max_len)]
-
-        res.append(mean)
-
-    return res

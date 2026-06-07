@@ -10,7 +10,6 @@ from .domain_models import Clausula, Meter, MeterClass, MeterType
 from .ml_preprocess import (
     MeterClassRegistry,
     break_into_chunks,
-    compute_mean_ling_accents_per_stanza,
 )
 from .nlp import PartOfSpeech
 
@@ -84,23 +83,16 @@ def extract_input_tensors(
     accent_input = []
     pos_input = []
 
-    stanza_stats = compute_mean_ling_accents_per_stanza(
-        accent_masks,
-        stanza_breaks,
-    )
     stanzas = break_into_chunks(
         list(zip(accent_masks, word_ending_masks, part_of_speech)),
         stanza_breaks,
     )
 
-    for current_stanza, stanza_lines in enumerate(stanzas):
+    for stanza_lines in stanzas:
         for ling_accent_mask, word_ending_mask, pos in stanza_lines:
-            stanza_stat = stanza_stats[current_stanza][: len(ling_accent_mask)]
-
             accent_input.append(
                 np.stack(
                     [
-                        np.array(stanza_stat, dtype=np.float32),
                         np.array(ling_accent_mask, dtype=np.float32),
                         np.array(word_ending_mask, dtype=np.float32),
                     ],

@@ -11,7 +11,7 @@ from velimir.settings import UNIFIED_ONNX_MODEL
 
 def make_dummy_inputs():
     N = 18
-    accent_input = torch.zeros(N, MAX_SEQ_LEN, 3)
+    accent_input = torch.zeros(N, MAX_SEQ_LEN, 2)
     pos_input = torch.zeros(N, MAX_SEQ_LEN, dtype=torch.long)
     return accent_input, pos_input
 
