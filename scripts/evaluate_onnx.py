@@ -2,125 +2,38 @@ import logging
 
 import torch
 
-from velimir.evaluation import evaluate_models, evaluate_refiner_models, init_db
-from velimir.io import load_models, load_poems_from_msgpack
+from velimir.evaluation import evaluate_unified, init_db
+from velimir.io import load_poems_from_msgpack, load_unified_model
 from velimir.logger import LoggingSettings
-from velimir.ml_loader import (
-    MeterClassRegistry,
-    fetch_raw_samples,
-    get_loader,
-    split_chunks,
-)
+from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
 from velimir.onnx import load_onnx_models
 
 
-def verify_single_batch(
-    accent_pt,
-    meter_pt,
-    accent_onnx,
-    meter_onnx,
-    batch,
-):
-    accent_input = batch.accent_input
-    pos_input = batch.part_of_speech_input
-
-    with torch.no_grad():
-        meter_pt_out = meter_pt(accent_input, pos_input)
-        meter_onnx_out = meter_onnx(accent_input, pos_input)
-        meter_pred = torch.argmax(meter_pt_out, dim=1)
-        accent_pt_out = accent_pt(accent_input, meter_pred, pos_input)
-        accent_onnx_out = accent_onnx(accent_input, meter_pred, pos_input)
-
-    meter_diff = (meter_pt_out - meter_onnx_out).abs()
-    accent_diff = (accent_pt_out - accent_onnx_out).abs()
-
-    mask = accent_input[:, :, 0] != -1
-
-    logging.info("=== Numerical Verification ===")
-    logging.info(
-        "Meter logits:  max_diff=%.6f  mean_diff=%.6f",
-        meter_diff.max().item(),
-        meter_diff.mean().item(),
-    )
-    logging.info(
-        "Accent logits: max_diff=%.6f  mean_diff=%.6f",
-        accent_diff.max().item(),
-        accent_diff.mean().item(),
-    )
-    logging.info(
-        "Accent logits (non-padded): max_diff=%.6f  mean_diff=%.6f",
-        accent_diff[mask].max().item(),
-        accent_diff[mask].mean().item(),
-    )
-
-    meter_onnx_pred = torch.argmax(meter_onnx_out, dim=1)
-    meter_agreement = (meter_pred == meter_onnx_pred).float().mean().item()
-    logging.info("Meter prediction agreement on batch: %.4f", meter_agreement)
-
-    accent_pred_pt = (torch.sigmoid(accent_pt_out) > 0.5).float()
-    accent_pred_onnx = (torch.sigmoid(accent_onnx_out) > 0.5).float()
-    accent_agreement = (
-        (accent_pred_pt[mask] == accent_pred_onnx[mask]).float().mean().item()
-    )
-    logging.info("Accent prediction agreement on batch: %.4f", accent_agreement)
-
-
-def run_evaluation(models, device, test_set, test_chunks):
-    accent, meter, refiner = models
-
+def run_evaluation(model, device, test_chunks):
     conn = init_db(":memory:")
-
-    base_results = evaluate_models(accent, meter, device, test_set, conn)
-    refiner_results = evaluate_refiner_models(
-        accent, meter, refiner, device, test_chunks, conn
-    )
-
+    results = evaluate_unified(model, device, test_chunks, conn)
     conn.commit()
     conn.close()
-
-    return {**base_results, **refiner_results}
+    return results
 
 
 def verify():
     device = torch.device("cpu")
 
-    accent_pt, meter_pt, refiner_pt = load_models(device)
-    accent_onnx, meter_onnx, refiner_onnx = load_onnx_models()
+    unified_pt = load_unified_model(device)
+    unified_onnx = load_onnx_models()
 
     poems = load_poems_from_msgpack()
     _, _, test_chunks = split_chunks(fetch_raw_samples(poems))
-    test_set = [rs for chunk in test_chunks for rs in chunk]
-
-    loader = get_loader(test_set, batch_size=16, shuffle=False)
-    batch = next(iter(loader))
-    verify_single_batch(
-        accent_pt,
-        meter_pt,
-        accent_onnx,
-        meter_onnx,
-        batch,
-    )
 
     logging.info("=== PyTorch Evaluation ===")
-    accent_pt.eval()
-    meter_pt.eval()
-    refiner_pt.eval()
-    results_pt = run_evaluation(
-        (accent_pt, meter_pt, refiner_pt),
-        device,
-        test_set,
-        test_chunks,
-    )
+    unified_pt.eval()
+    results_pt = run_evaluation(unified_pt, device, test_chunks)
     for k, v in results_pt.items():
         logging.info("%s=%f", k, v)
 
     logging.info("=== ONNX Evaluation ===")
-    results_onnx = run_evaluation(
-        (accent_onnx, meter_onnx, refiner_onnx),
-        device,
-        test_set,
-        test_chunks,
-    )
+    results_onnx = run_evaluation(unified_onnx, device, test_chunks)
     for k, v in results_onnx.items():
         logging.info("%s=%f", k, v)
 

@@ -20,11 +20,6 @@ from velimir.ml_preprocess import (
 )
 
 
-def get_loader(poems, **kwargs):
-    dataset = LineDataset(poems)
-    return DataLoader(dataset, collate_fn=collate, **kwargs)
-
-
 @dataclass(slots=True)
 class RawSample:
     poem_path: str
@@ -36,169 +31,15 @@ class RawSample:
     grammar: GrammarFeatures
 
 
-@dataclass(slots=True)
-class Sample:
-    accent_input: torch.Tensor
-    part_of_speech_input: torch.Tensor
-    poetic_accents: torch.Tensor
-    meter_class: torch.Tensor
-
-
-class LineDataset(Dataset):
-    def __init__(self, raw_samples: list[RawSample]):
-        logging.info("Loading poetry dataset")
-
-        self.samples: list[Sample] = []
-
-        for rs in raw_samples:
-            meter_class_t = torch.tensor(rs.meter_class, dtype=torch.long)
-
-            accent_input = make_accent_input(rs)
-
-            poetic = torch.tensor(rs.syllables.poetic_accents, dtype=torch.float32)
-
-            pos = torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
-
-            self.samples.append(
-                Sample(
-                    accent_input=accent_input,
-                    poetic_accents=poetic,
-                    meter_class=meter_class_t,
-                    part_of_speech_input=pos,
-                )
-            )
-
-        logging.info(
-            "Dataset loading finished. %d samples created",
-            len(self.samples),
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        return self.samples[idx]
-
-
-def collate(batch: list[Sample]):
-    accent_input = [b.accent_input for b in batch]
-    poetic = [b.poetic_accents for b in batch]
-    meters = [b.meter_class for b in batch]
-    pos = [b.part_of_speech_input for b in batch]
-
-    accent_input = pad_sequence(
-        accent_input,
-        batch_first=True,
-        padding_value=-1,
-    )
-    poetic = pad_sequence(
-        poetic,
-        batch_first=True,
-        padding_value=-1,
-    )
-    pos = pad_sequence(
-        pos,
-        batch_first=True,
-        padding_value=-1,
-    )
-
-    return Sample(
-        accent_input=accent_input,
-        poetic_accents=poetic,
-        meter_class=torch.stack(meters),
-        part_of_speech_input=pos,
-    )
-
-
-@dataclass(slots=True)
-class RefinerSample:
-    accent_input: torch.Tensor
-    meter_target: torch.Tensor
-    pos_input: torch.Tensor
-
-
-class RefinerDataset(Dataset):
-    def __init__(self, chunks: list[list[RawSample]]):
-        logging.info("Loading refiner dataset")
-
-        self.samples: list[RefinerSample] = []
-
-        for chunk_lines in chunks:
-            accent_tensors = []
-            pos_tensors = []
-            meter_targets = []
-
-            for rs in chunk_lines:
-                accent_tensors.append(make_accent_input(rs))
-                pos_tensors.append(
-                    torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
-                )
-                meter_targets.append(rs.meter_class)
-
-            accent_padded = pad_sequence(
-                accent_tensors, batch_first=True, padding_value=-1
-            )
-            pos_padded = pad_sequence(pos_tensors, batch_first=True, padding_value=-1)
-            meter_target = torch.tensor(meter_targets, dtype=torch.long)
-
-            self.samples.append(
-                RefinerSample(
-                    accent_input=accent_padded,
-                    pos_input=pos_padded,
-                    meter_target=meter_target,
-                )
-            )
-
-        logging.info(
-            "Refiner dataset loading finished. %d chunks created",
-            len(self.samples),
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        return self.samples[idx]
-
-
-def collate_refiner(batch: list[RefinerSample]):
-    line_counts = [s.accent_input.shape[0] for s in batch]
-    max_T = max(s.accent_input.shape[1] for s in batch)
-
-    all_accent = []
-    all_pos = []
-    all_meter = []
-
-    for s in batch:
-        N, T, _ = s.accent_input.shape
-        if T < max_T:
-            pad_a = F.pad(s.accent_input, (0, 0, 0, max_T - T), value=-1)
-            pad_p = F.pad(s.pos_input, (0, max_T - T), value=-1)
-        else:
-            pad_a = s.accent_input
-            pad_p = s.pos_input
-        all_accent.append(pad_a)
-        all_pos.append(pad_p)
-        all_meter.append(s.meter_target)
-
-    accent_input = torch.cat(all_accent, dim=0)
-    pos_input = torch.cat(all_pos, dim=0)
-    meter_target = pad_sequence(all_meter, batch_first=True, padding_value=-1)
-
-    sample = RefinerSample(
-        accent_input=accent_input,
-        pos_input=pos_input,
-        meter_target=meter_target,
-    )
-    return sample, torch.tensor(line_counts, dtype=torch.long)
-
-
-def get_refiner_loader(chunks, **kwargs):
-    dataset = RefinerDataset(chunks)
-    return DataLoader(
-        dataset,
-        collate_fn=collate_refiner,
-        **kwargs,
+def make_accent_input(rs: RawSample) -> torch.Tensor:
+    syllables = rs.syllables
+    return torch.stack(
+        [
+            torch.tensor(rs.stanza_stat, dtype=torch.float32),
+            torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
+            torch.tensor(syllables.last_in_word, dtype=torch.float32),
+        ],
+        dim=1,
     )
 
 
@@ -257,33 +98,59 @@ def get_meter_weights() -> torch.Tensor:
     return weights
 
 
-def make_accent_input(rs: RawSample) -> torch.Tensor:
-    syllables = rs.syllables
-    return torch.stack(
-        [
-            torch.tensor(rs.stanza_stat, dtype=torch.float32),
-            torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
-            torch.tensor(syllables.last_in_word, dtype=torch.float32),
-        ],
-        dim=1,
+def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
+    logging.info("Loading raw samples")
+
+    grammar_db = GrammarDB()
+
+    rare_meters_excluded = 0
+
+    for poem in poems:
+        stanza_stats = compute_mean_ling_accents_per_stanza(
+            [li.syllables.linguistic_accents for li in poem.lines],
+            poem.stanza_breaks,
+        )
+        chunks = break_into_chunks(poem.lines, poem.stanza_breaks)
+
+        for chunk_idx, chunk in enumerate(chunks):
+            for line in chunk:
+                syllables = line.syllables
+                meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
+
+                if meter_class is None:
+                    rare_meters_excluded += 1
+                    continue
+
+                stanza_stat = stanza_stats[chunk_idx][: line.length()]
+
+                try:
+                    gf = grammar_db.fetch(poem.path, line.idx)
+                    gf_expanded = gf.expand(syllables.last_in_word)
+                except ValueError as e:
+                    logging.error(
+                        "Poem %s, Line %d. Failed when processing grammar features: %s",
+                        poem.path,
+                        line.idx,
+                        e,
+                    )
+                    continue
+
+                yield RawSample(
+                    line_idx=line.idx,
+                    chunk_idx=chunk_idx,
+                    syllables=syllables,
+                    stanza_stat=stanza_stat,
+                    meter_class=meter_class,
+                    poem_path=poem.path,
+                    grammar=gf_expanded,
+                )
+
+    grammar_db.conn.close()
+
+    logging.info(
+        "%d lines are excluded from dataset as having rare meter types",
+        rare_meters_excluded,
     )
-
-
-def split_lines(
-    raw_samples: list[RawSample],
-    test_ratio: float = 0.02,
-    val_ratio: float = 0.02,
-    seed: int = 42,
-) -> tuple[list[RawSample], list[RawSample], list[RawSample]]:
-    train_chunks, val_chunks, test_chunks = split_chunks(
-        raw_samples, test_ratio, val_ratio, seed
-    )
-
-    train_set = [rs for chunk in train_chunks for rs in chunk]
-    val_set = [rs for chunk in val_chunks for rs in chunk]
-    test_set = [rs for chunk in test_chunks for rs in chunk]
-
-    return train_set, val_set, test_set
 
 
 def split_chunks(
@@ -324,57 +191,115 @@ def split_chunks(
     return train_chunks, val_chunks, test_chunks
 
 
-def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
-    logging.info("Loading raw samples")
+@dataclass(slots=True)
+class UnifiedSample:
+    accent_input: torch.Tensor
+    pos_input: torch.Tensor
+    meter_target: torch.Tensor
+    accent_target: torch.Tensor
 
-    grammar_db = GrammarDB()
 
-    rare_meters_excluded = 0
+class UnifiedDataset(Dataset):
+    def __init__(self, chunks: list[list[RawSample]]):
+        logging.info("Loading unified dataset")
 
-    for poem in poems:
-        stanza_stats = compute_mean_ling_accents_per_stanza(
-            [li.syllables.linguistic_accents for li in poem.lines],
-            poem.stanza_breaks,
-        )
-        chunks = break_into_chunks(poem.lines, poem.stanza_breaks)
+        self.samples: list[UnifiedSample] = []
 
-        for chunk_idx, chunk in enumerate(chunks):
-            for line in chunk:
-                syllables = line.syllables
-                meter_class = MeterClassRegistry.mc_to_int(line.to_meterclass())
+        for chunk_lines in chunks:
+            accent_tensors = []
+            pos_tensors = []
+            meter_targets = []
+            accent_targets = []
 
-                if meter_class is None:
-                    # Исключаем редкие типы метров из датасета
-                    rare_meters_excluded += 1
-                    continue
-
-                stanza_stat = stanza_stats[chunk_idx][: line.length()]
-
-                try:
-                    gf = grammar_db.fetch(poem.path, line.idx)
-                    gf_expanded = gf.expand(syllables.last_in_word)
-                except ValueError as e:
-                    logging.error(
-                        "Poem %s, Line %d. Failed when processing grammar features: %s",
-                        poem.path,
-                        line.idx,
-                        e,
-                    )
-                    continue
-
-                yield RawSample(
-                    line_idx=line.idx,
-                    chunk_idx=chunk_idx,
-                    syllables=syllables,
-                    stanza_stat=stanza_stat,
-                    meter_class=meter_class,
-                    poem_path=poem.path,
-                    grammar=gf_expanded,
+            for rs in chunk_lines:
+                accent_tensors.append(make_accent_input(rs))
+                pos_tensors.append(
+                    torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
+                )
+                meter_targets.append(rs.meter_class)
+                accent_targets.append(
+                    torch.tensor(rs.syllables.poetic_accents, dtype=torch.float32)
                 )
 
-    grammar_db.conn.close()
+            accent_input = pad_sequence(
+                accent_tensors, batch_first=True, padding_value=-1
+            )
+            pos_input = pad_sequence(pos_tensors, batch_first=True, padding_value=-1)
+            meter_target = torch.tensor(meter_targets, dtype=torch.long)
+            accent_target = pad_sequence(
+                accent_targets, batch_first=True, padding_value=-1
+            )
 
-    logging.info(
-        "%d lines are excluded from dataset as having rare meter types",
-        rare_meters_excluded,
+            self.samples.append(
+                UnifiedSample(
+                    accent_input=accent_input,
+                    pos_input=pos_input,
+                    meter_target=meter_target,
+                    accent_target=accent_target,
+                )
+            )
+
+        logging.info(
+            "Unified dataset loading finished. %d chunks created",
+            len(self.samples),
+        )
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx]
+
+
+@dataclass(slots=True)
+class UnifiedBatch:
+    accent_input: torch.Tensor
+    pos_input: torch.Tensor
+    meter_target: torch.Tensor
+    accent_target: torch.Tensor
+
+
+def collate_unified(batch: list[UnifiedSample]):
+    line_counts = torch.tensor(
+        [s.accent_input.shape[0] for s in batch], dtype=torch.long
     )
+    max_T = max(s.accent_input.shape[1] for s in batch)
+
+    all_accent = []
+    all_pos = []
+    all_meter = []
+    all_accent_target = []
+
+    for s in batch:
+        N, T, _ = s.accent_input.shape
+        if T < max_T:
+            pad_a = F.pad(s.accent_input, (0, 0, 0, max_T - T), value=-1)
+            pad_p = F.pad(s.pos_input, (0, max_T - T), value=-1)
+            pad_at = F.pad(s.accent_target, (0, max_T - T), value=-1)
+        else:
+            pad_a = s.accent_input
+            pad_p = s.pos_input
+            pad_at = s.accent_target
+
+        all_accent.append(pad_a)
+        all_pos.append(pad_p)
+        all_meter.append(s.meter_target)
+        all_accent_target.append(pad_at)
+
+    accent_input = torch.cat(all_accent, dim=0)
+    pos_input = torch.cat(all_pos, dim=0)
+    meter_target = torch.cat(all_meter, dim=0)
+    accent_target = torch.cat(all_accent_target, dim=0)
+
+    sample = UnifiedBatch(
+        accent_input=accent_input,
+        pos_input=pos_input,
+        meter_target=meter_target,
+        accent_target=accent_target,
+    )
+    return sample, line_counts
+
+
+def get_unified_loader(chunks, **kwargs):
+    dataset = UnifiedDataset(chunks)
+    return DataLoader(dataset, collate_fn=collate_unified, **kwargs)

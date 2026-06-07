@@ -9,35 +9,11 @@ from .ml_loader import (
     MeterClassRegistry,
     RawSample,
     make_accent_input,
-    get_loader,
 )
 from .settings import PREDICTION_DB_PATH
 
 predictions_schema = """
 CREATE TABLE predictions (
-    poem_path TEXT,
-    line_idx INTEGER,
-
-    -- Accent (sequence)
-    accent_pred TEXT,
-    accent_target TEXT,
-
-    meter_class_pred INTEGER,
-    meter_class_target INTEGER,
-
-    -- Meter formula and caesura are converted from meter class
-    meter_pred TEXT,
-    meter_target TEXT,
-
-    caesura_pred TEXT,
-    caesura_target TEXT,
-
-    UNIQUE(poem_path, line_idx) ON CONFLICT FAIL
-);
-"""
-
-refiner_predictions_schema = """
-CREATE TABLE refiner_predictions (
     poem_path TEXT,
     line_idx INTEGER,
 
@@ -67,7 +43,6 @@ def init_db(path=None):
 
     conn = sqlite3.connect(path)
     conn.execute(predictions_schema)
-    conn.execute(refiner_predictions_schema)
     conn.commit()
     return conn
 
@@ -110,67 +85,6 @@ def make_row(rs, accent_pred_str, accent_target_str, meter_pred_int, meter_targe
     )
 
 
-def evaluate_accent_pass(
-    accent_model,
-    device: torch.device,
-    samples: list[RawSample],
-    meter_preds: torch.Tensor,
-    batch_size: int,
-):
-    loader = get_loader(samples, batch_size=batch_size, shuffle=False)
-
-    correct = 0
-    total = 0
-    offset = 0
-
-    rhythms_pred: list[str] = []
-    rhythms_target: list[str] = []
-    meter_pred_ints: list[int] = []
-
-    with torch.no_grad():
-        for batch in loader:
-            accent_input = batch.accent_input.to(device)
-            pos_input = batch.part_of_speech_input.to(device)
-            poetic_target = batch.poetic_accents.to(device)
-
-            n = accent_input.size(0)
-
-            batch_meter_preds = meter_preds[offset : offset + n].to(device)
-
-            accent_logits = accent_model(accent_input, batch_meter_preds, pos_input)
-            accent_pred = (torch.sigmoid(accent_logits) > 0.5).float()
-
-            max_len = accent_logits.size(1)
-            poetic_target = poetic_target[:, :max_len]
-            mask = poetic_target != -1
-            correct += (accent_pred[mask] == poetic_target[mask]).sum().item()
-            total += mask.sum().item()
-
-            accent_pred_masked = accent_pred.masked_fill(~mask, -1)
-
-            for i in range(n):
-                rhythms_pred.append(rhythm_to_str(accent_pred_masked[i]))
-                rhythms_target.append(rhythm_to_str(poetic_target[i]))
-                meter_pred_ints.append(batch_meter_preds[i].item())
-
-            offset += n
-
-    accuracy = correct / total if total else 0.0
-    return accuracy, rhythms_pred, rhythms_target, meter_pred_ints
-
-
-def build_accent_rows(
-    samples: list[RawSample],
-    rhythms_pred: list[str],
-    rhythms_target: list[str],
-    meter_pred_ints: list[int],
-):
-    rows = []
-    for rs, rp, rt, mi in zip(samples, rhythms_pred, rhythms_target, meter_pred_ints):
-        rows.append(make_row(rs, rp, rt, mi, rs.meter_class))
-    return rows
-
-
 def write_rows(conn: sqlite3.Connection, table: str, rows: list[tuple]):
     cursor = conn.cursor()
     insert_sql = f"""
@@ -186,78 +100,34 @@ def write_rows(conn: sqlite3.Connection, table: str, rows: list[tuple]):
     cursor.executemany(insert_sql, rows)
 
 
-def evaluate_models(
-    accent_model,
-    meter_model,
+def evaluate_unified(
+    model,
     device: torch.device,
-    raw_samples: list[RawSample],
+    test_chunks: list[list[RawSample]],
     conn: sqlite3.Connection,
     batch_size: int = 16,
 ):
-    loader = get_loader(raw_samples, batch_size=batch_size, shuffle=False)
+    samples = [rs for chunk in test_chunks for rs in chunk]
 
-    meter_preds = torch.full((len(raw_samples),), -1, dtype=torch.long)
-
-    meter_correct = 0
-    meter_total = 0
-    meter_offset = 0
-
-    with torch.no_grad():
-        for batch in loader:
-            accent_input = batch.accent_input.to(device)
-            pos_input = batch.part_of_speech_input.to(device)
-            meter_target = batch.meter_class.to(device)
-
-            n = accent_input.size(0)
-
-            pred = torch.argmax(meter_model(accent_input, pos_input), dim=1)
-            meter_preds[meter_offset : meter_offset + n] = pred.cpu()
-            meter_correct += (pred == meter_target).sum().item()
-            meter_total += n
-
-            meter_offset += n
-
-    accent_accuracy, rhythms_pred, rhythms_target, meter_pred_ints = (
-        evaluate_accent_pass(
-            accent_model,
-            device,
-            raw_samples,
-            meter_preds,
-            batch_size,
-        )
-    )
-
-    rows = build_accent_rows(raw_samples, rhythms_pred, rhythms_target, meter_pred_ints)
-    write_rows(conn, "predictions", rows)
-
-    return {
-        "accent_accuracy": accent_accuracy,
-        "meter_accuracy": meter_correct / meter_total if meter_total else 0.0,
-    }
-
-
-def evaluate_refiner_models(
-    accent_model,
-    meter_model,
-    refiner_model,
-    device: torch.device,
-    chunks: list[list[RawSample]],
-    conn: sqlite3.Connection,
-    batch_size: int = 16,
-):
-    samples = [rs for chunk in chunks for rs in chunk]
-
-    refined_meter_preds = torch.full((len(samples),), -1, dtype=torch.long)
+    meter_preds = torch.full((len(samples),), -1, dtype=torch.long)
+    accent_pred_strs: list[str] = []
+    accent_target_strs: list[str] = []
 
     meter_correct = 0
     meter_total = 0
+    accent_correct = 0
+    accent_total = 0
     global_offset = 0
 
     with torch.no_grad():
-        for chunk_lines in chunks:
+        for chunk_lines in test_chunks:
             accent_tensors = [make_accent_input(rs) for rs in chunk_lines]
             pos_tensors = [
                 torch.tensor(rs.grammar.part_of_speech, dtype=torch.long)
+                for rs in chunk_lines
+            ]
+            accent_targets = [
+                torch.tensor(rs.syllables.poetic_accents, dtype=torch.float32)
                 for rs in chunk_lines
             ]
 
@@ -267,39 +137,48 @@ def evaluate_refiner_models(
             pos_input = pad_sequence(
                 pos_tensors, batch_first=True, padding_value=-1
             ).to(device)
+            accent_target = pad_sequence(
+                accent_targets, batch_first=True, padding_value=-1
+            ).to(device)
 
-            meter_targets = torch.tensor(
+            meter_target = torch.tensor(
                 [rs.meter_class for rs in chunk_lines], dtype=torch.long
             ).to(device)
 
-            base_logits = meter_model(accent_input, pos_input)
-            ling_accent = accent_input[:, :, 1:2]
-            refined = refiner_model(ling_accent, base_logits)
-            preds = torch.argmax(refined, dim=1)
+            meter_logits, accent_logits = model(accent_input, pos_input)
+            pred_meter = torch.argmax(meter_logits, dim=1)
+            pred_accent = (torch.sigmoid(accent_logits) > 0.5).float()
 
-            for local_idx in range(len(chunk_lines)):
-                refined_meter_preds[global_offset + local_idx] = preds[local_idx]
+            meter_correct += (pred_meter == meter_target).sum().item()
+            meter_total += len(meter_target)
 
-            meter_correct += (preds == meter_targets).sum().item()
-            meter_total += len(meter_targets)
-            global_offset += len(chunk_lines)
+            out_T = accent_logits.shape[1]
+            accent_target_trunc = accent_target[:, :out_T]
+            accent_mask = accent_target_trunc != -1
+            accent_correct += (
+                (pred_accent[accent_mask] == accent_target_trunc[accent_mask]).sum().item()
+            )
+            accent_total += accent_mask.sum().item()
+
+            pred_accent_masked = pred_accent.masked_fill(~accent_mask, -1)
+
+            for local_idx, rs in enumerate(chunk_lines):
+                meter_preds[global_offset] = pred_meter[local_idx]
+                accent_pred_strs.append(rhythm_to_str(pred_accent_masked[local_idx]))
+                accent_target_strs.append(rhythm_to_str(accent_target_trunc[local_idx]))
+                global_offset += 1
 
     meter_accuracy = meter_correct / meter_total if meter_total else 0.0
+    accent_accuracy = accent_correct / accent_total if accent_total else 0.0
 
-    accent_accuracy, rhythms_pred, rhythms_target, meter_pred_ints = (
-        evaluate_accent_pass(
-            accent_model,
-            device,
-            samples,
-            refined_meter_preds,
-            batch_size,
-        )
-    )
-
-    rows = build_accent_rows(samples, rhythms_pred, rhythms_target, meter_pred_ints)
-    write_rows(conn, "refiner_predictions", rows)
+    rows = []
+    for rs, rp, rt, mi in zip(
+        samples, accent_pred_strs, accent_target_strs, meter_preds
+    ):
+        rows.append(make_row(rs, rp, rt, int(mi), rs.meter_class))
+    write_rows(conn, "predictions", rows)
 
     return {
-        "refiner_meter_accuracy": meter_accuracy,
-        "refiner_accent_accuracy": accent_accuracy,
+        "meter_accuracy": meter_accuracy,
+        "accent_accuracy": accent_accuracy,
     }

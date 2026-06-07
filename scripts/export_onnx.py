@@ -2,114 +2,54 @@ import logging
 
 import torch
 
-from velimir.io import load_models
+from velimir.io import load_unified_model
 from velimir.logger import LoggingSettings
 from velimir.ml_preprocess import MeterClassRegistry
 from velimir.onnx import MAX_SEQ_LEN
-from velimir.settings import ACCENT_ONNX_MODEL, METER_ONNX_MODEL, REFINER_ONNX_MODEL
+from velimir.settings import UNIFIED_ONNX_MODEL
 
 
-def make_dummy_accent_inputs():
-    B = 2
-    accent_input = torch.zeros(B, MAX_SEQ_LEN, 3)
-    meter_class = torch.zeros(B, dtype=torch.long)
-    pos_input = torch.zeros(B, MAX_SEQ_LEN, dtype=torch.long)
-    return accent_input, meter_class, pos_input
-
-
-def make_dummy_meter_inputs():
-    B = 2
-    accent_input = torch.zeros(B, MAX_SEQ_LEN, 3)
-    pos_input = torch.zeros(B, MAX_SEQ_LEN, dtype=torch.long)
+def make_dummy_inputs():
+    N = 18
+    accent_input = torch.zeros(N, MAX_SEQ_LEN, 3)
+    pos_input = torch.zeros(N, MAX_SEQ_LEN, dtype=torch.long)
     return accent_input, pos_input
 
 
-def make_dummy_refiner_inputs():
-    B = 2
-    accent_input = torch.zeros(B, MAX_SEQ_LEN, 1)
-    meter_logits = torch.zeros(B, MeterClassRegistry.num())
-    return accent_input, meter_logits
-
-
-def export_accent(accent_model):
-    dummy_accent_input, dummy_meter_class, dummy_pos_input = make_dummy_accent_inputs()
-
-    logging.info("Exporting accent model to %s (T=%d)", ACCENT_ONNX_MODEL, MAX_SEQ_LEN)
-
-    torch.onnx.export(
-        accent_model,
-        (dummy_accent_input, dummy_meter_class, dummy_pos_input),
-        ACCENT_ONNX_MODEL,
-        input_names=["accent_input", "meter_class", "pos_input"],
-        output_names=["logits"],
-        dynamo=False,
-        dynamic_axes={
-            "accent_input": {0: "batch"},
-            "meter_class": {0: "batch"},
-            "pos_input": {0: "batch"},
-            "logits": {0: "batch"},
-        },
-    )
-
-    logging.info("Accent model exported successfully")
-
-
-def export_meter(meter_model):
-    dummy_accent_input, dummy_pos_input = make_dummy_meter_inputs()
-
-    logging.info("Exporting meter model to %s (T=%d)", METER_ONNX_MODEL, MAX_SEQ_LEN)
-
-    torch.onnx.export(
-        meter_model,
-        (dummy_accent_input, dummy_pos_input),
-        METER_ONNX_MODEL,
-        input_names=["accent_input", "pos_input"],
-        output_names=["logits"],
-        dynamo=False,
-        dynamic_axes={
-            "accent_input": {0: "batch"},
-            "pos_input": {0: "batch"},
-            "logits": {0: "batch"},
-        },
-    )
-
-    logging.info("Meter model exported successfully")
-
-
-def export_refiner(refiner_model):
-    dummy_accent_input, dummy_meter_logits = make_dummy_refiner_inputs()
-
-    logging.info("Exporting refiner model to %s (T=%d)", REFINER_ONNX_MODEL, MAX_SEQ_LEN)
-
-    torch.onnx.export(
-        refiner_model,
-        (dummy_accent_input, dummy_meter_logits),
-        REFINER_ONNX_MODEL,
-        input_names=["accent_input", "meter_logits"],
-        output_names=["logits"],
-        dynamo=False,
-        dynamic_axes={
-            "accent_input": {0: "batch"},
-            "meter_logits": {0: "batch"},
-            "logits": {0: "batch"},
-        },
-    )
-
-    logging.info("Refiner model exported successfully")
-
-
-def export_models():
+def export():
     device = torch.device("cpu")
 
-    accent_model, meter_model, refiner_model = load_models(device)
+    model = load_unified_model(device)
 
-    export_accent(accent_model)
-    export_meter(meter_model)
-    export_refiner(refiner_model)
+    dummy_accent, dummy_pos = make_dummy_inputs()
+
+    logging.info(
+        "Exporting unified model to %s (N=%d, T=%d)",
+        UNIFIED_ONNX_MODEL,
+        18,
+        MAX_SEQ_LEN,
+    )
+
+    torch.onnx.export(
+        model,
+        (dummy_accent, dummy_pos),
+        UNIFIED_ONNX_MODEL,
+        input_names=["accent_input", "pos_input"],
+        output_names=["meter_logits", "accent_logits"],
+        dynamo=False,
+        dynamic_axes={
+            "accent_input": {0: "batch_size"},
+            "pos_input": {0: "batch_size"},
+            "meter_logits": {0: "batch_size"},
+            "accent_logits": {0: "batch_size"},
+        },
+    )
+
+    logging.info("Unified model exported successfully")
 
 
 if __name__ == "__main__":
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
-    export_models()
+    export()

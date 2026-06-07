@@ -116,44 +116,6 @@ def extract_input_tensors(
     return accent_input_padded, pos_input_padded
 
 
-def detect_poetic_accents(model, accent_input, meter_pred, pos_input):
-    logits = model(accent_input, meter_pred, pos_input)
-    pred = (1.0 / (1.0 + np.exp(-logits)) > 0.5).astype(np.float32)
-    mask = (accent_input != -1).all(axis=2)
-    pred[~mask] = -1
-    return pred[..., np.newaxis]
-
-
-def detect_meter(
-    meter_model,
-    refiner_model,
-    accent_input,
-    pos_input,
-    stanza_breaks,
-):
-    base_logits = meter_model(accent_input, pos_input)
-
-    refined_preds = np.full(len(accent_input), -1, dtype=np.int64)
-
-    line_indices = list(range(len(accent_input)))
-    stanzas = list(break_into_chunks(line_indices, stanza_breaks))
-
-    for stanza_lines in stanzas:
-        indices = np.array(stanza_lines)
-
-        stanza_accent = accent_input[indices]
-        stanza_logits = base_logits[indices]
-        ling_stanza = stanza_accent[..., 1:2]
-
-        refined = refiner_model(ling_stanza, stanza_logits)
-        stanza_preds = np.argmax(refined, axis=1)
-
-        for j, line_idx in enumerate(stanza_lines):
-            refined_preds[line_idx] = stanza_preds[j]
-
-    return refined_preds
-
-
 def extract_meter_accent_mask(
     meter_position: int,
     total_meters: int,
@@ -325,9 +287,7 @@ def process_line(
 
 
 def process_lines(
-    accent_model,
-    meter_model,
-    refiner_model,
+    model,
     lines: list[str],
     stanza_breaks: list[int],
 ) -> list[ProcessedLine | None]:
@@ -345,31 +305,35 @@ def process_lines(
         [gf.part_of_speech for gf in gf_expanded],
     )
 
-    refined_meter_preds = detect_meter(
-        meter_model,
-        refiner_model,
-        accent_input,
-        pos_input,
-        stanza_breaks,
-    )
+    N = len(lines)
+    T_max = accent_input.shape[1]
+    all_meter_preds = np.full(N, -1, dtype=np.int64)
+    all_accent_mask = np.full((N, T_max), -1.0, dtype=np.float32)
 
-    poetic_accents = detect_poetic_accents(
-        accent_model,
-        accent_input,
-        refined_meter_preds,
-        pos_input,
-    )
+    line_indices = list(range(N))
+    chunks = list(break_into_chunks(line_indices, stanza_breaks))
 
-    meters_list = []
-    for i in range(len(lines)):
-        mi = refined_meter_preds[i]
-        mc = MeterClassRegistry.int_to_mc(mi)
-        meters_list.append(mc)
+    for stanza_lines in chunks:
+        indices = np.array(stanza_lines)
+        chunk_accent = accent_input[indices]
+        chunk_pos = pos_input[indices]
+
+        meter_logits, accent_logits = model(chunk_accent, chunk_pos)
+        meter_preds = np.argmax(meter_logits, axis=1)
+        accent_preds = (1.0 / (1.0 + np.exp(-accent_logits)) > 0.5).astype(np.float32)
+
+        syllable_mask = ~(chunk_accent != -1).all(axis=2)
+        accent_preds[syllable_mask] = -1
+
+        all_meter_preds[indices] = meter_preds
+        all_accent_mask[indices] = accent_preds
+
+    meters_list = [MeterClassRegistry.int_to_mc(int(mi)) for mi in all_meter_preds]
 
     poetic_accents_list = []
-    for mask in poetic_accents:
-        valid_mask = mask[mask != -1]
-        poetic_accents_list.append(valid_mask.squeeze().tolist())
+    for mask in all_accent_mask:
+        valid = mask[mask != -1]
+        poetic_accents_list.append(valid.tolist())
 
     res = []
     for i, (mc, pmask, wmask) in enumerate(

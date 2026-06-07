@@ -108,8 +108,10 @@ def main():
 
     flat_lines, stanza_breaks = flatten_verses(verses)
 
+    onnx_model = load_onnx_models()
+
     processed_flat = process_lines(
-        *load_onnx_models(),
+        onnx_model,
         flat_lines,
         stanza_breaks,
     )

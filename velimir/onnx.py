@@ -53,19 +53,19 @@ def onnx_call(func):
         result = func(self, *numpy_args)
 
         if is_torch:
-            return torch.from_numpy(result)
+            return torch.from_numpy(result[0]), torch.from_numpy(result[1])
 
         return result
 
     return wrapper
 
 
-class OnnxAccent:
+class OnnxUnified:
     def __init__(self, onnx_path: str):
         self.session = ort.InferenceSession(onnx_path, providers=available_providers())
 
     @onnx_call
-    def __call__(self, accent_input, meter_class, pos_input):
+    def __call__(self, accent_input, pos_input):
         orig_T = accent_input.shape[1]
         accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
         pos_input = pad_to_length(pos_input, MAX_SEQ_LEN)
@@ -73,56 +73,17 @@ class OnnxAccent:
             None,
             {
                 "accent_input": accent_input,
-                "meter_class": meter_class,
                 "pos_input": pos_input,
             },
         )
-        result = outputs[0]
-        if result.shape[1] > orig_T:
-            result = result[:, :orig_T]
-        return result
-
-
-class OnnxMeter:
-    def __init__(self, onnx_path: str):
-        self.session = ort.InferenceSession(onnx_path, providers=available_providers())
-
-    @onnx_call
-    def __call__(self, accent_input, pos_input):
-        accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
-        pos_input = pad_to_length(pos_input, MAX_SEQ_LEN)
-        outputs = self.session.run(
-            None,
-            {
-                "accent_input": accent_input,
-                "pos_input": pos_input,
-            },
-        )
-        return outputs[0]
-
-
-class OnnxRefiner:
-    def __init__(self, onnx_path: str):
-        self.session = ort.InferenceSession(onnx_path, providers=available_providers())
-
-    @onnx_call
-    def __call__(self, accent_input, meter_logits):
-        accent_input = pad_to_length(accent_input, MAX_SEQ_LEN)
-        outputs = self.session.run(
-            None,
-            {
-                "accent_input": accent_input,
-                "meter_logits": meter_logits,
-            },
-        )
-        return outputs[0]
+        meter_logits = outputs[0]
+        accent_logits = outputs[1]
+        if accent_logits.shape[1] > orig_T:
+            accent_logits = accent_logits[:, :orig_T]
+        return meter_logits, accent_logits
 
 
 def load_onnx_models():
-    from velimir.settings import ACCENT_ONNX_MODEL, METER_ONNX_MODEL, REFINER_ONNX_MODEL
+    from velimir.settings import UNIFIED_ONNX_MODEL
 
-    return (
-        OnnxAccent(ACCENT_ONNX_MODEL),
-        OnnxMeter(METER_ONNX_MODEL),
-        OnnxRefiner(REFINER_ONNX_MODEL),
-    )
+    return OnnxUnified(UNIFIED_ONNX_MODEL)

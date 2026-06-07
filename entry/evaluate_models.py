@@ -2,46 +2,26 @@ import logging
 
 import torch
 
-from velimir.io import load_models, load_poems_from_msgpack
+from velimir.io import load_poems_from_msgpack, load_unified_model
 from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
 from velimir.logger import LoggingSettings
-from velimir.evaluation import evaluate_models, evaluate_refiner_models, init_db
+from velimir.evaluation import evaluate_unified, init_db
 
 
 def evaluate():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device: %s", device)
 
-    accent_model, meter_model, refiner_model = load_models(device)
-    accent_model.eval()
-    meter_model.eval()
-    refiner_model.eval()
+    model = load_unified_model(device)
+    model.eval()
 
     poems = load_poems_from_msgpack()
     _, _, test_chunks = split_chunks(fetch_raw_samples(poems))
-    test_set = [rs for chunk in test_chunks for rs in chunk]
 
     conn = init_db()
 
-    base_results = evaluate_models(
-        accent_model,
-        meter_model,
-        device,
-        test_set,
-        conn,
-    )
-    for k, v in base_results.items():
-        logging.info("%s=%f", k, v)
-
-    refiner_results = evaluate_refiner_models(
-        accent_model,
-        meter_model,
-        refiner_model,
-        device,
-        test_chunks,
-        conn,
-    )
-    for k, v in refiner_results.items():
+    results = evaluate_unified(model, device, test_chunks, conn)
+    for k, v in results.items():
         logging.info("%s=%f", k, v)
 
     conn.commit()
