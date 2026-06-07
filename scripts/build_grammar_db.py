@@ -5,13 +5,13 @@ import logging
 import os
 import sqlite3
 from dataclasses import dataclass
+from typing import Iterator
 
 import msgpack
-
-from velimir import parsers, accentuator
+from velimir import accentuator, parsers
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
-from velimir.logger import delayed_logger, LoggingSettings
+from velimir.logger import LoggingSettings, delayed_logger
 from velimir.nlp import GrammarFeatures, markup
 from velimir.settings import (
     GRAMMAR_DB_PATH,

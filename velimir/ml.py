@@ -58,7 +58,7 @@ class UnifiedModel(nn.Module):
             nn.Linear(hidden, 1),
         )
 
-    def forward(self, accent_input, pos_input, line_counts=None, meter_for_accent=None):
+    def forward(self, accent_input, pos_input, line_counts=None):
         total_N, T, _ = accent_input.shape
 
         syllable_mask = (accent_input != -1).any(dim=-1)
@@ -104,10 +104,8 @@ class UnifiedModel(nn.Module):
 
         meter_logits = self.meter_head(context)
 
-        if meter_for_accent is None:
-            meter_for_accent = torch.argmax(meter_logits, dim=1)
-
-        meter_emb = self.meter_emb(meter_for_accent)
+        meter_probs = torch.softmax(meter_logits, dim=-1)
+        meter_emb = meter_probs @ self.meter_emb.weight
         meter_emb_T = meter_emb.unsqueeze(1).expand(-1, T, -1)
         context_T = context.unsqueeze(1).expand(-1, T, -1)
 
@@ -124,21 +122,21 @@ def unified_forward_loss(model, batch, line_counts, loss_fns, device):
     accent_target = batch.accent_target.to(device, non_blocking=True)
     line_counts = line_counts.to(device)
 
-    meter_logits, accent_logits = model(
-        accent_input, pos_input, line_counts, meter_for_accent=meter_target
-    )
+    meter_logits, accent_logits = model(accent_input, pos_input, line_counts)
 
     meter_loss = loss_fns[0](meter_logits, meter_target)
 
     accent_mask = accent_target != -1
     accent_loss = loss_fns[1](accent_logits[accent_mask], accent_target[accent_mask])
 
-    return meter_loss + accent_loss
+    return meter_loss + accent_loss, meter_loss, accent_loss
 
 
 def train_unified(model, loader, optimizer, device):
     model.train()
     total_loss = 0
+    total_meter_loss = 0
+    total_accent_loss = 0
 
     class_weights = get_meter_weights().to(device, non_blocking=True)
     meter_loss_fn = nn.CrossEntropyLoss(weight=class_weights)
@@ -148,7 +146,9 @@ def train_unified(model, loader, optimizer, device):
     for batch, line_counts in loader:
         optimizer.zero_grad()
 
-        loss = unified_forward_loss(model, batch, line_counts, loss_fns, device)
+        loss, meter_loss, accent_loss = unified_forward_loss(
+            model, batch, line_counts, loss_fns, device
+        )
 
         if torch.isnan(loss) or torch.isinf(loss):
             logging.error("Unified model: skipping invalid batch")
@@ -159,13 +159,24 @@ def train_unified(model, loader, optimizer, device):
 
         optimizer.step()
         total_loss += loss.item()
+        total_meter_loss += meter_loss.item()
+        total_accent_loss += accent_loss.item()
 
-    return total_loss / len(loader)
+    n = len(loader)
+    logging.info(
+        "training: meter_loss=%.4f accent_loss=%.4f",
+        total_meter_loss / n,
+        total_accent_loss / n,
+    )
+
+    return total_loss / n
 
 
 def eval_unified(model, loader, device):
     model.eval()
     total_loss = 0.0
+    total_meter_loss = 0.0
+    total_accent_loss = 0.0
 
     class_weights = get_meter_weights().to(device, non_blocking=True)
     meter_loss_fn = nn.CrossEntropyLoss(weight=class_weights)
@@ -174,10 +185,21 @@ def eval_unified(model, loader, device):
 
     with torch.no_grad():
         for batch, line_counts in loader:
-            loss = unified_forward_loss(model, batch, line_counts, loss_fns, device)
+            loss, meter_loss, accent_loss = unified_forward_loss(
+                model, batch, line_counts, loss_fns, device
+            )
             total_loss += loss.item()
+            total_meter_loss += meter_loss.item()
+            total_accent_loss += accent_loss.item()
 
-    return total_loss / len(loader)
+    n = len(loader)
+    logging.info(
+        "validation: meter_loss=%.4f accent_loss=%.4f",
+        total_meter_loss / n,
+        total_accent_loss / n,
+    )
+
+    return total_loss / n
 
 
 def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
@@ -212,7 +234,7 @@ def train_unified_model(
     val_chunks,
     max_epochs=100,
     patience=3,
-    batch_size=128,
+    batch_size=512,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
