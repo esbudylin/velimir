@@ -3,7 +3,6 @@ import logging
 import torch
 
 from velimir.evaluation import evaluate_models, evaluate_refiner_models, init_db
-from velimir.identifier import logic_refine
 from velimir.io import load_models, load_poems_from_msgpack
 from velimir.logger import LoggingSettings
 from velimir.ml_loader import (
@@ -67,24 +66,13 @@ def verify_single_batch(
 
 
 def run_evaluation(models, device, test_set, test_chunks):
-    accent, meter, _refiner = models
+    accent, meter, refiner = models
 
     conn = init_db(":memory:")
 
-    base_results = evaluate_models(
-        accent,
-        meter,
-        device,
-        test_set,
-        conn,
-    )
+    base_results = evaluate_models(accent, meter, device, test_set, conn)
     refiner_results = evaluate_refiner_models(
-        accent,
-        meter,
-        device,
-        test_chunks,
-        conn,
-        refiner=logic_refine,
+        accent, meter, refiner, device, test_chunks, conn
     )
 
     conn.commit()

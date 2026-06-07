@@ -231,18 +231,18 @@ def evaluate_models(
     write_rows(conn, "predictions", rows)
 
     return {
-        "meter_accuracy": meter_correct / meter_total if meter_total else 0.0,
         "accent_accuracy": accent_accuracy,
+        "meter_accuracy": meter_correct / meter_total if meter_total else 0.0,
     }
 
 
 def evaluate_refiner_models(
     accent_model,
     meter_model,
+    refiner_model,
     device: torch.device,
     chunks: list[list[RawSample]],
     conn: sqlite3.Connection,
-    refiner,
     batch_size: int = 16,
 ):
     samples = [rs for chunk in chunks for rs in chunk]
@@ -273,8 +273,9 @@ def evaluate_refiner_models(
             ).to(device)
 
             base_logits = meter_model(accent_input, pos_input)
-            stanza_preds = refiner(base_logits.cpu().numpy())
-            preds = torch.tensor(stanza_preds, dtype=torch.long).to(device)
+            ling_accent = accent_input[:, :, 1:2]
+            refined = refiner_model(ling_accent, base_logits)
+            preds = torch.argmax(refined, dim=1)
 
             for local_idx in range(len(chunk_lines)):
                 refined_meter_preds[global_offset + local_idx] = preds[local_idx]
