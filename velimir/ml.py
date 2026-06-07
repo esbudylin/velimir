@@ -115,7 +115,9 @@ class UnifiedModel(nn.Module):
         return meter_logits, accent_logits
 
 
-def unified_forward_loss(model, batch, line_counts, loss_fns, device):
+def unified_forward_loss(
+    model, batch, line_counts, loss_fns, device, accent_loss_weight
+):
     accent_input = batch.accent_input.to(device, non_blocking=True)
     pos_input = batch.pos_input.to(device, non_blocking=True)
     meter_target = batch.meter_target.to(device, non_blocking=True)
@@ -129,10 +131,10 @@ def unified_forward_loss(model, batch, line_counts, loss_fns, device):
     accent_mask = accent_target != -1
     accent_loss = loss_fns[1](accent_logits[accent_mask], accent_target[accent_mask])
 
-    return meter_loss + accent_loss, meter_loss, accent_loss
+    return meter_loss + accent_loss_weight * accent_loss, meter_loss, accent_loss
 
 
-def train_unified(model, loader, optimizer, device):
+def train_unified(model, loader, optimizer, device, accent_loss_weight):
     model.train()
     total_loss = 0
     total_meter_loss = 0
@@ -147,7 +149,7 @@ def train_unified(model, loader, optimizer, device):
         optimizer.zero_grad()
 
         loss, meter_loss, accent_loss = unified_forward_loss(
-            model, batch, line_counts, loss_fns, device
+            model, batch, line_counts, loss_fns, device, accent_loss_weight
         )
 
         if torch.isnan(loss) or torch.isinf(loss):
@@ -172,7 +174,7 @@ def train_unified(model, loader, optimizer, device):
     return total_loss / n
 
 
-def eval_unified(model, loader, device):
+def eval_unified(model, loader, device, accent_loss_weight):
     model.eval()
     total_loss = 0.0
     total_meter_loss = 0.0
@@ -186,7 +188,7 @@ def eval_unified(model, loader, device):
     with torch.no_grad():
         for batch, line_counts in loader:
             loss, meter_loss, accent_loss = unified_forward_loss(
-                model, batch, line_counts, loss_fns, device
+                model, batch, line_counts, loss_fns, device, accent_loss_weight
             )
             total_loss += loss.item()
             total_meter_loss += meter_loss.item()
@@ -233,7 +235,8 @@ def train_unified_model(
     train_chunks,
     val_chunks,
     max_epochs=100,
-    patience=3,
+    patience=6,
+    accent_loss_weight=7.0,
     batch_size=512,
     num_workers=4,
 ):
@@ -258,13 +261,15 @@ def train_unified_model(
 
     model = UnifiedModel().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2)
 
     logging.info("Training unified model")
     state_dict = train_model(
         model,
-        partial(train_unified, model, train_loader, optimizer, device),
-        partial(eval_unified, model, val_loader, device),
+        partial(
+            train_unified, model, train_loader, optimizer, device, accent_loss_weight
+        ),
+        partial(eval_unified, model, val_loader, device, accent_loss_weight),
         scheduler=scheduler,
         max_epochs=max_epochs,
         patience=patience,
