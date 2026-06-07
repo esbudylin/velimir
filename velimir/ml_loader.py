@@ -144,7 +144,7 @@ def fetch_raw_samples(poems: Iterator[Poem]) -> Iterator[RawSample]:
 
 
 def split_chunks(
-    raw_samples: list[RawSample],
+    raw_samples: Iterator[RawSample],
     test_ratio: float = 0.02,
     val_ratio: float = 0.02,
     seed: int = 42,
@@ -182,18 +182,18 @@ def split_chunks(
 
 
 @dataclass(slots=True)
-class UnifiedSample:
+class Sample:
     accent_input: torch.Tensor
     pos_input: torch.Tensor
     meter_target: torch.Tensor
     accent_target: torch.Tensor
 
 
-class UnifiedDataset(Dataset):
+class SampleDataset(Dataset):
     def __init__(self, chunks: list[list[RawSample]]):
-        logging.info("Loading unified dataset")
+        logging.info("Loading dataset")
 
-        self.samples: list[UnifiedSample] = []
+        self.samples: list[Sample] = []
 
         for chunk_lines in chunks:
             accent_tensors = []
@@ -221,7 +221,7 @@ class UnifiedDataset(Dataset):
             )
 
             self.samples.append(
-                UnifiedSample(
+                Sample(
                     accent_input=accent_input,
                     pos_input=pos_input,
                     meter_target=meter_target,
@@ -230,7 +230,7 @@ class UnifiedDataset(Dataset):
             )
 
         logging.info(
-            "Unified dataset loading finished. %d chunks created",
+            "Dataset loading finished. %d chunks created",
             len(self.samples),
         )
 
@@ -241,15 +241,7 @@ class UnifiedDataset(Dataset):
         return self.samples[idx]
 
 
-@dataclass(slots=True)
-class UnifiedBatch:
-    accent_input: torch.Tensor
-    pos_input: torch.Tensor
-    meter_target: torch.Tensor
-    accent_target: torch.Tensor
-
-
-def collate_unified(batch: list[UnifiedSample]):
+def collate_samples(batch: list[Sample]):
     line_counts = torch.tensor(
         [s.accent_input.shape[0] for s in batch], dtype=torch.long
     )
@@ -281,7 +273,7 @@ def collate_unified(batch: list[UnifiedSample]):
     meter_target = torch.cat(all_meter, dim=0)
     accent_target = torch.cat(all_accent_target, dim=0)
 
-    sample = UnifiedBatch(
+    sample = Sample(
         accent_input=accent_input,
         pos_input=pos_input,
         meter_target=meter_target,
@@ -290,6 +282,6 @@ def collate_unified(batch: list[UnifiedSample]):
     return sample, line_counts
 
 
-def get_unified_loader(chunks, **kwargs):
-    dataset = UnifiedDataset(chunks)
-    return DataLoader(dataset, collate_fn=collate_unified, **kwargs)
+def get_loader(chunks, **kwargs):
+    dataset = SampleDataset(chunks)
+    return DataLoader(dataset, collate_fn=collate_samples, **kwargs)

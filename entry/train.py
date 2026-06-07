@@ -6,15 +6,17 @@ import torch
 
 from velimir.io import load_poems_from_msgpack
 from velimir.logger import LoggingSettings
-from velimir.ml import train_unified_model
+from velimir.ml import train_models
 from velimir.ml_loader import (
     MeterClassRegistry,
     fetch_raw_samples,
     split_chunks,
 )
 from velimir.settings import (
-    UNIFIED_MODEL,
-    UNIFIED_TEST_MODEL,
+    METER_MODEL,
+    METER_TEST_MODEL,
+    ACCENT_MODEL,
+    ACCENT_TEST_MODEL,
 )
 
 
@@ -38,27 +40,26 @@ def train(test_run: bool = False):
         )
         raw_samples = islice(raw_samples, testing_subset)
 
-    raw_samples = list(raw_samples)
-
     train_chunks, val_chunks, _ = split_chunks(raw_samples)
 
-    logging.info("Training unified model...")
-    state_dict = train_unified_model(
+    accent_state_dict, meter_state_dict = train_models(
         train_chunks,
         val_chunks,
         **training_kwargs,
     )
 
-    logging.info("Saving trained model...")
+    logging.info("Saving trained models...")
 
     if test_run:
-        torch.save(state_dict, UNIFIED_TEST_MODEL)
+        torch.save(meter_state_dict, METER_TEST_MODEL)
+        torch.save(accent_state_dict, ACCENT_TEST_MODEL)
     else:
-        torch.save(state_dict, UNIFIED_MODEL)
+        torch.save(meter_state_dict, METER_MODEL)
+        torch.save(accent_state_dict, ACCENT_MODEL)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train unified accent/meter model.")
+    parser = argparse.ArgumentParser(description="Train meter and accent models.")
     parser.add_argument(
         "--test-run",
         action="store_true",

@@ -9,23 +9,18 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_se
 from .ml_loader import (
     MeterClassRegistry,
     get_meter_weights,
-    get_unified_loader,
+    get_loader,
 )
 from .nlp import PartOfSpeech
 
 
-class UnifiedModel(nn.Module):
-    def __init__(self):
+class SharedEncoder(nn.Module):
+    def __init__(self, hidden=128, num_pos_classes=None, pos_emb_dim=8):
         super().__init__()
-
-        hidden = 128
-        num_classes = MeterClassRegistry.num()
-        meter_emb_dim = 16
-        num_pos_classes = len(PartOfSpeech) + 1
-        pos_emb_dim = 8
+        if num_pos_classes is None:
+            num_pos_classes = len(PartOfSpeech) + 1
 
         self.pos_emb = nn.Embedding(num_pos_classes, pos_emb_dim, padding_idx=0)
-        self.meter_emb = nn.Embedding(num_classes, meter_emb_dim)
 
         self.line_encoder = nn.LSTM(
             input_size=2 + pos_emb_dim,
@@ -42,20 +37,6 @@ class UnifiedModel(nn.Module):
             batch_first=True,
             bidirectional=True,
             num_layers=2,
-        )
-
-        self.meter_head = nn.Sequential(
-            nn.Linear(hidden * 2, hidden),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden, num_classes),
-        )
-
-        self.accent_head = nn.Sequential(
-            nn.Linear(hidden * 2 + hidden * 2 + meter_emb_dim, hidden),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden, 1),
         )
 
     def forward(self, accent_input, pos_input, line_counts=None):
@@ -102,58 +83,82 @@ class UnifiedModel(nn.Module):
                 [stanza_out[i, :lc] for i, lc in enumerate(line_counts)], dim=0
             )
 
-        meter_logits = self.meter_head(context)
+        return out, context
 
-        meter_probs = torch.softmax(meter_logits, dim=-1)
-        meter_emb = meter_probs @ self.meter_emb.weight
+
+class MeterModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        hidden = 128
+        num_classes = MeterClassRegistry.num()
+
+        self.encoder = SharedEncoder()
+        self.meter_head = nn.Sequential(
+            nn.Linear(hidden * 2, hidden),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden, num_classes),
+        )
+
+    def forward(self, accent_input, pos_input, line_counts=None):
+        _, context = self.encoder(accent_input, pos_input, line_counts)
+        return self.meter_head(context)
+
+
+class AccentModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        hidden = 128
+        num_classes = MeterClassRegistry.num()
+        meter_emb_dim = 16
+
+        self.encoder = SharedEncoder()
+        self.meter_emb = nn.Embedding(num_classes, meter_emb_dim)
+        self.accent_head = nn.Sequential(
+            nn.Linear(hidden * 2 + hidden * 2 + meter_emb_dim, hidden),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden, 1),
+        )
+
+    def forward(self, accent_input, pos_input, meter_target, line_counts=None):
+        T = accent_input.shape[1]
+        out, context = self.encoder(accent_input, pos_input, line_counts)
+
+        meter_emb = self.meter_emb(meter_target)
         meter_emb_T = meter_emb.unsqueeze(1).expand(-1, T, -1)
         context_T = context.unsqueeze(1).expand(-1, T, -1)
 
         accent_x = torch.cat([out, context_T, meter_emb_T], dim=-1)
-        accent_logits = self.accent_head(accent_x).squeeze(-1)
-
-        return meter_logits, accent_logits
+        return self.accent_head(accent_x).squeeze(-1)
 
 
-def unified_forward_loss(
-    model, batch, line_counts, loss_fns, device, accent_loss_weight
-):
+def meter_forward_loss(model, batch, line_counts, loss_fn, device):
     accent_input = batch.accent_input.to(device, non_blocking=True)
     pos_input = batch.pos_input.to(device, non_blocking=True)
     meter_target = batch.meter_target.to(device, non_blocking=True)
-    accent_target = batch.accent_target.to(device, non_blocking=True)
     line_counts = line_counts.to(device)
 
-    meter_logits, accent_logits = model(accent_input, pos_input, line_counts)
-
-    meter_loss = loss_fns[0](meter_logits, meter_target)
-
-    accent_mask = accent_target != -1
-    accent_loss = loss_fns[1](accent_logits[accent_mask], accent_target[accent_mask])
-
-    return meter_loss + accent_loss_weight * accent_loss, meter_loss, accent_loss
+    meter_logits = model(accent_input, pos_input, line_counts)
+    return loss_fn(meter_logits, meter_target)
 
 
-def train_unified(model, loader, optimizer, device, accent_loss_weight):
+def train_meter(model, loader, optimizer, device):
     model.train()
     total_loss = 0
-    total_meter_loss = 0
-    total_accent_loss = 0
 
     class_weights = get_meter_weights().to(device, non_blocking=True)
-    meter_loss_fn = nn.CrossEntropyLoss(weight=class_weights)
-    accent_loss_fn = nn.BCEWithLogitsLoss()
-    loss_fns = (meter_loss_fn, accent_loss_fn)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     for batch, line_counts in loader:
         optimizer.zero_grad()
 
-        loss, meter_loss, accent_loss = unified_forward_loss(
-            model, batch, line_counts, loss_fns, device, accent_loss_weight
-        )
+        loss = meter_forward_loss(model, batch, line_counts, loss_fn, device)
 
         if torch.isnan(loss) or torch.isinf(loss):
-            logging.error("Unified model: skipping invalid batch")
+            logging.error("Meter model: skipping invalid batch")
             continue
 
         loss.backward()
@@ -161,47 +166,74 @@ def train_unified(model, loader, optimizer, device, accent_loss_weight):
 
         optimizer.step()
         total_loss += loss.item()
-        total_meter_loss += meter_loss.item()
-        total_accent_loss += accent_loss.item()
 
-    n = len(loader)
-    logging.info(
-        "training: meter_loss=%.4f accent_loss=%.4f",
-        total_meter_loss / n,
-        total_accent_loss / n,
-    )
-
-    return total_loss / n
+    return total_loss / len(loader)
 
 
-def eval_unified(model, loader, device, accent_loss_weight):
+def eval_meter(model, loader, device):
     model.eval()
     total_loss = 0.0
-    total_meter_loss = 0.0
-    total_accent_loss = 0.0
 
     class_weights = get_meter_weights().to(device, non_blocking=True)
-    meter_loss_fn = nn.CrossEntropyLoss(weight=class_weights)
-    accent_loss_fn = nn.BCEWithLogitsLoss()
-    loss_fns = (meter_loss_fn, accent_loss_fn)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     with torch.no_grad():
         for batch, line_counts in loader:
-            loss, meter_loss, accent_loss = unified_forward_loss(
-                model, batch, line_counts, loss_fns, device, accent_loss_weight
-            )
+            loss = meter_forward_loss(model, batch, line_counts, loss_fn, device)
             total_loss += loss.item()
-            total_meter_loss += meter_loss.item()
-            total_accent_loss += accent_loss.item()
 
-    n = len(loader)
-    logging.info(
-        "validation: meter_loss=%.4f accent_loss=%.4f",
-        total_meter_loss / n,
-        total_accent_loss / n,
-    )
+    return total_loss / len(loader)
 
-    return total_loss / n
+
+def accent_forward_loss(model, batch, line_counts, loss_fn, device):
+    accent_input = batch.accent_input.to(device, non_blocking=True)
+    pos_input = batch.pos_input.to(device, non_blocking=True)
+    meter_target = batch.meter_target.to(device, non_blocking=True)
+    accent_target = batch.accent_target.to(device, non_blocking=True)
+    line_counts = line_counts.to(device)
+
+    accent_logits = model(accent_input, pos_input, meter_target, line_counts)
+
+    accent_mask = accent_target != -1
+    return loss_fn(accent_logits[accent_mask], accent_target[accent_mask])
+
+
+def train_accent(model, loader, optimizer, device):
+    model.train()
+    total_loss = 0
+
+    loss_fn = nn.BCEWithLogitsLoss()
+
+    for batch, line_counts in loader:
+        optimizer.zero_grad()
+
+        loss = accent_forward_loss(model, batch, line_counts, loss_fn, device)
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            logging.error("Accent model: skipping invalid batch")
+            continue
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+        optimizer.step()
+        total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
+def eval_accent(model, loader, device):
+    model.eval()
+    total_loss = 0.0
+
+    loss_fn = nn.BCEWithLogitsLoss()
+
+    with torch.no_grad():
+        for batch, line_counts in loader:
+            loss = accent_forward_loss(model, batch, line_counts, loss_fn, device)
+            total_loss += loss.item()
+
+    return total_loss / len(loader)
 
 
 def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
@@ -231,48 +263,66 @@ def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
     return best_state_dict
 
 
-def train_unified_model(
-    train_chunks,
-    val_chunks,
+def train_models(
+    train_set,
+    validation_set,
     max_epochs=100,
     patience=6,
-    accent_loss_weight=7.0,
     batch_size=512,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Using device %s for training", device)
 
-    train_loader = get_unified_loader(
-        train_chunks,
+    train_loader = get_loader(
+        train_set,
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
         batch_size=batch_size,
     )
 
-    val_loader = get_unified_loader(
-        val_chunks,
+    validation_loader = get_loader(
+        validation_set,
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
         batch_size=batch_size,
     )
 
-    model = UnifiedModel().to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2)
+    accent_model = AccentModel().to(device)
+    meter_model = MeterModel().to(device)
 
-    logging.info("Training unified model")
-    state_dict = train_model(
-        model,
-        partial(
-            train_unified, model, train_loader, optimizer, device, accent_loss_weight
-        ),
-        partial(eval_unified, model, val_loader, device, accent_loss_weight),
-        scheduler=scheduler,
+    accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=3e-4)
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
+
+    accent_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        accent_optimizer,
+        patience=2,
+    )
+    meter_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        meter_optimizer,
+        patience=2,
+    )
+
+    logging.info("Training accent model")
+    accent_state_dict = train_model(
+        accent_model,
+        partial(train_accent, accent_model, train_loader, accent_optimizer, device),
+        partial(eval_accent, accent_model, validation_loader, device),
+        scheduler=accent_scheduler,
         max_epochs=max_epochs,
         patience=patience,
     )
 
-    return state_dict
+    logging.info("Training meter model")
+    meter_state_dict = train_model(
+        meter_model,
+        partial(train_meter, meter_model, train_loader, meter_optimizer, device),
+        partial(eval_meter, meter_model, validation_loader, device),
+        scheduler=meter_scheduler,
+        max_epochs=max_epochs,
+        patience=patience,
+    )
+
+    return accent_state_dict, meter_state_dict

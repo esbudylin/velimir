@@ -9,9 +9,13 @@ TEXTS_DIR = os.path.join(DATA_DIRECTORY, "rnc", "texts")
 OUTPUT_FILE = os.path.join(DATA_DIRECTORY, "poems.msgpack")
 MODELS_DIRECTORY = os.path.join(DATA_DIRECTORY, "models")
 
-UNIFIED_MODEL = os.path.join(MODELS_DIRECTORY, "unified")
-UNIFIED_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "unified-test")
-UNIFIED_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "unified.onnx")
+METER_MODEL = os.path.join(MODELS_DIRECTORY, "meter")
+METER_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "meter-test")
+METER_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "meter.onnx")
+
+ACCENT_MODEL = os.path.join(MODELS_DIRECTORY, "accent")
+ACCENT_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "accent-test")
+ACCENT_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "accent.onnx")
 
 ACCENT_DICT_DIR = os.path.join(DATA_DIRECTORY, "accent_dicts")
 ACCENT_DICT_PATHS = [

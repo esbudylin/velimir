@@ -279,7 +279,8 @@ def process_line(
 
 
 def process_lines(
-    model,
+    meter_model,
+    accent_model,
     lines: list[str],
     stanza_breaks: list[int],
 ) -> list[ProcessedLine | None]:
@@ -310,14 +311,16 @@ def process_lines(
         chunk_accent = accent_input[indices]
         chunk_pos = pos_input[indices]
 
-        meter_logits, accent_logits = model(chunk_accent, chunk_pos)
+        meter_logits = meter_model(chunk_accent, chunk_pos)
         meter_preds = np.argmax(meter_logits, axis=1)
+        all_meter_preds[indices] = meter_preds
+
+        accent_logits = accent_model(chunk_accent, chunk_pos, meter_preds)
         accent_preds = (1.0 / (1.0 + np.exp(-accent_logits)) > 0.5).astype(np.float32)
 
         syllable_mask = ~(chunk_accent != -1).all(axis=2)
         accent_preds[syllable_mask] = -1
 
-        all_meter_preds[indices] = meter_preds
         all_accent_mask[indices] = accent_preds
 
     meters_list = [MeterClassRegistry.int_to_mc(int(mi)) for mi in all_meter_preds]

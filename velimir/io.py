@@ -3,7 +3,7 @@ from itertools import islice
 from typing import Iterator
 
 from .domain_models import Poem
-from .settings import OUTPUT_FILE, TEXTS_DIR, UNIFIED_MODEL
+from .settings import OUTPUT_FILE, TEXTS_DIR, METER_MODEL, ACCENT_MODEL
 
 
 def read_poem_xml(text_path):
@@ -49,13 +49,17 @@ def read_accent_dicts(filenames):
                 yield line
 
 
-def load_unified_model(device):
+def load_models(device):
     import torch
 
-    from .ml import UnifiedModel
+    from .ml import MeterModel, AccentModel
 
-    model = UnifiedModel().to(device)
-    model.load_state_dict(torch.load(UNIFIED_MODEL, map_location=device))
-    model.eval()
+    meter = MeterModel().to(device)
+    meter.load_state_dict(torch.load(METER_MODEL, map_location=device))
+    meter.eval()
 
-    return model
+    accent = AccentModel().to(device)
+    accent.load_state_dict(torch.load(ACCENT_MODEL, map_location=device))
+    accent.eval()
+
+    return meter, accent

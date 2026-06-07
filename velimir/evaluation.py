@@ -17,12 +17,14 @@ CREATE TABLE predictions (
     poem_path TEXT,
     line_idx INTEGER,
 
+    -- Accent (sequence)
     accent_pred TEXT,
     accent_target TEXT,
 
     meter_class_pred INTEGER,
     meter_class_target INTEGER,
 
+    -- Meter formula and caesura are converted from meter class
     meter_pred TEXT,
     meter_target TEXT,
 
@@ -85,10 +87,10 @@ def make_row(rs, accent_pred_str, accent_target_str, meter_pred_int, meter_targe
     )
 
 
-def write_rows(conn: sqlite3.Connection, table: str, rows: list[tuple]):
+def write_rows(conn: sqlite3.Connection, rows: list[tuple]):
     cursor = conn.cursor()
-    insert_sql = f"""
-        INSERT INTO {table} (
+    insert_sql = """
+        INSERT INTO predictions (
             poem_path, line_idx,
             accent_pred, accent_target,
             meter_class_pred, meter_class_target,
@@ -100,8 +102,9 @@ def write_rows(conn: sqlite3.Connection, table: str, rows: list[tuple]):
     cursor.executemany(insert_sql, rows)
 
 
-def evaluate_unified(
-    model,
+def evaluate_models(
+    meter_model,
+    accent_model,
     device: torch.device,
     test_chunks: list[list[RawSample]],
     conn: sqlite3.Connection,
@@ -145,18 +148,22 @@ def evaluate_unified(
                 [rs.meter_class for rs in chunk_lines], dtype=torch.long
             ).to(device)
 
-            meter_logits, accent_logits = model(accent_input, pos_input)
+            meter_logits = meter_model(accent_input, pos_input)
             pred_meter = torch.argmax(meter_logits, dim=1)
-            pred_accent = (torch.sigmoid(accent_logits) > 0.5).float()
 
             meter_correct += (pred_meter == meter_target).sum().item()
             meter_total += len(meter_target)
+
+            accent_logits = accent_model(accent_input, pos_input, pred_meter)
+            pred_accent = (torch.sigmoid(accent_logits) > 0.5).float()
 
             out_T = accent_logits.shape[1]
             accent_target_trunc = accent_target[:, :out_T]
             accent_mask = accent_target_trunc != -1
             accent_correct += (
-                (pred_accent[accent_mask] == accent_target_trunc[accent_mask]).sum().item()
+                (pred_accent[accent_mask] == accent_target_trunc[accent_mask])
+                .sum()
+                .item()
             )
             accent_total += accent_mask.sum().item()
 
@@ -176,7 +183,7 @@ def evaluate_unified(
         samples, accent_pred_strs, accent_target_strs, meter_preds
     ):
         rows.append(make_row(rs, rp, rt, int(mi), rs.meter_class))
-    write_rows(conn, "predictions", rows)
+    write_rows(conn, rows)
 
     return {
         "meter_accuracy": meter_accuracy,
