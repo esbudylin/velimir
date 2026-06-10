@@ -88,21 +88,24 @@ To run the test suite for the project, use
 Velimir uses two sequential neural networks trained on a corpus of
 Russian poetry.
 
-The first model, meter detection, takes each line of a poem and
-predicts the metrical form of the line. As inputs, it accepts
-binary masks showing line's linguistic accents and word boundaries. It
-also accepts mean linguistic accent rate accross the stanza for each
-syllable in the line.
+Before processing, a poem is split into chunks of ~12 lines. Models
+process a poem by chunk, rather than line by line - this provides them
+with necessary context.
+
+The first model, meter detection, takes a chunk and predicts the
+metrical form of each line in the chunk. As inputs, it accepts binary
+arrays showing each line's linguistic accents and word boundaries. It
+also accepts part-of-speech tags for each word in a line.
 
 The second model predicts the poetic accents of the line. It accepts
-the same input as the first model plus the predicted meter.
+the same input as the first model plus the predicted meters.
 
 # TODO add an example
 
 # TODO explain meter classification
 
-Evaluating the models on the test dataset shows 93.7% accuracy for
-accent detection and 94.2% accuracy for meter detection.
+Evaluating the models on the test dataset shows 95% accuracy for
+accent detection and 95.5% accuracy for meter detection.
 
 Accuracy varies by meter type. The graph below shows accuracy of meter
 and accent detection contrasted with the frequency of each meter type
