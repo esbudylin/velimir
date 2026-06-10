@@ -15,10 +15,10 @@ from .nlp import PartOfSpeech
 
 
 class SharedEncoder(nn.Module):
-    def __init__(self, hidden=128, num_pos_classes=None, pos_emb_dim=8):
+    def __init__(self, hidden=128, pos_emb_dim=8):
         super().__init__()
-        if num_pos_classes is None:
-            num_pos_classes = len(PartOfSpeech) + 1
+
+        num_pos_classes = len(PartOfSpeech) + 1
 
         self.pos_emb = nn.Embedding(num_pos_classes, pos_emb_dim, padding_idx=0)
 
