@@ -207,11 +207,17 @@ View для сбора ошибок при определении метра
   SELECT
       p.*,
       CASE
+          WHEN caesura_target <> '' THEN 'caesura'
+          WHEN meter_target IN ('Ак', 'Тк', 'Дк') THEN 'tonic'
+          WHEN meter_target IN ('Я', 'Х', 'Аф', 'Ан', 'Д') THEN 'syllabo_tonic'
+          ELSE 'other'
+      END AS target_category,
+      CASE
           WHEN caesura_pred <> '' THEN 'caesura'
           WHEN meter_pred IN ('Ак', 'Тк', 'Дк') THEN 'tonic'
           WHEN meter_pred IN ('Я', 'Х', 'Аф', 'Ан', 'Д') THEN 'syllabo_tonic'
           ELSE 'other'
-      END AS stratum
+      END AS pred_category
   FROM predictions p
   WHERE meter_class_target <> meter_class_pred;
 #+end_src
@@ -227,15 +233,12 @@ View для сбора ошибок при определении метра
 #+begin_src sqlite
   CREATE VIEW error_strata AS
   SELECT
-      meter_class_target,
-      meter_target,
+      target_category,
+      pred_category,
       COUNT(*) AS total_errors,
-      ROUND(SUM(CASE WHEN stratum = 'caesura' THEN 1 ELSE 0 END) * 1.0 / COUNT(*), 4) AS caesura_pct,
-      ROUND(SUM(CASE WHEN stratum = 'tonic' THEN 1 ELSE 0 END) * 1.0 / COUNT(*), 4) AS tonic_pct,
-      ROUND(SUM(CASE WHEN stratum = 'syllabo_tonic' THEN 1 ELSE 0 END) * 1.0 / COUNT(*), 4) AS syllabo_tonic_pct,
-      ROUND(SUM(CASE WHEN stratum = 'other' THEN 1 ELSE 0 END) * 1.0 / COUNT(*), 4) AS other_pct
+      ROUND(COUNT(*) * 1.0 / SUM(COUNT(*)) OVER (), 4) AS freq
   FROM error_details
-  GROUP BY meter_class_target
+  GROUP BY target_category, pred_category
   ORDER BY total_errors DESC;
 #+end_src
 
@@ -246,29 +249,24 @@ View для сбора ошибок при определении метра
 #+end_src
 
 #+RESULTS:
-| meter_class_target | meter_target | total_errors | caesura_pct | tonic_pct | syllabo_tonic_pct | other_pct |
-|--------------------+--------------+--------------+-------------+-----------+-------------------+-----------|
-|                  3 | Дк           |          922 |      0.2202 |     0.321 |            0.3742 |    0.0846 |
-|                  0 | Я            |          443 |      0.0835 |    0.3973 |            0.3138 |    0.2054 |
-|                  1 | Х            |          421 |      0.0736 |    0.3872 |            0.3444 |    0.1948 |
-|                  6 | Тк           |          266 |      0.0865 |    0.5789 |             0.312 |    0.0226 |
-|                  5 | Д            |          207 |      0.0145 |    0.3816 |            0.2609 |     0.343 |
-|                  4 | Аф           |          191 |      0.1152 |    0.5707 |            0.2461 |    0.0681 |
-|                  2 | Ан           |          185 |      0.1135 |    0.6541 |            0.2054 |     0.027 |
-|                  8 | Ак           |           91 |      0.0549 |    0.8791 |             0.044 |     0.022 |
-|                 11 | Л            |           46 |      0.2609 |    0.5435 |            0.1957 |       0.0 |
-|                  9 | С            |           38 |      0.4474 |    0.2105 |            0.2895 |    0.0526 |
-|                  7 | Гек          |           31 |      0.0645 |    0.2903 |            0.6452 |       0.0 |
-|                 17 | Дк~          |           20 |        0.75 |       0.1 |              0.05 |       0.1 |
-|                 13 | Д~Д          |           19 |         0.0 |    0.9474 |            0.0526 |       0.0 |
-|                 14 | Ан~Ан        |           18 |      0.6667 |    0.2778 |            0.0556 |       0.0 |
-|                 16 | Х*           |           14 |         0.0 |    0.1429 |            0.8571 |       0.0 |
-|                 18 | Я*           |           12 |         0.0 |       0.0 |               1.0 |       0.0 |
-|                 12 | Х~Х          |           10 |         0.0 |       0.3 |               0.6 |       0.1 |
-|                 10 | Я~Я          |            9 |         0.0 |    0.4444 |            0.3333 |    0.2222 |
-|                 19 | Пен          |            5 |         0.4 |       0.2 |               0.2 |       0.2 |
-|                 15 | Х~Х          |            4 |         0.0 |       0.0 |               0.0 |       1.0 |
-|                 20 | Аф~Аф        |            2 |         0.0 |       1.0 |               0.0 |       0.0 |
+| target_category | pred_category | total_errors |   freq |
+|-----------------+---------------+--------------+--------|
+| syllabo_tonic   | tonic         |          648 | 0.2194 |
+| tonic           | tonic         |          530 | 0.1794 |
+| tonic           | syllabo_tonic |          432 | 0.1462 |
+| syllabo_tonic   | syllabo_tonic |          423 | 0.1432 |
+| syllabo_tonic   | other         |          262 | 0.0887 |
+| tonic           | caesura       |          231 | 0.0782 |
+| syllabo_tonic   | caesura       |          114 | 0.0386 |
+| tonic           | other         |           86 | 0.0291 |
+| other           | syllabo_tonic |           65 |  0.022 |
+| other           | tonic         |           45 | 0.0152 |
+| caesura         | tonic         |           34 | 0.0115 |
+| other           | caesura       |           33 | 0.0112 |
+| caesura         | caesura       |           27 | 0.0091 |
+| caesura         | syllabo_tonic |           12 | 0.0041 |
+| caesura         | other         |            9 |  0.003 |
+| other           | other         |            3 |  0.001 |
 
 Распределение правильных предсказаний метра по количеству стоп в строке
 #+begin_src sqlite
