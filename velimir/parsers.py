@@ -161,8 +161,8 @@ def extract_syllable_features(
     rhythm_accents = rhythm_accents or []
 
     if not sum(poetic_accents) and sum(rhythm_accents):
-        # Ударения не размечены
-        # Используем разметку ритма вместо них
+        delayed_logger.record()
+        logging.warning("Accents are not marked. Using line formula rhythm instead")
         poetic_accents = rhythm_accents
 
     cleaned_line = clean_line(accentuator.remove_accent_marks(line))

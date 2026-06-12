@@ -62,7 +62,11 @@ def meters_to_str(mc: MeterClass):
             mstr += "*"
         acc.append(mstr)
 
-    return "~".join(acc)
+    match acc:
+        case [only] if mc.caesura:
+            return only + "~"
+        case _:
+            return "~".join(acc)
 
 
 def caesura_to_str(li):
