@@ -67,11 +67,14 @@ if __name__ == "__main__":
         "--batch-size",
         type=int,
         default=argparse.SUPPRESS,
-        help="Batch size for training (default: 512)",
+        help="Batch size for training",
     )
     args = parser.parse_args()
 
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
-    train(test_run=args.test_run, **{k: v for k, v in vars(args).items() if k != "test_run"})
+    train(
+        test_run=args.test_run,
+        **{k: v for k, v in vars(args).items() if k != "test_run"},
+    )

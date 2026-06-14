@@ -268,7 +268,7 @@ def train_models(
     validation_set,
     max_epochs=100,
     patience=6,
-    batch_size=512,
+    batch_size=1024,
     num_workers=4,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
