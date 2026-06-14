@@ -1,7 +1,7 @@
-{"meter_types": [0], "caesura": [], "unstable": [false], "count": 1470648}
-{"meter_types": [1], "caesura": [], "unstable": [false], "count": 514006}
-{"meter_types": [3], "caesura": [], "unstable": [false], "count": 210302}
-{"meter_types": [5], "caesura": [], "unstable": [false], "count": 205204}
+{"meter_types": [0], "caesura": [], "unstable": [false], "count": 1470655}
+{"meter_types": [1], "caesura": [], "unstable": [false], "count": 514007}
+{"meter_types": [3], "caesura": [], "unstable": [false], "count": 210301}
+{"meter_types": [5], "caesura": [], "unstable": [false], "count": 205201}
 {"meter_types": [4], "caesura": [], "unstable": [false], "count": 201402}
 {"meter_types": [2], "caesura": [], "unstable": [false], "count": 135175}
 {"meter_types": [6], "caesura": [], "unstable": [false], "count": 39540}
@@ -17,6 +17,3 @@
 {"meter_types": [1], "caesura": [], "unstable": [true], "count": 1095}
 {"meter_types": [5], "caesura": ["1/2"], "unstable": [false], "count": 789}
 {"meter_types": [0], "caesura": [], "unstable": [true], "count": 511}
-{"meter_types": [10], "caesura": [], "unstable": [false], "count": 386}
-{"meter_types": [4, 4], "caesura": ["1/2"], "unstable": [false, false], "count": 318}
-{"meter_types": [3, 3], "caesura": ["2/5"], "unstable": [false, false], "count": 278}
