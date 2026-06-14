@@ -20,10 +20,8 @@ from velimir.settings import (
 )
 
 
-def train(test_run: bool = False):
+def train(test_run: bool = False, **training_kwargs):
     logging.info("Loading poems from msgpack")
-
-    training_kwargs = {}
 
     poems = load_poems_from_msgpack()
     raw_samples = fetch_raw_samples(poems)
@@ -65,9 +63,15 @@ if __name__ == "__main__":
         action="store_true",
         help="Run training on a small subset of data for testing purposes",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=argparse.SUPPRESS,
+        help="Batch size for training (default: 512)",
+    )
     args = parser.parse_args()
 
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
-    train(test_run=args.test_run)
+    train(test_run=args.test_run, **{k: v for k, v in vars(args).items() if k != "test_run"})

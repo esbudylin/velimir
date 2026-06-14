@@ -34,7 +34,7 @@ endef
 
 define SCRIPT_TARGET_WITH_TESTS
 $(call TO_KEBAB, $(1)):
-	$(Q)LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py
+	$(Q)LOG_FILE=$(LOG_DIR)/$(1).log $(PYTHON) $(2)/$(1).py $(3)
 
 $(call TO_KEBAB, $(1))-test:
 	$(Q)LOG_FILE=$(LOG_DIR)/$(1)_test.log $(PYTHON) $(2)/$(1).py --test-run
@@ -42,7 +42,7 @@ endef
 
 $(eval $(call SCRIPT_TARGET,markup,entry))
 
-$(eval $(call SCRIPT_TARGET_WITH_TESTS,train,entry))
+$(eval $(call SCRIPT_TARGET_WITH_TESTS,train,entry,$(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE))))
 
 $(eval $(call SCRIPT_TARGET,evaluate_models,entry))
 
