@@ -16,6 +16,7 @@ predictions_schema = """
 CREATE TABLE predictions (
     poem_path TEXT,
     line_idx INTEGER,
+    chunk_idx INTEGER,
 
     -- Accent (sequence)
     accent_pred TEXT,
@@ -80,6 +81,7 @@ def make_row(rs, accent_pred_str, accent_target_str, meter_pred_int, meter_targe
     return (
         rs.poem_path,
         rs.line_idx,
+        rs.chunk_idx,
         accent_pred_str,
         accent_target_str,
         meter_pred_int,
@@ -95,13 +97,13 @@ def write_rows(conn: sqlite3.Connection, rows: list[tuple]):
     cursor = conn.cursor()
     insert_sql = """
         INSERT INTO predictions (
-            poem_path, line_idx,
+            poem_path, line_idx, chunk_idx,
             accent_pred, accent_target,
             meter_class_pred, meter_class_target,
             meter_pred, meter_target,
             caesura_pred, caesura_target
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     cursor.executemany(insert_sql, rows)
 

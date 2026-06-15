@@ -1,0 +1,161 @@
+#+PROPERTY: header-args:R :session prediction-ci
+#+PROPERTY: header-args :dir ..
+
+#+begin_src R
+  library(RSQLite)
+  library(dplyr)
+  library(ClusterBootstrap)
+#+end_src
+
+#+RESULTS:
+| ClusterBootstrap |
+| dplyr            |
+| RSQLite          |
+| stats            |
+| graphics         |
+| grDevices        |
+| utils            |
+| datasets         |
+| methods          |
+| base             |
+
+#+begin_src R
+  con <- dbConnect(SQLite(), "data/predictions.db")
+
+  df <- dbGetQuery(con, "
+    SELECT *
+    FROM predictions
+  ")
+
+  dbDisconnect(con)
+#+end_src
+
+#+RESULTS:
+: TRUE
+
+#+begin_src R :results output
+  df$uniq_chunk_id <- paste(df$poem_path, df$chunk_idx, sep = "::")
+#+end_src
+
+#+RESULTS:
+
+#+begin_src R :results output
+  meter_classes <- sort(unique(df$meter_class_target))
+#+end_src
+
+#+RESULTS:
+
+#+begin_src R
+  meter_class_names <- sapply(meter_classes, function(k) {
+    row <- df[df$meter_class_target == k, ][1, ]
+
+    paste(row$meter_target, row$caesura_target, sep = " ")
+  })
+#+end_src
+
+#+RESULTS:
+| Я         |
+| Х         |
+| Ан        |
+| Дк        |
+| Аф        |
+| Д         |
+| Тк        |
+| Гек       |
+| Ак        |
+| С         |
+| Я~Я 1/2   |
+| Л         |
+| Х~Х 1/2   |
+| Д~Д 1/2   |
+| Ан~Ан 1/2 |
+| Х~Х 4/7   |
+| Х*        |
+| Дк~ 1/2   |
+| Я*        |
+
+#+begin_src R
+  set.seed(986355)
+
+  cb <- clusterBootstrap(
+    df,
+    clusters = c("uniq_chunk_id"),
+    replace = c(TRUE),
+    stat_fun = function(df) {
+      class_acc <- sapply(meter_classes, function(k) {
+
+          idx <- df$meter_class_target == k
+
+          if (sum(idx) == 0) return(NA_real_)
+
+          mean(df$meter_class_pred[idx] == df$meter_class_target[idx])
+      })
+
+      names(class_acc) <- meter_class_names
+
+      c(
+        accent_acc = mean(df$accent_pred == df$accent_target),
+        meter_acc = mean(df$meter_class_pred == df$meter_class_target),
+        class_acc
+      )
+    },
+    B = 10000
+  )
+#+end_src
+
+#+RESULTS:
+
+#+begin_src R
+  roundResults <- function(res) {
+    lapply(res, function(col) {
+      if (is.numeric(col)) signif(col, 3) else col
+    })
+  }
+#+end_src
+
+#+RESULTS:
+
+#+begin_src R
+  roundResults(
+    confint(
+      cb,
+      level = 0.95,
+      parm = c("accent_acc", "meter_acc")
+    )
+  )
+#+end_src
+
+#+RESULTS:
+| accent_acc | 0.934 | 0.943 |
+| meter_acc  | 0.932 | 0.941 |
+
+#+begin_src R
+  roundResults(
+    confint(
+      cb,
+      level = 0.95,
+      parm = meter_class_names
+    )
+  )
+#+end_src
+
+#+RESULTS:
+| Я         |  0.976 | 0.983 |
+| Х         |  0.946 | 0.963 |
+| Ан        |   0.91 | 0.941 |
+| Дк        |  0.732 | 0.782 |
+| Аф        |  0.938 | 0.961 |
+| Д         |  0.879 | 0.924 |
+| Тк        |  0.459 | 0.572 |
+| Гек       |  0.885 | 0.976 |
+| Ак        |   0.45 | 0.603 |
+| С         |   0.66 |  0.96 |
+| Я~Я 1/2   |  0.712 | 0.981 |
+| Л         | 0.0426 | 0.571 |
+| Х~Х 1/2   |   0.69 |  0.96 |
+| Д~Д 1/2   |  0.778 | 0.965 |
+| Ан~Ан 1/2 |  0.232 |     1 |
+| Х~Х 4/7   |  0.732 |     1 |
+| Х*        |  0.167 | 0.844 |
+| Дк~ 1/2   |      0 |   0.6 |
+| Я*        |      0 | 0.706 |
