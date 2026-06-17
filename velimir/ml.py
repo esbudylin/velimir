@@ -266,6 +266,8 @@ def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
 def train_models(
     train_set,
     validation_set,
+    accent_seed,
+    meter_seed,
     max_epochs=100,
     patience=6,
     batch_size=1024,
@@ -290,18 +292,12 @@ def train_models(
         batch_size=batch_size,
     )
 
+    torch.manual_seed(accent_seed)
     accent_model = AccentModel().to(device)
-    meter_model = MeterModel().to(device)
 
     accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=3e-4)
-    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
-
     accent_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         accent_optimizer,
-        patience=2,
-    )
-    meter_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        meter_optimizer,
         patience=2,
     )
 
@@ -313,6 +309,15 @@ def train_models(
         scheduler=accent_scheduler,
         max_epochs=max_epochs,
         patience=patience,
+    )
+
+    torch.manual_seed(meter_seed)
+    meter_model = MeterModel().to(device)
+
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
+    meter_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        meter_optimizer,
+        patience=2,
     )
 
     logging.info("Training meter model")

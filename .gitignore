@@ -5,6 +5,8 @@ __pycache__
 logs/
 data/models/accent-test
 data/models/meter-test
+data/models/sweep
+data/models/sweep-test
 data/predictions.db
 data/pos_accent.db
 data/pos_accent_test.db
