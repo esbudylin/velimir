@@ -147,7 +147,7 @@ def split_chunks(
     raw_samples: Iterator[RawSample],
     test_ratio: float = 0.02,
     val_ratio: float = 0.02,
-    seed: int = 42,
+    seed: int = 195968,
 ):
     all_chunks: list[list[RawSample]] = []
     current_key = None
