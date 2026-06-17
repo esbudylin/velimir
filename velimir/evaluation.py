@@ -125,6 +125,7 @@ def evaluate_models(
     meter_correct = 0
     meter_total = 0
     accent_correct = 0
+    accent_correct_gt = 0
     accent_total = 0
     global_offset = 0
 
@@ -163,11 +164,19 @@ def evaluate_models(
             accent_logits = accent_model(accent_input, pos_input, pred_meter)
             pred_accent = (torch.sigmoid(accent_logits) > 0.5).float()
 
+            accent_logits_gt = accent_model(accent_input, pos_input, meter_target)
+            pred_accent_gt = (torch.sigmoid(accent_logits_gt) > 0.5).float()
+
             out_T = accent_logits.shape[1]
             accent_target_trunc = accent_target[:, :out_T]
             accent_mask = accent_target_trunc != -1
             accent_correct += (
                 (pred_accent[accent_mask] == accent_target_trunc[accent_mask])
+                .sum()
+                .item()
+            )
+            accent_correct_gt += (
+                (pred_accent_gt[accent_mask] == accent_target_trunc[accent_mask])
                 .sum()
                 .item()
             )
@@ -183,6 +192,7 @@ def evaluate_models(
 
     meter_accuracy = meter_correct / meter_total if meter_total else 0.0
     accent_accuracy = accent_correct / accent_total if accent_total else 0.0
+    accent_accuracy_gt = accent_correct_gt / accent_total if accent_total else 0.0
 
     rows = []
     for rs, rp, rt, mi in zip(
@@ -194,4 +204,5 @@ def evaluate_models(
     return {
         "meter_accuracy": meter_accuracy,
         "accent_accuracy": accent_accuracy,
+        "accent_accuracy_gt": accent_accuracy_gt,
     }
