@@ -111,8 +111,7 @@ def main(test_run: bool = False):
             "run": run_id,
             "accent_seed": accent_seed,
             "meter_seed": meter_seed,
-            "test_meter_accuracy": eval_results["meter_accuracy"],
-            "test_accent_accuracy": eval_results["accent_accuracy"],
+            **eval_results,
             **asdict(metrics),
         }
 
