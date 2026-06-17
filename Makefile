@@ -58,6 +58,8 @@ $(eval $(call SCRIPT_TARGET,export_onnx,scripts))
 
 $(eval $(call SCRIPT_TARGET,evaluate_onnx,scripts))
 
+$(eval $(call SCRIPT_TARGET_WITH_TESTS,seed_sweep,scripts))
+
 test:
 	$(PYTHON) -m unittest discover tests
 

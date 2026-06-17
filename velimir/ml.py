@@ -1,5 +1,6 @@
 import copy
 import logging
+from dataclasses import dataclass
 from functools import partial
 
 import torch
@@ -12,6 +13,14 @@ from .ml_loader import (
     get_loader,
 )
 from .nlp import PartOfSpeech
+
+
+@dataclass
+class TrainingMetrics:
+    accent_val_loss: float
+    accent_epochs: int
+    meter_val_loss: float
+    meter_epochs: int
 
 
 class SharedEncoder(nn.Module):
@@ -260,12 +269,14 @@ def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
                 logging.info("Early stopping triggered at epoch %d", epoch)
                 break
 
-    return best_state_dict
+    return best_state_dict, best_validation_loss, epoch + 1
 
 
 def train_models(
     train_set,
     validation_set,
+    accent_seed,
+    meter_seed,
     max_epochs=100,
     patience=6,
     batch_size=1024,
@@ -290,23 +301,17 @@ def train_models(
         batch_size=batch_size,
     )
 
+    torch.manual_seed(accent_seed)
     accent_model = AccentModel().to(device)
-    meter_model = MeterModel().to(device)
 
     accent_optimizer = torch.optim.Adam(accent_model.parameters(), lr=3e-4)
-    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
-
     accent_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         accent_optimizer,
         patience=2,
     )
-    meter_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        meter_optimizer,
-        patience=2,
-    )
 
     logging.info("Training accent model")
-    accent_state_dict = train_model(
+    accent_state_dict, accent_val_loss, accent_epochs = train_model(
         accent_model,
         partial(train_accent, accent_model, train_loader, accent_optimizer, device),
         partial(eval_accent, accent_model, validation_loader, device),
@@ -315,8 +320,17 @@ def train_models(
         patience=patience,
     )
 
+    torch.manual_seed(meter_seed)
+    meter_model = MeterModel().to(device)
+
+    meter_optimizer = torch.optim.Adam(meter_model.parameters(), lr=3e-4)
+    meter_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        meter_optimizer,
+        patience=2,
+    )
+
     logging.info("Training meter model")
-    meter_state_dict = train_model(
+    meter_state_dict, meter_val_loss, meter_epochs = train_model(
         meter_model,
         partial(train_meter, meter_model, train_loader, meter_optimizer, device),
         partial(eval_meter, meter_model, validation_loader, device),
@@ -325,4 +339,11 @@ def train_models(
         patience=patience,
     )
 
-    return accent_state_dict, meter_state_dict
+    metrics = TrainingMetrics(
+        accent_val_loss=accent_val_loss,
+        accent_epochs=accent_epochs,
+        meter_val_loss=meter_val_loss,
+        meter_epochs=meter_epochs,
+    )
+
+    return accent_state_dict, meter_state_dict, metrics

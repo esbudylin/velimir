@@ -40,7 +40,7 @@ def train(test_run: bool = False, **training_kwargs):
 
     train_chunks, val_chunks, _ = split_chunks(raw_samples)
 
-    accent_state_dict, meter_state_dict = train_models(
+    accent_state_dict, meter_state_dict, _ = train_models(
         train_chunks,
         val_chunks,
         **training_kwargs,
@@ -74,9 +74,9 @@ if __name__ == "__main__":
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
-    torch.manual_seed(138499)
-
     train(
         test_run=args.test_run,
+        accent_seed=138499,
+        meter_seed=138499,
         **{k: v for k, v in vars(args).items() if k != "test_run"},
     )
