@@ -74,9 +74,9 @@ if __name__ == "__main__":
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
 
-    torch.manual_seed(138499)
-
     train(
         test_run=args.test_run,
+        accent_seed=1046019622,
+        meter_seed=2124279353,
         **{k: v for k, v in vars(args).items() if k != "test_run"},
     )
