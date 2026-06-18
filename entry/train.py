@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     train(
         test_run=args.test_run,
-        accent_seed=138499,
-        meter_seed=138499,
+        accent_seed=1046019622,
+        meter_seed=2124279353,
         **{k: v for k, v in vars(args).items() if k != "test_run"},
     )
