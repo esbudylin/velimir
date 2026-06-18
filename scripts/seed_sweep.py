@@ -56,6 +56,13 @@ def reevaluate(test_run: bool = False):
     output_dir = TEST_OUTPUT_DIR if test_run else OUTPUT_DIR
     results_path = output_dir / "results.jsonl"
 
+    if not results_path.exists():
+        logging.error("No results file at %s", results_path)
+        return
+
+    with open(results_path) as f:
+        results = [json.loads(line) for line in f if line.strip()]
+
     logging.info("Loading data for re-evaluation...")
     poems = load_poems_from_msgpack()
     raw_samples = fetch_raw_samples(poems)
@@ -65,9 +72,9 @@ def reevaluate(test_run: bool = False):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    results = []
-
-    for run_id in range(RUNS):
+    updated = False
+    for entry in results:
+        run_id = entry["run"]
         run_dir = output_dir / f"run_{run_id:03d}"
         accent_path = run_dir / "accent"
         meter_path = run_dir / "meter"
@@ -85,12 +92,25 @@ def reevaluate(test_run: bool = False):
             batch_size=8 if test_run else None,
         )
 
-        results.append(eval_results)
+        for k, v in eval_results.items():
+            old = entry.get(k)
+            entry[k] = v
+            if old != v:
+                updated = True
+                logging.info(
+                    "  %s: %s -> %s",
+                    k,
+                    round(old, 4) if isinstance(old, float) else old,
+                    round(v, 4),
+                )
 
-    with open(results_path, "w") as f:
-        for entry in results:
-            f.write(json.dumps(entry) + "\n")
-    logging.info("Updated %s with new metrics", results_path)
+    if updated:
+        with open(results_path, "w") as f:
+            for entry in results:
+                f.write(json.dumps(entry) + "\n")
+        logging.info("Updated %s with new metrics", results_path)
+    else:
+        logging.info("All metrics unchanged, nothing written")
 
 
 def main(test_run: bool = False):
