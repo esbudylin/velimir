@@ -23,6 +23,96 @@ TEST_OUTPUT_DIR = Path("data/models/sweep-test")
 TEST_SUBSET = 1000
 
 
+def load_and_eval(accent_path, meter_path, test_chunks, device, batch_size=None):
+    accent_model = AccentModel().to(device)
+    accent_model.load_state_dict(torch.load(accent_path, map_location=device))
+    accent_model.eval()
+
+    meter_model = MeterModel().to(device)
+    meter_model.load_state_dict(torch.load(meter_path, map_location=device))
+    meter_model.eval()
+
+    kwargs = {}
+    if batch_size is not None:
+        kwargs["batch_size"] = batch_size
+
+    conn = init_db(":memory:")
+    eval_results = evaluate_models(
+        meter_model,
+        accent_model,
+        device,
+        test_chunks,
+        conn,
+        **kwargs,
+    )
+    conn.close()
+    return eval_results
+
+
+def reevaluate(test_run: bool = False):
+    LoggingSettings.setup()
+    MeterClassRegistry.initialize()
+
+    output_dir = TEST_OUTPUT_DIR if test_run else OUTPUT_DIR
+    results_path = output_dir / "results.jsonl"
+
+    if not results_path.exists():
+        logging.error("No results file at %s", results_path)
+        return
+
+    with open(results_path) as f:
+        results = [json.loads(line) for line in f if line.strip()]
+
+    logging.info("Loading data for re-evaluation...")
+    poems = load_poems_from_msgpack()
+    raw_samples = fetch_raw_samples(poems)
+    if test_run:
+        raw_samples = islice(raw_samples, TEST_SUBSET)
+    _, _, test_chunks = split_chunks(raw_samples)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    updated = False
+    for entry in results:
+        run_id = entry["run"]
+        run_dir = output_dir / f"run_{run_id:03d}"
+        accent_path = run_dir / "accent"
+        meter_path = run_dir / "meter"
+
+        if not accent_path.exists() or not meter_path.exists():
+            logging.warning("Run %d: missing model files, skipping", run_id)
+            continue
+
+        logging.info("Re-evaluating run %d...", run_id)
+        eval_results = load_and_eval(
+            accent_path,
+            meter_path,
+            test_chunks,
+            device,
+            batch_size=8 if test_run else None,
+        )
+
+        for k, v in eval_results.items():
+            old = entry.get(k)
+            entry[k] = v
+            if old != v:
+                updated = True
+                logging.info(
+                    "  %s: %s -> %s",
+                    k,
+                    round(old, 4) if isinstance(old, float) else old,
+                    round(v, 4),
+                )
+
+    if updated:
+        with open(results_path, "w") as f:
+            for entry in results:
+                f.write(json.dumps(entry) + "\n")
+        logging.info("Updated %s with new metrics", results_path)
+    else:
+        logging.info("All metrics unchanged, nothing written")
+
+
 def main(test_run: bool = False):
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
@@ -86,26 +176,13 @@ def main(test_run: bool = False):
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        accent_model = AccentModel().to(device)
-        accent_model.load_state_dict(accent_state_dict)
-        accent_model.eval()
-
-        meter_model = MeterModel().to(device)
-        meter_model.load_state_dict(meter_state_dict)
-        meter_model.eval()
-
-        eval_batch_size = training_kwargs.get("batch_size", 1024)
-
-        conn = init_db(":memory:")
-        eval_results = evaluate_models(
-            meter_model,
-            accent_model,
-            device,
+        eval_results = load_and_eval(
+            run_dir / "accent",
+            run_dir / "meter",
             test_chunks,
-            conn,
-            batch_size=eval_batch_size,
+            device,
+            batch_size=training_kwargs.get("batch_size"),
         )
-        conn.close()
 
         run_result = {
             "run": run_id,
@@ -141,6 +218,14 @@ if __name__ == "__main__":
         action="store_true",
         help="Use small data subset and few epochs for testing",
     )
+    parser.add_argument(
+        "--reevaluate",
+        action="store_true",
+        help="Re-evaluate saved models and update results.jsonl with new metrics",
+    )
     args = parser.parse_args()
 
-    main(args.test_run)
+    if args.reevaluate:
+        reevaluate(args.test_run)
+    else:
+        main(args.test_run)
