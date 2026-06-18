@@ -126,6 +126,8 @@ def evaluate_models(
     meter_total = 0
     accent_correct = 0
     accent_correct_gt = 0
+    accent_line_correct = 0
+    accent_line_correct_gt = 0
     accent_total = 0
     global_offset = 0
 
@@ -185,6 +187,15 @@ def evaluate_models(
             pred_accent_masked = pred_accent.masked_fill(~accent_mask, -1)
 
             for local_idx, rs in enumerate(chunk_lines):
+                mask = accent_mask[local_idx]
+                pred_line = pred_accent[local_idx][mask]
+                target_line = accent_target_trunc[local_idx][mask]
+                if pred_line.equal(target_line):
+                    accent_line_correct += 1
+                pred_line_gt = pred_accent_gt[local_idx][mask]
+                if pred_line_gt.equal(target_line):
+                    accent_line_correct_gt += 1
+
                 meter_preds[global_offset] = pred_meter[local_idx]
                 accent_pred_strs.append(rhythm_to_str(pred_accent_masked[local_idx]))
                 accent_target_strs.append(rhythm_to_str(accent_target_trunc[local_idx]))
@@ -193,6 +204,8 @@ def evaluate_models(
     meter_accuracy = meter_correct / meter_total if meter_total else 0.0
     accent_accuracy = accent_correct / accent_total if accent_total else 0.0
     accent_accuracy_gt = accent_correct_gt / accent_total if accent_total else 0.0
+    accent_line_accuracy = accent_line_correct / meter_total if meter_total else 0.0
+    accent_line_accuracy_gt = accent_line_correct_gt / meter_total if meter_total else 0.0
 
     rows = []
     for rs, rp, rt, mi in zip(
@@ -205,4 +218,6 @@ def evaluate_models(
         "meter_accuracy": meter_accuracy,
         "accent_accuracy": accent_accuracy,
         "accent_accuracy_gt": accent_accuracy_gt,
+        "accent_line_accuracy": accent_line_accuracy,
+        "accent_line_accuracy_gt": accent_line_accuracy_gt,
     }
