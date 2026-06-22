@@ -29,24 +29,10 @@ class ProcessedLine:
     @staticmethod
     def _mask_to_string(mask: list[bool], caesura: list[int]):
         caesura_mark = "|"
-        acccent_mark = "*"
+        accent_mark = "*"
 
         def ms(mask):
-            res = ""
-            accentless_syllables = 0
-
-            for i, has_accent in enumerate(mask):
-                if has_accent:
-                    res += str(accentless_syllables)
-                    accentless_syllables = 0
-
-                    res += acccent_mark
-                else:
-                    accentless_syllables += 1
-
-            res += str(accentless_syllables)
-
-            return res
+            return accent_mark.join(map(str, extract_rhythm(mask)))
 
         match caesura:
             case []:
@@ -57,6 +43,22 @@ class ProcessedLine:
                 return caesura_mark.join(map(ms, (mask[:ca], mask[ca:cb], mask[cb:])))
             case _:
                 raise ValueError("Invalid caesura sequence length")
+
+
+def extract_rhythm(accent_mask: list[bool]):
+    res = []
+    accentless_syllables = 0
+
+    for has_accent in accent_mask:
+        if has_accent:
+            res.append(accentless_syllables)
+            accentless_syllables = 0
+        else:
+            accentless_syllables += 1
+
+    res.append(accentless_syllables)
+
+    return res
 
 
 def pad_and_stack(arrays, pad_value=-1):
@@ -247,6 +249,24 @@ def extract_caesura_from_word_endings(
     return clausula_pos + first_word_end_pos + 1
 
 
+def extract_feet(meter_type: MeterType, meter_mask: list[bool]) -> int:
+    stress_count = sum(meter_mask)
+
+    # в силлабике размечается количество слогов, а не ударений
+    if meter_type == MeterType.SYLLABIC:
+        return len(meter_mask)
+
+    if meter_type in (MeterType.DOLNIK, MeterType.TAKTOVIK):
+        # отсекаем анакрусу и клаузлу
+        rhythm = extract_rhythm(meter_mask)[1:-1]
+
+        # специальный случай: виртуальный икт
+        if rhythm and max(rhythm) >= 4:
+            return stress_count + 1
+
+    return stress_count
+
+
 def process_line(
     mc: MeterClass,
     pmask: list[bool],
@@ -265,7 +285,7 @@ def process_line(
         line_meters.append(
             Meter(
                 meter=meter_type,
-                feet=len([i for i in meter_mask if i]),
+                feet=extract_feet(meter_type, meter_mask),
                 clausula=extract_clausula(meter_mask),
                 unstable=mc.unstable[i],
             )
@@ -328,7 +348,7 @@ def process_lines(
     poetic_accents_list = []
     for mask in all_accent_mask:
         valid = mask[mask != -1]
-        poetic_accents_list.append(valid.tolist())
+        poetic_accents_list.append(valid.astype(bool).tolist())
 
     res = []
     for i, (mc, pmask, wmask) in enumerate(
