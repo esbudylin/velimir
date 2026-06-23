@@ -139,7 +139,12 @@ def extract_clausula(meter_accent_mask: list[bool]) -> Clausula:
         lambda n: not n,
         reversed(meter_accent_mask),
     )
-    return Clausula(len(list(last_syllables_without_accent)))
+    return Clausula(
+        min(
+            len(list(last_syllables_without_accent)),
+            Clausula.HYPERDACTYLIC,
+        )
+    )
 
 
 def anacrusa_by_meter_type(meter: MeterType) -> int:
