@@ -2,7 +2,7 @@ import logging
 import sys
 
 from velimir.accentuator import build_accent_dict, is_vowel, stress_mark_ord
-from velimir.identifier import ProcessedLine, process_lines
+from velimir.identifier import FailedLine, ProcessedLine, process_lines
 from velimir.io import read_accent_dicts
 from velimir.ml_preprocess import MeterClassRegistry
 from velimir.onnx import load_onnx_models
@@ -82,12 +82,16 @@ def emit_result(verses, processed_verses):
     print("</body>")
 
 
-def format_verse(lines: list[str], processed_lines: list[ProcessedLine | None]) -> str:
+def format_verse(
+    lines: list[str],
+    processed_lines: list[ProcessedLine | FailedLine],
+) -> str:
     parts = ['<p class="verse">']
 
     for line, processed in zip(lines, processed_lines):
-        meter = processed.to_str() if processed else "???"
-        accline = put_accents(line, processed.poetic_accents) if processed else line
+        err = isinstance(processed, FailedLine)
+        meter = processed.to_str() if not err else "???"
+        accline = put_accents(line, processed.poetic_accents) if not err else line
         parts.append(f'<line meter="{meter}"/>{accline}<br/>')
 
     parts.append("</p>")

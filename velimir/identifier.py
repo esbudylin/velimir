@@ -14,6 +14,10 @@ from .ml_preprocess import (
 from .nlp import PartOfSpeech
 
 
+class FailedLine:
+    pass
+
+
 @dataclass
 class ProcessedLine:
     meters: list[Meter]
@@ -308,7 +312,7 @@ def process_lines(
     accent_model,
     lines: list[str],
     stanza_breaks: list[int],
-) -> list[ProcessedLine | None]:
+) -> list[ProcessedLine | FailedLine]:
     word_ending_masks = [accentuator.extract_word_ending_mask(li) for li in lines]
     ling_accent_masks = [accentuator.accent_line(li) for li in lines]
 
@@ -371,6 +375,6 @@ def process_lines(
         except Exception as e:
             logging.error("Failed to process line: %s", lines[i])
             logging.exception(e)
-            res.append(None)
+            res.append(FailedLine())
 
     return res
