@@ -49,70 +49,6 @@ def load_and_eval(accent_path, meter_path, test_chunks, device, batch_size=None)
     return eval_results
 
 
-def reevaluate(test_run: bool = False):
-    LoggingSettings.setup()
-    MeterClassRegistry.initialize()
-
-    output_dir = TEST_OUTPUT_DIR if test_run else OUTPUT_DIR
-    results_path = output_dir / "results.jsonl"
-
-    if not results_path.exists():
-        logging.error("No results file at %s", results_path)
-        return
-
-    with open(results_path) as f:
-        results = [json.loads(line) for line in f if line.strip()]
-
-    logging.info("Loading data for re-evaluation...")
-    poems = load_poems_from_msgpack()
-    raw_samples = fetch_raw_samples(poems)
-    if test_run:
-        raw_samples = islice(raw_samples, TEST_SUBSET)
-    _, _, test_chunks = split_chunks(raw_samples)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    updated = False
-    for entry in results:
-        run_id = entry["run"]
-        run_dir = output_dir / f"run_{run_id:03d}"
-        accent_path = run_dir / "accent"
-        meter_path = run_dir / "meter"
-
-        if not accent_path.exists() or not meter_path.exists():
-            logging.warning("Run %d: missing model files, skipping", run_id)
-            continue
-
-        logging.info("Re-evaluating run %d...", run_id)
-        eval_results = load_and_eval(
-            accent_path,
-            meter_path,
-            test_chunks,
-            device,
-            batch_size=8 if test_run else None,
-        )
-
-        for k, v in eval_results.items():
-            old = entry.get(k)
-            entry[k] = v
-            if old != v:
-                updated = True
-                logging.info(
-                    "  %s: %s -> %s",
-                    k,
-                    round(old, 4) if isinstance(old, float) else old,
-                    round(v, 4),
-                )
-
-    if updated:
-        with open(results_path, "w") as f:
-            for entry in results:
-                f.write(json.dumps(entry) + "\n")
-        logging.info("Updated %s with new metrics", results_path)
-    else:
-        logging.info("All metrics unchanged, nothing written")
-
-
 def main(test_run: bool = False):
     LoggingSettings.setup()
     MeterClassRegistry.initialize()
@@ -225,7 +161,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.reevaluate:
-        reevaluate(args.test_run)
-    else:
-        main(args.test_run)
+    main(args.test_run)

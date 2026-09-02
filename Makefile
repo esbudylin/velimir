@@ -60,12 +60,6 @@ $(eval $(call SCRIPT_TARGET,evaluate_onnx,scripts))
 
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,seed_sweep,scripts))
 
-re-evaluate-seed-sweep:
-	$(Q)LOG_FILE=$(LOG_DIR)/seed_sweep_reevaluate.log $(PYTHON) scripts/seed_sweep.py --reevaluate
-
-re-evaluate-seed-sweep-test:
-	$(Q)LOG_FILE=$(LOG_DIR)/seed_sweep_reevaluate_test.log $(PYTHON) scripts/seed_sweep.py --test-run --reevaluate
-
 test:
 	$(PYTHON) -m unittest discover tests
 
