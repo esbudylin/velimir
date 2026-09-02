@@ -40,7 +40,7 @@ def train(test_run: bool = False, **training_kwargs):
 
     train_chunks, val_chunks, _ = split_chunks(raw_samples)
 
-    accent_state_dict, meter_state_dict = train_models(
+    accent_state_dict, meter_state_dict, _ = train_models(
         train_chunks,
         val_chunks,
         **training_kwargs,

@@ -1,5 +1,6 @@
 import copy
 import logging
+from dataclasses import dataclass
 from functools import partial
 
 import torch
@@ -12,6 +13,14 @@ from .ml_loader import (
     get_loader,
 )
 from .nlp import PartOfSpeech
+
+
+@dataclass
+class TrainingMetrics:
+    accent_val_loss: float
+    accent_epochs: int
+    meter_val_loss: float
+    meter_epochs: int
 
 
 class SharedEncoder(nn.Module):
@@ -260,7 +269,7 @@ def train_model(model, train_func, eval_func, scheduler, max_epochs, patience):
                 logging.info("Early stopping triggered at epoch %d", epoch)
                 break
 
-    return best_state_dict
+    return best_state_dict, best_validation_loss, epoch + 1
 
 
 def train_models(
@@ -302,7 +311,7 @@ def train_models(
     )
 
     logging.info("Training accent model")
-    accent_state_dict = train_model(
+    accent_state_dict, accent_val_loss, accent_epochs = train_model(
         accent_model,
         partial(train_accent, accent_model, train_loader, accent_optimizer, device),
         partial(eval_accent, accent_model, validation_loader, device),
@@ -321,7 +330,7 @@ def train_models(
     )
 
     logging.info("Training meter model")
-    meter_state_dict = train_model(
+    meter_state_dict, meter_val_loss, meter_epochs = train_model(
         meter_model,
         partial(train_meter, meter_model, train_loader, meter_optimizer, device),
         partial(eval_meter, meter_model, validation_loader, device),
@@ -330,4 +339,11 @@ def train_models(
         patience=patience,
     )
 
-    return accent_state_dict, meter_state_dict
+    metrics = TrainingMetrics(
+        accent_val_loss=accent_val_loss,
+        accent_epochs=accent_epochs,
+        meter_val_loss=meter_val_loss,
+        meter_epochs=meter_epochs,
+    )
+
+    return accent_state_dict, meter_state_dict, metrics
