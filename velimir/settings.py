@@ -26,6 +26,9 @@ PREDICTION_DB_PATH = os.path.join(DATA_DIRECTORY, "predictions.db")
 GRAMMAR_DB_PATH = os.path.join(DATA_DIRECTORY, "grammar.db")
 GRAMMAR_TEST_DB_PATH = os.path.join(DATA_DIRECTORY, "grammar_test.db")
 
+RHYME_DB_PATH = os.path.join(DATA_DIRECTORY, "rhyme.db")
+RHYME_TEST_DB_PATH = os.path.join(DATA_DIRECTORY, "rhyme_test.db")
+
 METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
 
 

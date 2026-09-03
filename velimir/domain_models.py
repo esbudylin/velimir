@@ -61,6 +61,8 @@ class InputPoem:
     meter: str
     clausula: str
     feet: str
+    rhyme: str
+    extra: str
     path: str
 
     @classmethod
@@ -74,6 +76,7 @@ class InputLine:
     idx: int
     meter: str
     text: str
+    rhyme_zone: str  # текст в зоне рифмовки
 
 
 @dataclass(slots=True)

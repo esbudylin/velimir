@@ -95,7 +95,11 @@ class LineFormulaVisitor(NodeVisitor):
         return visited_children or node
 
 
-def parse_input_lines(xml: str) -> tuple[list[InputLine], list[int]]:
+def parse_input_lines(
+    xml: str,
+    *,
+    allow_latin: bool = False,
+) -> tuple[list[InputLine], list[int]]:
     soup = BeautifulSoup(xml, "xml")
 
     line_count = count()
@@ -103,7 +107,9 @@ def parse_input_lines(xml: str) -> tuple[list[InputLine], list[int]]:
     stanza_breaks = []
 
     for verse in soup.find_all("p", class_="verse"):
-        if stanza := list(extract_lines(verse, line_count)):
+        if stanza := list(
+            extract_lines(verse, line_count=line_count, allow_latin=allow_latin)
+        ):
             stanza_breaks.append(len(lines))
             lines.extend(stanza)
         else:
@@ -174,34 +180,37 @@ def extract_syllable_features(
     )
 
 
-def extract_text_until_next_line(element) -> str:
+def collect_line_text(line) -> tuple[str, str]:
     parts = []
-    for child in element.contents:
-        if isinstance(child, Tag) and child.name == "line":
-            break
-        if isinstance(child, NavigableString):
-            parts.append(str(child))
-        elif isinstance(child, Tag):
-            parts.append(extract_text_until_next_line(child))
-    return "".join(parts)
+    rhyme_zone = -1
 
+    stack = [iter(line.next_siblings)]
 
-def collect_line_text(line_tag) -> str:
-    parts = []
-    for node in line_tag.next_siblings:
+    while stack:
+        try:
+            node = next(stack[-1])
+        except StopIteration:
+            stack.pop()
+            continue
+
         if isinstance(node, Tag) and node.name == "line":
             break
 
         if isinstance(node, NavigableString):
             parts.append(str(node))
         elif isinstance(node, Tag):
-            if node.find("line") is not None:
-                parts.append(extract_text_until_next_line(node))
-                break
+            if node.name == "rhyme-zone":
+                rhyme_zone = len(parts)
+
+            if node.find("line") or node.find("rhyme-zone"):
+                stack.append(iter(node.contents))
             else:
                 parts.append(node.get_text())
 
-    return "".join(parts).strip()
+    full_line_text = "".join(parts).strip()
+    rhyme_zone_text = "" if rhyme_zone == -1 else "".join(parts[rhyme_zone:]).strip()
+
+    return full_line_text, rhyme_zone_text
 
 
 def parse_line(line: InputLine, line_formula: LineFormula) -> Line:
@@ -222,10 +231,15 @@ def parse_line(line: InputLine, line_formula: LineFormula) -> Line:
     )
 
 
-def extract_lines(soup, line_count: Iterator[int] | None = None) -> Iterator[InputLine]:
+def extract_lines(
+    soup,
+    *,
+    line_count: Iterator[int] | None = None,
+    allow_latin: bool = False,
+) -> Iterator[InputLine]:
     for line, idx in zip(soup.find_all("line"), line_count or count()):
         if meter := line.get("meter"):
-            text = collect_line_text(line)
+            text, rhyme_zone = collect_line_text(line)
 
             if not text:
                 delayed_logger.record()
@@ -234,13 +248,23 @@ def extract_lines(soup, line_count: Iterator[int] | None = None) -> Iterator[Inp
 
             match cyrlat.detect(text):
                 case cyrlat.DetectionResult.LATIN:
-                    delayed_logger.record()
-                    logging.warning("Skipping line (latin script detected) %s", text)
-                    continue
+                    if not allow_latin:
+                        delayed_logger.record()
+                        logging.warning(
+                            "Skipping line (latin script detected) %s",
+                            text,
+                        )
+                        continue
                 case cyrlat.DetectionResult.CYRLAT:
                     text = cyrlat.fix(text)
+                    rhyme_zone = cyrlat.fix(rhyme_zone)
 
-            yield InputLine(idx=idx, text=text, meter=meter.strip())
+            yield InputLine(
+                idx=idx,
+                text=text,
+                meter=meter.strip(),
+                rhyme_zone=rhyme_zone,
+            )
 
 
 def parse_lines(lines: Iterable[InputLine]) -> Iterator[Line]:
