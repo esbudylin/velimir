@@ -1,4 +1,4 @@
-PYTHON ?= python
+PYTHON ?= uv run python
 LOG_DIR := logs
 
 V ?= 0
