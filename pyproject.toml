@@ -1,0 +1,45 @@
+[project]
+name = "velimir"
+version = "0.1.0"
+description = "ML-based tool for detecting rhythm and meter in Russian poetry"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "stressrnn @ git+https://github.com/dbklim/StressRNN.git@0afefac146033b41ef558ac356989c87ef764c79",
+    "pymorphy2[fast] @ git+https://github.com/pymorphy2-fork/pymorphy2@4ae2041cd31228cbb45cb4b508483b81a1009d17",
+    "numpy<1.24",
+    "bitarray==3.8.0",
+    "onnxruntime==1.23.2",
+]
+
+[project.optional-dependencies]
+cpu = ["torch>=2.10.0,<2.11"]
+cuda = ["torch>=2.10.0,<2.11"]
+
+[dependency-groups]
+dev = [
+    "parameterized==0.9.0",
+    "beautifulsoup4==4.14.3",
+    "lxml==4.9.3",
+    "parsimonious==0.10.0",
+    "msgpack==1.0.6",
+    "onnx==1.21.0",
+]
+
+[tool.uv]
+package = false
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cuda" },
+    ],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

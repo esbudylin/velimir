@@ -1,5 +1,0 @@
-stressrnn @ git+https://github.com/dbklim/StressRNN.git
-pymorphy2[fast] @ git+https://github.com/pymorphy2-fork/pymorphy2@master
-numpy<1.24
-bitarray==3.8.0
-onnxruntime==1.23.2

@@ -9,11 +9,20 @@ poetry.
 Velimir exposes several commands as its entry points. To use them,
 clone the repository and run them via the ~make~ utility.
 
-You will need Python 3.10 to run the project. If you only intend to
-run the ~markup~ target, you will need to install the dependencies
-listed in ~requirements.txt~. For anything else, you will also need
-dependencies from the ~requirements-dev.txt~ file. Installing the
-dependencies requires ~git~.
+You will need [[https://github.com/astral-sh/uv][uv]] and ~git~ to install the dependecies and run the
+project. The base set of dependecies and the required Python version
+will be installed automatically on running any ~make~ target.
+
+However, for running ~train~ target you'll also need a set of
+development dependecies. If you intend to train the models on GPU run
+#+begin_src sh
+  uv sync --group dev --extra cuda
+#+end_src
+
+For CPU training, run
+#+begin_src sh
+  uv sync --group dev --extra cpu
+#+end_src
 
 ** Entry points
 + ~markup~
