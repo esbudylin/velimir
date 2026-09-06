@@ -60,6 +60,9 @@ $(eval $(call SCRIPT_TARGET,export_onnx,scripts))
 
 $(eval $(call SCRIPT_TARGET,evaluate_onnx,scripts))
 
+serve-rhymes:
+	$(Q)uv run scripts/serve_rhymes.py
+
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,seed_sweep,scripts))
 
 test:

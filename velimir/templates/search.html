@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Поиск рифм{% endblock %}
+{% block content %}
+<h1>Поиск рифм</h1>
+<form action="{{ url_for('search') }}" method="get">
+  <input type="text" name="q" value="{{ query }}" placeholder="Слово, например корпус">
+  <button type="submit">Искать</button>
+</form>
+
+{% if query %}
+<p class="muted">Найдено слов, рифмующихся с «{{ query }}»: {{ results|length }}</p>
+<table>
+  <tr>
+    {% for col in columns %}
+    <th><a href="{{ col.href }}">{{ col.label }}</a>{% if col.arrow %} {{ col.arrow }}{% endif %}</th>
+    {% endfor %}
+  </tr>
+  {% for row in results %}
+  <tr>
+    {% for col in columns %}
+    <td>{{ row[col.key] }}</td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

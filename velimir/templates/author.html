@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block content %}
+<h1>{{ name }}</h1>
+<p class="muted">Рифменных групп: {{ groups|length }}</p>
+<table>
+  <tr>
+    {% for col in columns %}
+    <th><a href="{{ col.href }}">{{ col.label }}</a>{% if col.arrow %} {{ col.arrow }}{% endif %}</th>
+    {% endfor %}
+  </tr>
+  {% for row in groups %}
+  <tr>
+    {% for col in columns %}
+    <td>{{ row[col.key] }}</td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

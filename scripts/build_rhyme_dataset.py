@@ -42,6 +42,7 @@ class RhymeSample:
 class PoemSamples:
     author: str
     path: str
+    header: str
     creation_date: CreationDate
     samples: list[RhymeSample]
 
@@ -146,6 +147,7 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[PoemSamples]:
         yield PoemSamples(
             author=poem.author,
             path=poem.path,
+            header=poem.header.strip(),
             creation_date=creation_date,
             samples=samples,
         )
@@ -166,6 +168,7 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
         """
         CREATE TABLE poems (
             path TEXT UNIQUE NOT NULL,
+            header TEXT,
             author_id INTEGER NOT NULL REFERENCES authors(rowid)
         )
         """
@@ -237,8 +240,8 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
 
             if poem.path not in poem_id_cache:
                 result = cursor.execute(
-                    "INSERT OR IGNORE INTO poems (path, author_id) VALUES (?, ?) RETURNING rowid",
-                    (poem.path, author_id),
+                    "INSERT OR IGNORE INTO poems (path, header, author_id) VALUES (?, ?, ?) RETURNING rowid",
+                    (poem.path, poem.header, author_id),
                 )
                 row = result.fetchone()
                 if row is None:

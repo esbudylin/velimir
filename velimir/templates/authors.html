@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Авторы{% endblock %}
+{% block content %}
+<h1>Авторы</h1>
+<p class="muted">Всего авторов: {{ authors|length }}</p>
+<table>
+  <tr>
+    <th>Автор</th>
+    <th>Рифменных групп</th>
+  </tr>
+  {% for author in authors %}
+  <tr>
+    <td><a href="{{ url_for('author', name=author['name']) }}">{{ author['name'] }}</a></td>
+    <td>{{ author['groups'] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Рифмы</h1>
+<p>Просмотр собранных данных о рифмах из <code>{{ database }}</code>.</p>
+<ul>
+  <li><a href="{{ url_for('authors') }}">Рифмы по авторам</a></li>
+  <li><a href="{{ url_for('search') }}">Поиск рифм</a></li>
+</ul>
+{% endblock %}
