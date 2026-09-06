@@ -22,7 +22,7 @@ AUTHOR_COLUMNS = [
 
 SEARCH_COLUMNS = [
     ("word", "Слово", "rhymes.word"),
-    ("author", "Автор", "authors.name"),
+    ("author", "Автор", "authors.sort_key"),
     ("date", "Дата", "creation_dates.date_low"),
     ("title", "Стихотворение", "sort_key(poems.header)"),
 ]
@@ -142,7 +142,7 @@ def create_app() -> Flask:
             JOIN rhymes ON rhymes.poem_id = poems.ROWID
             WHERE rhymes.rhyme_group <> -1
             GROUP BY authors.name
-            ORDER BY authors.name
+            ORDER BY authors.sort_key, authors.name
             """
             )
             .fetchall()

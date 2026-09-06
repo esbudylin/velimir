@@ -1,5 +1,6 @@
 import logging
 
+from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
@@ -7,14 +8,14 @@ author_grammar = Grammar(
     """
     expr = author ( separator author )*
 
-    separator = ws ":" ws
+    separator = ws? ":" ws?
 
     author = full_name ( ws secondary_name )?
 
     full_name = surname_with_initials / ( name ( ws name )* )
 
     surname_with_initials = initial ws ( initial ws )? name
-    initial = ~r"[А-ЯЁ]" "."
+    initial = ~r"[А-ЯЁ][а-яё]?" "."
 
     secondary_name = "(" full_name ")"
 
@@ -50,13 +51,15 @@ class AuthorVisitor(NodeVisitor):
 
 
 def get_author_sort_key(author: str):
-    visitor = AuthorVisitor()
-    visitor.grammar = author_grammar
-
     try:
-        sort_key = visitor.parse(author)
-    except Exception:
-        logging.warning("Can't parse author name: %s", author)
-        raise ValueError
+        tree = author_grammar.parse(author)
 
-    return sort_key
+    except ParseError as e:
+        if isinstance(e, IncompleteParseError):
+            logging.warning("Can't fully parse the author: %s", author)
+            tree = author_grammar.match(author)
+        else:
+            logging.warn("Can't parse author name: %s", author)
+            return author
+
+    return AuthorVisitor().visit(tree)

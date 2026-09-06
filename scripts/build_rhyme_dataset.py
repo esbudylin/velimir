@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from velimir import accentuator, cyrlat
+from velimir.author import get_author_sort_key
 from velimir.creation_date import CreationDate
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
@@ -41,6 +42,7 @@ class RhymeSample:
 @dataclass
 class PoemSamples:
     author: str
+    author_sort_key: str
     path: str
     header: str
     creation_date: CreationDate
@@ -122,6 +124,8 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[PoemSamples]:
     rhyme_visitor = RhymeVisitor()
     rhyme_visitor.grammar = rhyme_grammar
 
+    author_sort_keys: dict[str, str] = {}
+
     for row in csv_reader:
         poem = InputPoem.from_row(row)
 
@@ -135,6 +139,9 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[PoemSamples]:
             logging.warning("Can't parse creation date for %s: %s", poem.path, error)
             continue
 
+        if poem.author not in author_sort_keys:
+            author_sort_keys[poem.author] = get_author_sort_key(poem.author)
+
         xml_str = read_poem_xml(poem.path)
 
         try:
@@ -146,6 +153,7 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[PoemSamples]:
 
         yield PoemSamples(
             author=poem.author,
+            author_sort_key=author_sort_keys[poem.author],
             path=poem.path,
             header=poem.header.strip(),
             creation_date=creation_date,
@@ -159,7 +167,8 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
     cursor.execute(
         """
         CREATE TABLE authors (
-            name TEXT UNIQUE NOT NULL
+            name TEXT UNIQUE NOT NULL,
+            sort_key TEXT
         )
         """
     )
@@ -224,8 +233,8 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
         for poem in batch:
             if poem.author not in author_id_cache:
                 result = cursor.execute(
-                    "INSERT OR IGNORE INTO authors (name) VALUES (?) RETURNING rowid",
-                    (poem.author,),
+                    "INSERT OR IGNORE INTO authors (name, sort_key) VALUES (?, ?) RETURNING rowid",
+                    (poem.author, poem.author_sort_key),
                 )
                 row = result.fetchone()
                 if row is None:
