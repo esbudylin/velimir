@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from velimir import accentuator, cyrlat
+from velimir.creation_date import CreationDate
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
@@ -26,8 +27,6 @@ IRREGULAR_STANZA_MARK = "нарушения строфики"
 
 @dataclass
 class RhymeSample:
-    poem_path: str
-    author: str
     rhyme_type: str
 
     seq: int
@@ -37,6 +36,14 @@ class RhymeSample:
 
     word: str
     accents: list[bool]  # позиции ударных слогов рифмованного слова
+
+
+@dataclass
+class PoemSamples:
+    author: str
+    path: str
+    creation_date: CreationDate
+    samples: list[RhymeSample]
 
 
 def extract_rhyme_features(
@@ -101,8 +108,6 @@ def extract_rhyme_features(
                 continue
 
             yield RhymeSample(
-                poem_path=poem.path,
-                author=poem.author,
                 seq=seq_idx,
                 order_in_seq=order_in_seq,
                 rhyme_type=type,
@@ -112,7 +117,7 @@ def extract_rhyme_features(
             )
 
 
-def transform_data(csv_reader: csv.DictReader) -> Iterator[RhymeSample]:
+def transform_data(csv_reader: csv.DictReader) -> Iterator[PoemSamples]:
     rhyme_visitor = RhymeVisitor()
     rhyme_visitor.grammar = rhyme_grammar
 
@@ -123,17 +128,30 @@ def transform_data(csv_reader: csv.DictReader) -> Iterator[RhymeSample]:
             logging.INFO, "Transforming poem: %s, meter: %s", poem.path, poem.formula
         )
 
+        try:
+            creation_date = CreationDate.extract(poem)
+        except ValueError as error:
+            logging.warning("Can't parse creation date for %s: %s", poem.path, error)
+            continue
+
         xml_str = read_poem_xml(poem.path)
 
         try:
-            yield from extract_rhyme_features(rhyme_visitor, poem, xml_str)
+            samples = list(extract_rhyme_features(rhyme_visitor, poem, xml_str))
         except Exception as error:
             delayed_logger.record()
             logging.exception(error)
             continue
 
+        yield PoemSamples(
+            author=poem.author,
+            path=poem.path,
+            creation_date=creation_date,
+            samples=samples,
+        )
 
-def write_into_sqlite(conn, transformed_data: Iterator[RhymeSample]):
+
+def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
     cursor = conn.cursor()
 
     cursor.execute(
@@ -171,6 +189,19 @@ def write_into_sqlite(conn, transformed_data: Iterator[RhymeSample]):
         """
     )
 
+    cursor.execute(
+        """
+        CREATE TABLE creation_dates (
+            poem_id INTEGER NOT NULL REFERENCES poems(rowid),
+            date_low INTEGER NOT NULL,
+            date_high INTEGER,
+            is_exact INTEGER NOT NULL,
+
+            UNIQUE(poem_id) ON CONFLICT FAIL
+        )
+        """
+    )
+
     conn.commit()
 
     def batched(iterable, size):
@@ -187,51 +218,67 @@ def write_into_sqlite(conn, transformed_data: Iterator[RhymeSample]):
     for batch in batched(transformed_data, size=10000):
         insert_buffer = []
 
-        for sample in batch:
-            if sample.author not in author_id_cache:
+        for poem in batch:
+            if poem.author not in author_id_cache:
                 result = cursor.execute(
                     "INSERT OR IGNORE INTO authors (name) VALUES (?) RETURNING rowid",
-                    (sample.author,),
+                    (poem.author,),
                 )
                 row = result.fetchone()
                 if row is None:
                     raise ValueError(
                         "Author %s is already in a db. Missing cache value",
-                        sample.author,
+                        poem.author,
                     )
 
-                author_id_cache[sample.author] = row[0]
+                author_id_cache[poem.author] = row[0]
 
-            author_id = author_id_cache[sample.author]
+            author_id = author_id_cache[poem.author]
 
-            if sample.poem_path not in poem_id_cache:
+            if poem.path not in poem_id_cache:
                 result = cursor.execute(
                     "INSERT OR IGNORE INTO poems (path, author_id) VALUES (?, ?) RETURNING rowid",
-                    (sample.poem_path, author_id),
+                    (poem.path, author_id),
                 )
                 row = result.fetchone()
                 if row is None:
                     raise ValueError(
                         "Poem %s is already in a db. Missing cache value",
-                        sample.poem_path,
+                        poem.path,
                     )
 
-                poem_id_cache[sample.poem_path] = row[0]
+                poem_id_cache[poem.path] = row[0]
 
-            poem_id = poem_id_cache[sample.poem_path]
-            accent_str = "".join(str(int(accent)) for accent in sample.accents)
-
-            insert_buffer.append(
-                (
-                    poem_id,
-                    sample.rhyme_type,
-                    sample.seq,
-                    sample.order_in_seq,
-                    sample.rhyme_group,
-                    sample.word,
-                    accent_str,
+                cursor.execute(
+                    """
+                    INSERT INTO creation_dates
+                        (poem_id, date_low, date_high, is_exact)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        row[0],
+                        poem.creation_date.lower,
+                        poem.creation_date.upper,
+                        int(poem.creation_date.is_exact),
+                    ),
                 )
-            )
+
+            poem_id = poem_id_cache[poem.path]
+
+            for sample in poem.samples:
+                accent_str = "".join(str(int(accent)) for accent in sample.accents)
+
+                insert_buffer.append(
+                    (
+                        poem_id,
+                        sample.rhyme_type,
+                        sample.seq,
+                        sample.order_in_seq,
+                        sample.rhyme_group,
+                        sample.word,
+                        accent_str,
+                    )
+                )
 
         cursor.executemany(
             """

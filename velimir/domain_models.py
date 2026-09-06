@@ -56,6 +56,7 @@ class Clausula(CodeIntEnum):
 class InputPoem:
     author: str
     created: str
+    exact: str
     header: str
     formula: str
     meter: str
