@@ -185,9 +185,18 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
 
     cursor.execute(
         """
+        CREATE TABLE rhyme_types (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL
+        )
+        """
+    )
+
+    cursor.execute(
+        """
         CREATE TABLE rhymes (
             poem_id INTEGER NOT NULL REFERENCES poems(rowid),
-            rhyme_type TEXT,
+            rhyme_type_id INTEGER NOT NULL REFERENCES rhyme_types(id),
 
             seq INTEGER,
             order_in_seq INTEGER,
@@ -226,6 +235,7 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
 
     poem_id_cache: dict[str, int] = {}
     author_id_cache: dict[str, int] = {}
+    rhyme_type_id_cache: dict[str, int] = {}
 
     for batch in batched(transformed_data, size=10000):
         insert_buffer = []
@@ -280,10 +290,23 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
             for sample in poem.samples:
                 accent_str = "".join(str(int(accent)) for accent in sample.accents)
 
+                if sample.rhyme_type not in rhyme_type_id_cache:
+                    result = cursor.execute(
+                        "INSERT OR IGNORE INTO rhyme_types (name) VALUES (?) RETURNING id",
+                        (sample.rhyme_type,),
+                    )
+                    row = result.fetchone()
+                    if row is None:
+                        raise ValueError(
+                            "Rhyme type %s is already in a db. Missing cache value",
+                            sample.rhyme_type,
+                        )
+                    rhyme_type_id_cache[sample.rhyme_type] = row[0]
+
                 insert_buffer.append(
                     (
                         poem_id,
-                        sample.rhyme_type,
+                        rhyme_type_id_cache[sample.rhyme_type],
                         sample.seq,
                         sample.order_in_seq,
                         sample.rhyme_group,
@@ -295,7 +318,7 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
         cursor.executemany(
             """
                 INSERT INTO rhymes
-                    (poem_id, rhyme_type, seq, order_in_seq, rhyme_group, word, accents)
+                    (poem_id, rhyme_type_id, seq, order_in_seq, rhyme_group, word, accents)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
             insert_buffer,

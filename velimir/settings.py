@@ -4,9 +4,11 @@ import os
 DATA_DIRECTORY = "data"
 LOGS_DIRECTORY = "logs"
 
+DATASETS_DIRECTORY = os.path.join(DATA_DIRECTORY, "datasets")
+
 METADATA_TABLE = os.path.join(DATA_DIRECTORY, "rnc", "tables", "poetic.csv")
 TEXTS_DIR = os.path.join(DATA_DIRECTORY, "rnc", "texts")
-OUTPUT_FILE = os.path.join(DATA_DIRECTORY, "poems.msgpack")
+OUTPUT_FILE = os.path.join(DATASETS_DIRECTORY, "poems.msgpack")
 MODELS_DIRECTORY = os.path.join(DATA_DIRECTORY, "models")
 
 METER_MODEL = os.path.join(MODELS_DIRECTORY, "meter")
@@ -23,11 +25,11 @@ ACCENT_DICT_PATHS = [
     for n in ["accent.dic", "accent1.dic", "accent2.dic"]
 ]
 PREDICTION_DB_PATH = os.path.join(DATA_DIRECTORY, "predictions.db")
-GRAMMAR_DB_PATH = os.path.join(DATA_DIRECTORY, "grammar.db")
-GRAMMAR_TEST_DB_PATH = os.path.join(DATA_DIRECTORY, "grammar_test.db")
+GRAMMAR_DB_PATH = os.path.join(DATASETS_DIRECTORY, "grammar.db")
+GRAMMAR_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "grammar_test.db")
 
-RHYME_DB_PATH = os.path.join(DATA_DIRECTORY, "rhyme.db")
-RHYME_TEST_DB_PATH = os.path.join(DATA_DIRECTORY, "rhyme_test.db")
+RHYME_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme.db")
+RHYME_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_test.db")
 
 METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
 

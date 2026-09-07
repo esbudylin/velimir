@@ -10,4 +10,5 @@ data/models/sweep-test
 data/predictions.db
 data/pos_accent.db
 data/pos_accent_test.db
-data/grammar_test.db
+data/datasets/grammar_test.db
+data/datasets/rhyme_test.db
