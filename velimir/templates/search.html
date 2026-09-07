@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Поиск рифм</h1>
 <form action="{{ url_for('search') }}" method="get">
-  <input type="text" name="q" value="{{ query }}" placeholder="Слово, например корпус">
+  <input type="text" name="q" value="{{ query }}">
   <button type="submit">Искать</button>
 </form>
 

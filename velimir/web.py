@@ -126,7 +126,7 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
-        return render_template("index.html", database=RHYME_DB_PATH)
+        return render_template("index.html")
 
     @app.get("/authors")
     def authors():
