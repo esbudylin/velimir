@@ -154,11 +154,6 @@ if __name__ == "__main__":
         action="store_true",
         help="Use small data subset and few epochs for testing",
     )
-    parser.add_argument(
-        "--reevaluate",
-        action="store_true",
-        help="Re-evaluate saved models and update results.jsonl with new metrics",
-    )
     args = parser.parse_args()
 
     main(args.test_run)
