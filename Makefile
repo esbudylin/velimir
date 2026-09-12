@@ -56,6 +56,8 @@ $(eval $(call SCRIPT_TARGET_WITH_TESTS,build_grammar_db,scripts))
 
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,build_rhyme_dataset,scripts))
 
+$(eval $(call SCRIPT_TARGET_WITH_TESTS,annotate_rhyme_dataset,scripts))
+
 $(eval $(call SCRIPT_TARGET,export_onnx,scripts))
 
 $(eval $(call SCRIPT_TARGET,evaluate_onnx,scripts))
