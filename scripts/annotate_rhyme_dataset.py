@@ -15,6 +15,8 @@ from velimir.settings import (
 select_query = """
 SELECT poem_id,
        path,
+       seq,
+       rhyme_group,
        json_group_array(word) AS words,
        json_group_array(accents) AS accents
 FROM (
@@ -54,8 +56,11 @@ def annotate(conn: sqlite3.Connection):
         """
         CREATE TABLE rhyme_annotations (
             poem_id INTEGER NOT NULL REFERENCES poems(rowid),
-            words TEXT NOT NULL,
-            rhyming_coef REAL NOT NULL
+            seq INTEGER NOT NULL,
+            rhyme_group INTEGER NOT NULL,
+            rhyming_coef REAL NOT NULL,
+
+            UNIQUE(poem_id, seq, rhyme_group) ON CONFLICT FAIL
         )
         """
     )
@@ -63,7 +68,7 @@ def annotate(conn: sqlite3.Connection):
     insert_buffer = []
     skipped = 0
 
-    for poem_id, path, words, accents in conn.execute(select_query):
+    for poem_id, path, seq, group, words, accents in conn.execute(select_query):
         try:
             rhymes = parse_rhymes(words, accents)
             rhyming_index = calc_rhyming_coef(rhymes)
@@ -72,12 +77,12 @@ def annotate(conn: sqlite3.Connection):
             skipped += 1
             continue
 
-        insert_buffer.append((poem_id, words, rhyming_index))
+        insert_buffer.append((poem_id, seq, group, rhyming_index))
 
     cursor.executemany(
         """
-        INSERT INTO rhyme_annotations (poem_id, words, rhyming_coef)
-        VALUES (?, ?, ?)
+        INSERT INTO rhyme_annotations (poem_id, seq, rhyme_group, rhyming_coef)
+        VALUES (?, ?, ?, ?)
         """,
         insert_buffer,
     )
