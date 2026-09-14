@@ -11,21 +11,71 @@
 |   743549 |
 
 #+begin_src sqlite
-  WITH text_avg_coef AS (
-      SELECT poem_id, AVG(rhyming_coef) as avg_coef FROM rhyme_annotations
-      GROUP BY(poem_id)
-  )
-  SELECT COUNT(*) FROM rhyme_annotations ra
-  JOIN text_avg_coef tac ON ra.poem_id = tac.poem_id
-  WHERE
-      rhyming_coef > 0.2 OR
-      (rhyming_coef < 0.2 AND rhyming_coef > 0.1 AND tac.avg_coef > 0.45)
+  SELECT COUNT(*) FROM validated_rhyme_groups
 #+end_src
 
 #+RESULTS:
 | COUNT(*) |
 |----------|
-|   731123 |
+|   733788 |
+
+#+begin_src sqlite
+  SELECT vrg.rhyming_coef,
+         json_group_array(DISTINCT r.word) AS words
+  FROM validated_rhyme_groups vrg
+  JOIN rhymes r
+     ON vrg.poem_id     = r.poem_id
+     AND vrg.seq         = r.seq
+     AND vrg.rhyme_group = r.rhyme_group
+  WHERE avg_coef < 0.45
+  GROUP BY r.poem_id, r.seq, r.rhyme_group
+  ORDER BY rhyming_coef ASC
+  LIMIT 10
+#+end_src
+
+#+RESULTS:
+| rhyming_coef | words      |              |
+|--------------+------------+--------------|
+|          0.2 | ["стеной"  | глухой]      |
+|          0.2 | ["вечны"   | крылатый]    |
+|          0.2 | ["долг"    | вздох]       |
+|          0.2 | ["затворы" | нивы]        |
+|          0.2 | ["красы"   | эреба]       |
+|          0.2 | ["цари"    | возлюбляйте] |
+|          0.2 | ["голубей" | видней]      |
+|          0.2 | ["плеча"   | она]         |
+|          0.2 | ["тобой"   | весной]      |
+|          0.2 | ["судьбой" | землей]      |
+
+#+begin_src sqlite
+  SELECT p.path,
+         vrg.rhyming_coef,
+         vrg.avg_coef,
+         json_group_array(DISTINCT r.word) AS words
+  FROM validated_rhyme_groups vrg
+  JOIN rhymes r
+     ON vrg.poem_id     = r.poem_id
+     AND vrg.seq         = r.seq
+     AND vrg.rhyme_group = r.rhyme_group
+  JOIN poems p ON vrg.poem_id = p.ROWID
+  GROUP BY r.poem_id, r.seq, r.rhyme_group
+  ORDER BY rhyming_coef ASC
+  LIMIT 10
+#+end_src
+
+#+RESULTS:
+| path                          | rhyming_coef | avg_coef | words     |          |
+|-------------------------------+--------------+----------+-----------+----------|
+| xix/1790-1810_poets/poets-371 |          0.1 |      0.5 | ["землей" | тобой]   |
+| xix/1790-1810_poets/psec-080  |          0.1 |     0.53 | ["стезей" | покой]   |
+| xix/1820/1820-095             |          0.1 |     0.48 | ["струей" | дорогой] |
+| xix/1820/1820-098             |          0.1 |     0.52 | ["рукой"  | землей]  |
+| xix/1820/1820-164             |          0.1 |     0.55 | ["младой" | стезей]  |
+| xix/1820/1820-176             |          0.1 |     0.45 | ["родной" | струей]  |
+| xix/1820/1820-377             |          0.1 |     0.51 | ["ночной" | стезей]  |
+| xix/1830/1830-305             |          0.1 |     0.53 | ["землей" | упокой]  |
+| xix/1830/1830-305             |          0.1 |     0.53 | ["стезей" | упокой]  |
+| xix/1830/1830-421             |          0.1 |     0.47 | ["налой"  | струей]  |
 
 #+begin_src sqlite
   WITH text_avg_coef AS (
@@ -90,3 +140,83 @@
 | 0.9-1.0 |   2100 |  0.28 |
 |     1.0 |  24659 |  3.32 |
 
+#+begin_src sqlite
+  DROP VIEW IF EXISTS excluded_rhymes
+#+end_src
+
+#+RESULTS:
+
+#+begin_src sqlite
+  CREATE VIEW excluded_rhymes AS
+  WITH text_avg_coef AS (
+      SELECT poem_id, AVG(rhyming_coef) AS avg_coef
+      FROM rhyme_annotations
+      GROUP BY poem_id
+  )
+  SELECT authors.name AS author,
+         poems.path AS poem_path,
+         poems.header AS title,
+         json_group_array(DISTINCT r.word) AS words,
+         ROUND(AVG(ra.rhyming_coef), 2) AS rhyming_coef,
+         ROUND(tac.avg_coef, 2)         AS avg_coef
+  FROM rhymes r
+  JOIN poems ON r.poem_id = poems.ROWID
+  JOIN authors ON poems.author_id = authors.ROWID
+  JOIN rhyme_annotations ra
+      ON ra.poem_id     = r.poem_id
+     AND ra.seq         = r.seq
+     AND ra.rhyme_group = r.rhyme_group
+  JOIN text_avg_coef tac ON tac.poem_id = r.poem_id
+  WHERE NOT EXISTS (
+      SELECT 1
+      FROM validated_rhyme_groups vrg
+      WHERE vrg.poem_id     = r.poem_id
+        AND vrg.seq         = r.seq
+        AND vrg.rhyme_group = r.rhyme_group
+  )
+  GROUP BY r.poem_id, r.seq, r.rhyme_group
+#+end_src
+
+#+RESULTS:
+
+#+begin_src sqlite
+  SELECT poem_path, words, rhyming_coef, avg_coef FROM excluded_rhymes WHERE rhyming_coef > 0.1 ORDER BY avg_coef DESC, rhyming_coef DESC LIMIT 10
+#+end_src
+
+#+RESULTS:
+| poem_path                       | words          | rhyming_coef | avg_coef |      |
+|---------------------------------+----------------+--------------+----------+------|
+| xix/minsky/minsk-048            | ["влюбленный"  | бессонной]   |     0.19 | 0.44 |
+| xix/polezhaev/pole-086-1        | ["груди"       | расцвести]   |     0.19 | 0.44 |
+| xx/schepkina-kupernik/kuper-100 | ["приходит"    | королева]    |     0.19 | 0.44 |
+| xx/tixonov/tixon-164            | ["многоплечий" | клетчатый]   |     0.19 | 0.44 |
+| xx/cvetaeva/cvet2-331           | ["приложим"    | сережа]      |     0.19 | 0.44 |
+| xx/samoilov/samoi-362           | ["полстолетье" | порою]       |     0.19 | 0.44 |
+| xx/china/china-010              | ["одноглазый"  | салазках]    |     0.19 | 0.44 |
+| xx/china/china-426              | ["невзначай"   | приступай]   |     0.19 | 0.44 |
+| xx/mironov/miron-206            | ["невдомек"    | голубок]     |     0.19 | 0.44 |
+| xx/sosnora/sosnor-495           | ["глаза"       | государств]  |     0.19 | 0.44 |
+
+#+begin_src sqlite
+  SELECT poem_path, words, rhyming_coef, avg_coef FROM excluded_rhymes ORDER BY rhyming_coef DESC LIMIT 10
+#+end_src
+
+#+RESULTS:
+| poem_path               | words           | rhyming_coef      | avg_coef |      |
+|-------------------------+-----------------+-------------------+----------+------|
+| xix/1840/1840-089       | ["воспевать"    | оговорок]         |     0.19 | 0.23 |
+| xix/1840/1840-089       | ["заключил"     | богатой]          |     0.19 | 0.23 |
+| xix/1840/1840-251       | ["миронтень"    | ничего]           |     0.19 | 0.17 |
+| xix/1840/1840-265       | ["хвоста-то"    | неладно]          |     0.19 | 0.25 |
+| xix/1840/1840-265       | ["дороги"       | треклятый]        |     0.19 | 0.25 |
+| xix/1840/1840-265       | ["оправданье"   | казною]           |     0.19 | 0.25 |
+| xix/batjushkov/bat-093- | ["страстном"    | съединен]         |     0.19 | 0.32 |
+| xix/iskra/iskra-78      | ["обедней"      | встретил]         |     0.19 | 0.37 |
+| xix/lermontov/le4-118   | ["благонравный" | распространялись] |     0.19 | 0.22 |
+| xix/miatlev/miat-056    | ["из-за моря"   | строит он]        |     0.19 | 0.38 |
+
+#+begin_src sh
+  sqlite3 -header -csv data/datasets/rhyme.db "SELECT * FROM excluded_rhymes" > data/excluded_rhymes.csv
+#+end_src
+
+#+RESULTS:

@@ -103,21 +103,6 @@ def prepare_database() -> str:
     try:
         conn.execute(
             """
-            CREATE TABLE validated_rhyme_groups AS
-            WITH text_avg_coef AS (
-                SELECT poem_id, AVG(rhyming_coef) as avg_coef FROM rhyme_annotations
-                GROUP BY(poem_id)
-            )
-            SELECT ra.poem_id, seq, rhyme_group FROM rhyme_annotations ra
-            JOIN text_avg_coef tac ON ra.poem_id = tac.poem_id
-            WHERE
-                rhyming_coef > 0.2 OR
-                (rhyming_coef < 0.2 AND rhyming_coef > 0.1 AND tac.avg_coef > 0.45)
-        """
-        )
-
-        conn.execute(
-            """
             CREATE TABLE creation_dates AS
             SELECT ROWID AS poem_id,
                 IF(is_date_exact, '', '≈') ||
