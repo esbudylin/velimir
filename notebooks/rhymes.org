@@ -1,0 +1,92 @@
+#+PROPERTY: header-args :dir ..
+#+PROPERTY: header-args:sqlite :db data/datasets/rhyme.db :colnames yes
+
+#+begin_src sqlite
+  SELECT COUNT(*) FROM rhyme_annotations
+#+end_src
+
+#+RESULTS:
+| COUNT(*) |
+|----------|
+|   743549 |
+
+#+begin_src sqlite
+  WITH text_avg_coef AS (
+      SELECT poem_id, AVG(rhyming_coef) as avg_coef FROM rhyme_annotations
+      GROUP BY(poem_id)
+  )
+  SELECT COUNT(*) FROM rhyme_annotations ra
+  JOIN text_avg_coef tac ON ra.poem_id = tac.poem_id
+  WHERE
+      rhyming_coef > 0.2 OR
+      (rhyming_coef < 0.2 AND rhyming_coef > 0.1 AND tac.avg_coef > 0.45)
+#+end_src
+
+#+RESULTS:
+| COUNT(*) |
+|----------|
+|   731123 |
+
+#+begin_src sqlite
+  WITH text_avg_coef AS (
+  SELECT poem_id, AVG(rhyming_coef) as avg_coef FROM rhyme_annotations
+  GROUP BY(poem_id)
+  )
+  SELECT printf('%.1f-%.1f',
+                 CAST(avg_coef * 10 AS INT) / 10.0,
+                 (CAST(avg_coef * 10 AS INT) + 1) / 10.0)
+  AS strata,
+  COUNT(*) AS n,
+  ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM text_avg_coef), 2) AS pct
+  FROM text_avg_coef
+  GROUP BY strata
+  ORDER BY MIN(avg_coef)
+#+end_src
+
+#+RESULTS:
+|  strata |     n |   pct |
+|---------+-------+-------|
+| 0.0-0.1 |    56 |  0.08 |
+| 0.1-0.2 |   138 |  0.21 |
+| 0.2-0.3 |   306 |  0.46 |
+| 0.3-0.4 |  1508 |  2.26 |
+| 0.4-0.5 |  9706 | 14.52 |
+| 0.5-0.6 | 32216 | 48.18 |
+| 0.6-0.7 | 19150 | 28.64 |
+| 0.7-0.8 |  3279 |   4.9 |
+| 0.8-0.9 |   417 |  0.62 |
+| 0.9-1.0 |    35 |  0.05 |
+| 1.0-1.1 |    57 |  0.09 |
+
+#+begin_src sqlite
+  SELECT
+    CASE
+      WHEN rhyming_coef = 0.0 THEN '0.0'
+      WHEN rhyming_coef = 1.0 THEN '1.0'
+      ELSE printf('%.1f-%.1f',
+                  CAST(rhyming_coef * 10 AS INT) / 10.0,
+                  (CAST(rhyming_coef * 10 AS INT) + 1) / 10.0)
+    END AS strata,
+    COUNT(*) AS n,
+    ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM rhyme_annotations), 2) AS pct
+  FROM rhyme_annotations
+  GROUP BY strata
+  ORDER BY MIN(rhyming_coef)
+#+end_src
+
+#+RESULTS:
+|  strata |      n |   pct |
+|---------+--------+-------|
+|     0.0 |   5889 |  0.79 |
+| 0.0-0.1 |   1340 |  0.18 |
+| 0.1-0.2 |  13381 |   1.8 |
+| 0.2-0.3 |  23944 |  3.22 |
+| 0.3-0.4 |  58044 |  7.81 |
+| 0.4-0.5 |  99688 | 13.41 |
+| 0.5-0.6 | 190119 | 25.57 |
+| 0.6-0.7 | 185051 | 24.89 |
+| 0.7-0.8 |  84463 | 11.36 |
+| 0.8-0.9 |  54871 |  7.38 |
+| 0.9-1.0 |   2100 |  0.28 |
+|     1.0 |  24659 |  3.32 |
+

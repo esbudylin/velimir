@@ -1,7 +1,6 @@
 import argparse
 import json
 import logging
-import os
 import sqlite3
 
 from bitarray import bitarray
@@ -9,21 +8,20 @@ from bitarray import bitarray
 from velimir.logger import LoggingSettings
 from velimir.phonetics import RhymeInput, calc_rhyming_coef
 from velimir.settings import (
-    RHYME_ANNOTATIONS_DB_PATH,
-    RHYME_ANNOTATIONS_TEST_DB_PATH,
     RHYME_DB_PATH,
     RHYME_TEST_DB_PATH,
 )
 
 select_query = """
-SELECT path,
+SELECT poem_id,
+       path,
        json_group_array(word) AS words,
        json_group_array(accents) AS accents
 FROM (
-    SELECT DISTINCT poems.path AS path,
-                    rhymes.poem_id AS poem_id,
+    SELECT DISTINCT rhymes.poem_id AS poem_id,
                     rhymes.seq AS seq,
                     rhymes.rhyme_group AS rhyme_group,
+                    poems.path AS path,
                     word,
                     accents
     FROM rhymes
@@ -43,13 +41,19 @@ def parse_rhymes(words: str, accents: str) -> list[RhymeInput]:
     ]
 
 
-def annotate(source_conn: sqlite3.Connection, output_conn: sqlite3.Connection):
-    output_cursor = output_conn.cursor()
+def annotate(conn: sqlite3.Connection):
+    cursor = conn.cursor()
 
-    output_cursor.execute(
+    cursor.execute(
+        """
+        DROP TABLE IF EXISTS rhyme_annotations
+        """
+    )
+
+    cursor.execute(
         """
         CREATE TABLE rhyme_annotations (
-            path TEXT NOT NULL,
+            poem_id INTEGER NOT NULL REFERENCES poems(rowid),
             words TEXT NOT NULL,
             rhyming_coef REAL NOT NULL
         )
@@ -59,7 +63,7 @@ def annotate(source_conn: sqlite3.Connection, output_conn: sqlite3.Connection):
     insert_buffer = []
     skipped = 0
 
-    for path, words, accents in source_conn.execute(select_query):
+    for poem_id, path, words, accents in conn.execute(select_query):
         try:
             rhymes = parse_rhymes(words, accents)
             rhyming_index = calc_rhyming_coef(rhymes)
@@ -68,41 +72,32 @@ def annotate(source_conn: sqlite3.Connection, output_conn: sqlite3.Connection):
             skipped += 1
             continue
 
-        insert_buffer.append((path, words, rhyming_index))
+        insert_buffer.append((poem_id, words, rhyming_index))
 
-    output_cursor.executemany(
+    cursor.executemany(
         """
-        INSERT INTO rhyme_annotations (path, words, rhyming_coef)
+        INSERT INTO rhyme_annotations (poem_id, words, rhyming_coef)
         VALUES (?, ?, ?)
         """,
         insert_buffer,
     )
-    output_conn.commit()
+    conn.commit()
 
     logging.info("Annotated %d rhyme groups, skipped %d", len(insert_buffer), skipped)
 
 
 def main(test_run: bool = False):
-    source_db_path = RHYME_TEST_DB_PATH if test_run else RHYME_DB_PATH
-    output_db_path = (
-        RHYME_ANNOTATIONS_TEST_DB_PATH if test_run else RHYME_ANNOTATIONS_DB_PATH
-    )
+    db_path = RHYME_TEST_DB_PATH if test_run else RHYME_DB_PATH
+    db_conn = sqlite3.connect(db_path)
 
     LoggingSettings.setup()
 
-    if os.path.exists(output_db_path):
-        os.remove(output_db_path)
-
-    source_conn = sqlite3.connect(source_db_path)
-    output_conn = sqlite3.connect(output_db_path)
-
     try:
-        annotate(source_conn, output_conn)
+        annotate(db_conn)
     finally:
-        source_conn.close()
-        output_conn.close()
+        db_conn.close()
 
-    logging.info("Rhyme annotations written to %s", output_db_path)
+    logging.info("Rhyme annotations written to %s", db_path)
 
 
 if __name__ == "__main__":
