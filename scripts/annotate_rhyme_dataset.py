@@ -87,37 +87,6 @@ def annotate(conn: sqlite3.Connection):
         insert_buffer,
     )
 
-    cursor.execute(
-        """
-        DROP VIEW IF EXISTS validated_rhyme_groups
-        """
-    )
-
-    cursor.execute(
-        """
-        CREATE VIEW validated_rhyme_groups AS
-        WITH text_avg_coef AS (
-            SELECT poem_id, AVG(rhyming_coef) as avg_coef FROM rhyme_annotations
-            GROUP BY(poem_id)
-        ),
-        rounded AS (
-            SELECT
-                ra.poem_id,
-                seq,
-                rhyme_group,
-                ROUND(ra.rhyming_coef, 2) AS rhyming_coef,
-                ROUND(tac.avg_coef, 2) AS avg_coef
-            FROM rhyme_annotations ra
-            JOIN text_avg_coef tac ON ra.poem_id = tac.poem_id
-        )
-        SELECT *
-        FROM rounded
-        WHERE
-            rhyming_coef >= 0.2
-            OR (rhyming_coef >= 0.1 AND avg_coef >= 0.45);
-        """
-    )
-
     conn.commit()
 
     logging.info("Annotated %d rhyme groups, skipped %d", len(insert_buffer), skipped)

@@ -128,12 +128,12 @@ def prepare_database() -> str:
                    authors.sort_key as sort_key,
                    json_group_array(DISTINCT r.word) AS rhymes,
                    creation_dates.year_range
-            FROM validated_rhyme_groups vrg
-            JOIN rhymes r ON r.poem_id = vrg.poem_id AND r.seq = vrg.seq AND r.rhyme_group = vrg.rhyme_group
-            JOIN poems ON vrg.poem_id = poems.ROWID
+            FROM rhymes r
+            JOIN poems ON r.poem_id = poems.ROWID
             JOIN authors ON poems.author_id = authors.ROWID
             JOIN creation_dates ON creation_dates.poem_id = poems.ROWID
-            GROUP BY vrg.poem_id, vrg.seq, vrg.rhyme_group
+            WHERE r.rhyme_group <> -1
+            GROUP BY r.poem_id, r.seq, r.rhyme_group
         """
         )
 
@@ -303,17 +303,13 @@ def create_app() -> Flask:
                     creation_dates.year_range AS year_range,
                     rhymes.word  AS word
                 FROM rhymes
-                JOIN validated_rhyme_groups vrg
-                    ON  vrg.poem_id     = rhymes.poem_id
-                    AND vrg.seq         = rhymes.seq
-                    AND vrg.rhyme_group = rhymes.rhyme_group
                 JOIN poems   ON poems.ROWID = rhymes.poem_id
                 JOIN authors ON authors.ROWID = poems.author_id
                 JOIN creation_dates ON creation_dates.poem_id = poems.ROWID
                 WHERE (rhymes.poem_id, rhymes.seq, rhymes.rhyme_group) IN (
                     SELECT poem_id, seq, rhyme_group FROM rhymes WHERE word = ?
                 )
-                AND rhymes.word <> ?
+                AND rhymes.word <> ? AND rhymes.rhyme_group <> -1
                 ORDER BY {order_by}
                 """,
                 (query, query),
