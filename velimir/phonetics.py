@@ -17,12 +17,19 @@ class RhymeInput:
     accents: bitarray
 
 
-def subst_vowel(ch: str, has_accent: bool):
-    subst = {
+def subst_vowel(ch: str, prev_ch: str, has_accent: bool):
+    composed_subst = {
         "ю": "у",
         "я": "а",
         "ё": "о",
         "е": "э",
+    }
+
+    if prev_ch and accentuator.is_vowel(prev_ch):  # TODO: начало слов
+        composed_subst = {k: "й" + v for k, v in composed_subst.items()}
+
+    subst = {
+        **composed_subst,
         "о": "о" if has_accent else "а",
         "ы": "и" if has_accent else "ы",
     }
@@ -67,12 +74,13 @@ def to_phonetic_repr(inp: RhymeInput) -> str:
     word = word.replace("здн", "зн")
     word = word.replace("стн", "сн")
 
-    word = re.sub(r"[^а-яё]|[ьъй]", "", word)
+    word = re.sub(r"[^а-яё]|[ьъ]", "", word)
 
     cur_vowel = 0
 
     for i, ch in enumerate(word):
         next_ch = "" if i + 1 == len(word) else word[i + 1]
+        prev_ch = "" if i == 0 else word[i - 1]
         vowel = accentuator.is_vowel(ch)
 
         if next_ch == ch and not vowel:
@@ -82,7 +90,11 @@ def to_phonetic_repr(inp: RhymeInput) -> str:
 
         cur_vowel += vowel
 
-        out += subst_vowel(ch, has_accent) if vowel else subst_consonant(ch, next_ch)
+        out += (
+            subst_vowel(ch, prev_ch, has_accent)
+            if vowel
+            else subst_consonant(ch, next_ch)
+        )
 
     return out
 
