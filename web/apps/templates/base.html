@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Рифмы{% endblock %}</title>
+  <style>
+    body { font-family: sans-serif; margin: 2em auto; max-width: 64em; line-height: 1.5; }
+    nav { margin-bottom: 1em; }
+    nav a { margin-right: 1em; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 0.35em 0.6em; text-align: left; vertical-align: top; }
+    th { background: #f2f2f2; }
+    .muted { color: #666; font-size: 0.9em; }
+    .words { word-spacing: 0.4em; }
+    .pagination a { margin-right: 1em; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('index') }}">Главная</a>
+    <a href="{{ url_for('authors') }}">Авторы</a>
+    <a href="{{ url_for('search') }}">Поиск рифм</a>
+  </nav>
+  {% block content %}{% endblock %}
+</body>
+</html>

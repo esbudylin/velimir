@@ -178,6 +178,9 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
         CREATE TABLE poems (
             path TEXT UNIQUE NOT NULL,
             header TEXT,
+            date_low INTEGER NOT NULL,
+            date_high INTEGER,
+            is_date_exact INTEGER NOT NULL,
             author_id INTEGER NOT NULL REFERENCES authors(rowid)
         )
         """
@@ -206,19 +209,6 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
             accents TEXT, -- binary mask
 
             UNIQUE(poem_id, seq, order_in_seq) ON CONFLICT FAIL
-        )
-        """
-    )
-
-    cursor.execute(
-        """
-        CREATE TABLE creation_dates (
-            poem_id INTEGER NOT NULL REFERENCES poems(rowid),
-            date_low INTEGER NOT NULL,
-            date_high INTEGER,
-            is_exact INTEGER NOT NULL,
-
-            UNIQUE(poem_id) ON CONFLICT FAIL
         )
         """
     )
@@ -259,8 +249,19 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
 
             if poem.path not in poem_id_cache:
                 result = cursor.execute(
-                    "INSERT OR IGNORE INTO poems (path, header, author_id) VALUES (?, ?, ?) RETURNING rowid",
-                    (poem.path, poem.header, author_id),
+                    """
+                    INSERT OR IGNORE INTO poems (path, header, author_id, date_low, date_high, is_date_exact)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    RETURNING rowid
+                    """,
+                    (
+                        poem.path,
+                        poem.header,
+                        author_id,
+                        poem.creation_date.lower,
+                        poem.creation_date.upper,
+                        int(poem.creation_date.is_exact),
+                    ),
                 )
                 row = result.fetchone()
                 if row is None:
@@ -270,20 +271,6 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
                     )
 
                 poem_id_cache[poem.path] = row[0]
-
-                cursor.execute(
-                    """
-                    INSERT INTO creation_dates
-                        (poem_id, date_low, date_high, is_exact)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        row[0],
-                        poem.creation_date.lower,
-                        poem.creation_date.upper,
-                        int(poem.creation_date.is_exact),
-                    ),
-                )
 
             poem_id = poem_id_cache[poem.path]
 

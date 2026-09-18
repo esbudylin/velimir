@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<h1>Рифмы</h1>
-<p>Сайт использует данные поэтического корпуса <a href="https://ruscorpora.ru">Национального корпуса русского языка.</a></p>
-<ul>
-  <li><a href="{{ url_for('authors') }}">Рифмы по авторам</a></li>
-  <li><a href="{{ url_for('search') }}">Поиск рифм</a></li>
-</ul>
-{% endblock %}
