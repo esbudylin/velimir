@@ -41,6 +41,7 @@ def main() -> None:
         {
             "bind": f"{args.host}:{args.port}",
             "workers": args.workers,
+            "preload_app": True,
         }
     ).run()
 

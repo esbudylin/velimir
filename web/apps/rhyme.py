@@ -12,7 +12,7 @@ from flask import Flask, abort, current_app, g, render_template, request, url_fo
 from markupsafe import Markup, escape
 
 from web.rnc_url import build_rnc_url
-from velimir.settings import RHYME_DB_PATH
+from velimir.settings import DATASETS_DIRECTORY, RHYME_DB_PATH
 
 SORT_KEY_RE = re.compile(r"[^а-яёa-z0-9]")
 
@@ -93,7 +93,7 @@ def sort_key(text: str) -> str:
 
 
 def prepare_database() -> str:
-    temp_dir = tempfile.mkdtemp(prefix="velimir_rhymes_")
+    temp_dir = tempfile.mkdtemp(prefix="velimir_rhymes_", dir=DATASETS_DIRECTORY)
     atexit.register(shutil.rmtree, temp_dir, ignore_errors=True)
 
     temp_path = os.path.join(temp_dir, "rhyme.db")
