@@ -31,10 +31,11 @@ GRAMMAR_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "grammar_test.db")
 RHYME_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme.db")
 RHYME_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_test.db")
 
-RHYME_ANNOTATIONS_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_annotations.db")
-RHYME_ANNOTATIONS_TEST_DB_PATH = os.path.join(
-    DATASETS_DIRECTORY, "rhyme_annotations_test.db"
-)
+DATASET_FILES = [
+    os.path.basename(GRAMMAR_DB_PATH),
+    os.path.basename(OUTPUT_FILE),
+    os.path.basename(RHYME_DB_PATH),
+]
 
 METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
 

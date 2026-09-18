@@ -62,10 +62,13 @@ $(eval $(call SCRIPT_TARGET,export_onnx,scripts))
 
 $(eval $(call SCRIPT_TARGET,evaluate_onnx,scripts))
 
-serve-rhymes:
-	$(Q)uv run scripts/serve_rhymes.py
-
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,seed_sweep,scripts))
+
+push-datasets:
+	$(Q)uv run scripts/push_datasets.py
+
+pull-datasets:
+	$(Q)uv run scripts/pull_datasets.py
 
 test:
 	$(PYTHON) -m unittest discover tests
