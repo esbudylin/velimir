@@ -134,6 +134,7 @@ def prepare_database() -> str:
             JOIN creation_dates ON creation_dates.poem_id = poems.ROWID
             WHERE r.rhyme_group <> -1
             GROUP BY r.poem_id, r.seq, r.rhyme_group
+            HAVING COUNT(DISTINCT word) > 1
         """
         )
 
