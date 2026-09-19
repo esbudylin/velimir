@@ -92,9 +92,14 @@ def sort_key(text: str) -> str:
     return SORT_KEY_RE.sub("", (text or "").lower())
 
 
+def remove_temp_dir(temp_dir: str, owner_pid: int) -> None:
+    if os.getpid() == owner_pid:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def prepare_database() -> str:
     temp_dir = tempfile.mkdtemp(prefix="velimir_rhymes_", dir=DATASETS_DIRECTORY)
-    atexit.register(shutil.rmtree, temp_dir, ignore_errors=True)
+    atexit.register(remove_temp_dir, temp_dir, os.getpid())
 
     temp_path = os.path.join(temp_dir, "rhyme.db")
     shutil.copyfile(RHYME_DB_PATH, temp_path)
