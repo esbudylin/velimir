@@ -6,7 +6,7 @@ import os
 import re
 import sqlite3
 from dataclasses import dataclass
-from itertools import repeat, islice
+from itertools import count, islice, repeat
 from typing import Iterator
 
 from velimir import accentuator, cyrlat
@@ -16,7 +16,7 @@ from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
 from velimir.parsers import parse_input_lines
-from velimir.rhyme import RhymeType, RhymeVisitor, rhyme_grammar
+from velimir.rhyme import RhymeType, RhymeVisitor, SpecialRhymeEntry, rhyme_grammar
 from velimir.settings import (
     METADATA_TABLE,
     RHYME_DB_PATH,
@@ -25,6 +25,8 @@ from velimir.settings import (
 )
 
 IRREGULAR_STANZA_MARK = "нарушения строфики"
+
+MONO_RHYME_SEQ_IDX = -1
 
 
 @dataclass
@@ -120,6 +122,8 @@ def extract_rhyme_features(
         input_lines[i : i + rhyme_seq_len] for i in range(0, input_len, rhyme_seq_len)
     ]
 
+    mono_counter = count()
+
     for seq_idx, seq in enumerate(rhyme_seqs):
         for order_in_seq, (rhyme_group, line) in enumerate(zip(schema, seq)):
             accents = accentuator.extract_accent_mask(line.rhyme_zone)
@@ -142,14 +146,26 @@ def extract_rhyme_features(
                 )
                 continue
 
-            yield RhymeSample(
-                seq=seq_idx,
-                order_in_seq=order_in_seq,
-                rhyme_type=rhyme_type,
-                rhyme_group=rhyme_group,
-                accents=accents,
-                word=cleaned_word,
-            )
+            if rhyme_group == SpecialRhymeEntry.MONO:
+                # монотонные рифмы собираются в отдельную группу,
+                # захватывающую монотонные рифмы по всему тексту
+                yield RhymeSample(
+                    seq=MONO_RHYME_SEQ_IDX,
+                    order_in_seq=next(mono_counter),
+                    rhyme_type=rhyme_type,
+                    rhyme_group=rhyme_group,
+                    accents=accents,
+                    word=cleaned_word,
+                )
+            else:
+                yield RhymeSample(
+                    seq=seq_idx,
+                    order_in_seq=order_in_seq,
+                    rhyme_type=rhyme_type,
+                    rhyme_group=rhyme_group,
+                    accents=accents,
+                    word=cleaned_word,
+                )
 
 
 def transform_data(csv_reader: csv.DictReader) -> Iterator[PoemSamples]:

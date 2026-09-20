@@ -13,7 +13,7 @@ rhyme_grammar = Grammar(
 
     entry = chain_type / type_with_schema / schemaless_type
 
-    schemaless_type = ( "монорим" / "вольная" / "спорадическая" / "затянутая" / "0" )
+    schemaless_type = ( "монорим" / "вольная" / "спорадическая" / "затянутая" / "0" / "неизвестно" )
 
     type_with_schema = ~r"[а-я]+" separator_colon schema
     separator_colon = ws* ":" ws*
@@ -21,7 +21,7 @@ rhyme_grammar = Grammar(
     chain_type = "цепная" separator_colon schema ws* ellipsis
 
     schema = schema_entry ( ws+ schema_entry )*
-    schema_entry = ~r"[А-ГХа-кхтмр]+" 
+    schema_entry = ~r"[А-ГХа-лхтмр]+"
 
     ws = ~r"\s+" 
     ellipsis = "..." / "…" / ".."
@@ -47,6 +47,7 @@ class RhymeType(CodeIntEnum):
     REGULAR = 14, "регулярная"
     CHAIN = 15, "цепная"
     NONE = 16, "0"
+    UNKNOWN = 17, "неизвестно"
 
 
 class SpecialRhymeEntry(IntEnum):
