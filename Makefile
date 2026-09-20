@@ -71,10 +71,10 @@ pull-datasets:
 	$(Q)uv run scripts/pull_datasets.py
 
 web-serve:
-	$(Q)uv run web/serve.py
+	$(Q)uv run --group web web/serve.py
 
 web-serve-prod:
-	$(Q)uv run web/serve_prod.py
+	$(Q)uv run --group web web/serve_prod.py
 
 test:
 	$(PYTHON) -m unittest discover tests

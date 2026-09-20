@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Рифмы{% endblock %}</title>
+  <title>{% block title %}Велимир{% endblock %}</title>
   <style>
     body { font-family: sans-serif; margin: 2em auto; max-width: 64em; line-height: 1.5; }
     nav { margin-bottom: 1em; }
@@ -14,14 +14,22 @@
     .muted { color: #666; font-size: 0.9em; }
     .words { word-spacing: 0.4em; }
     .pagination a { margin-right: 1em; }
+    textarea { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 1em; }
+    .error { color: #b00020; }
+    .verse { margin: 0.6em 0; }
+    .meter { color: #666; font-family: monospace; margin-right: 0.6em; }
+    .failed .meter { color: #b00020; }
   </style>
+  {% block styles %}{% endblock %}
 </head>
 <body>
   <nav>
-    <a href="{{ url_for('index') }}">Главная</a>
-    <a href="{{ url_for('authors') }}">Авторы</a>
-    <a href="{{ url_for('search') }}">Поиск рифм</a>
+    <a href="{{ url_for('rhyme.index') }}">Главная</a>
+    <a href="{{ url_for('rhyme.authors') }}">Рифмы по авторам</a>
+    <a href="{{ url_for('rhyme.search') }}">Поиск рифм</a>
+    <a href="{{ url_for('markup.index') }}">Разметка</a>
   </nav>
   {% block content %}{% endblock %}
+  {% block scripts %}{% endblock %}
 </body>
 </html>

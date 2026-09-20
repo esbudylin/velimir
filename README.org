@@ -37,11 +37,6 @@ To run the training, you'll also need to pull the datasets. To do so, run
   output is similar to the one internally used by the Russian National
   Corpus.
 
-  ~markup~ is only a lean frontend, so if you want to emit data in a
-  different format, you may want to replace this script
-  entirely. However, if instead you want to parse the markup output,
-  you may find [[file:velimir/parsers.py]] useful.
-
   # TODO: Add more documentation on input/output formats
 
   Despite using ML models for meter and rhythm detection, the script

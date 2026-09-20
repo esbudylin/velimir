@@ -11,7 +11,7 @@
   </tr>
   {% for author in authors %}
   <tr>
-    <td><a href="{{ url_for('author', name=author['name']) }}">{{ author['name'] }}</a></td>
+    <td><a href="{{ url_for('rhyme.author', name=author['name']) }}">{{ author['name'] }}</a></td>
     <td>{{ author['groups'] }}</td>
   </tr>
   {% endfor %}

@@ -8,8 +8,9 @@ import tempfile
 from dataclasses import dataclass
 from enum import Enum
 
-from flask import Flask, abort, current_app, g, render_template, request, url_for
+from flask import Blueprint, abort, current_app, g, render_template, request, url_for
 from markupsafe import Markup, escape
+from werkzeug.serving import is_running_from_reloader
 
 from web.rnc_url import build_rnc_url
 from velimir.settings import DATASETS_DIRECTORY, RHYME_DB_PATH
@@ -196,16 +197,27 @@ def close_db(_error=None) -> None:
         db.close()
 
 
-def create_app() -> Flask:
-    app = Flask(__name__)
-    app.teardown_appcontext(close_db)
-    app.config["DB_PATH"] = prepare_database()
+bp = Blueprint("rhyme", __name__)
 
-    @app.get("/")
+
+@bp.record_once
+def init_app(state) -> None:
+    state.app.teardown_appcontext(close_db)
+
+    # The Werkzeug reloader parent builds the app but never serves requests,
+    # so skip the expensive database copy there.
+    if state.app.debug and not is_running_from_reloader():
+        return
+
+    state.app.config["DB_PATH"] = prepare_database()
+
+
+def register_routes() -> None:
+    @bp.get("/")
     def index():
         return render_template("index.html")
 
-    @app.get("/authors")
+    @bp.get("/authors")
     def authors():
         sort, order = resolve_sort(AUTHORS_ORDER_BY, request.args, SortKey.NAME)
 
@@ -225,12 +237,14 @@ def create_app() -> Flask:
             AUTHORS_COLUMNS,
             sort,
             order,
-            lambda key, next_order: url_for("authors", sort=key, order=next_order),
+            lambda key, next_order: url_for(
+                "rhyme.authors", sort=key, order=next_order
+            ),
         )
 
         return render_template("authors.html", authors=rows, columns=columns)
 
-    @app.get("/authors/<path:name>")
+    @bp.get("/authors/<path:name>")
     def author(name):
         db = get_db()
 
@@ -267,7 +281,7 @@ def create_app() -> Flask:
             sort,
             order,
             lambda key, next_order: url_for(
-                "author", name=name, sort=key, order=next_order
+                "rhyme.author", name=name, sort=key, order=next_order
             ),
         )
 
@@ -278,7 +292,7 @@ def create_app() -> Flask:
             columns=columns,
         )
 
-    @app.get("/search")
+    @bp.get("/search")
     def search():
         query = request.args.get("q", "").strip().lower()
 
@@ -289,7 +303,7 @@ def create_app() -> Flask:
             sort,
             order,
             lambda key, next_order: url_for(
-                "search", q=query, sort=key, order=next_order
+                "rhyme.search", q=query, sort=key, order=next_order
             ),
         )
 
@@ -325,7 +339,7 @@ def create_app() -> Flask:
                 {
                     "word": row["word"],
                     "author": Markup('<a href="{}">{}</a>').format(
-                        url_for("author", name=row["author"]),
+                        url_for("rhyme.author", name=row["author"]),
                         escape(row["author"]),
                     ),
                     "date": row["year_range"],
@@ -344,4 +358,5 @@ def create_app() -> Flask:
             columns=columns,
         )
 
-    return app
+
+register_routes()

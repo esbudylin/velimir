@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Разметка стихотворения{% endblock %}
+{% block styles %}
+<style>
+  .markup-layout { table-layout: fixed;}
+  .markup-layout td { border: none; padding: 0; vertical-align: top; }
+  .markup-layout td:first-child { width: 33.3333%; padding-right: 3em; }
+  .markup-layout td:last-child { width: 66.6667%; }
+  .markup-layout textarea { min-height: 10em; overflow: hidden; }
+  .markup-layout .actions { margin: 0.6em 0 0; }
+  .markup-result { table-layout: auto; width: 100%; margin: 0.6em 0; }
+  .markup-result td { border: none; padding: 0 0 0.15em; vertical-align: baseline; }
+  .markup-result td.meter { color: #666; font-family: monospace; white-space: nowrap; padding-right: 1.5em; width: 1%; }
+  .markup-result td.text { width: 100%; }
+  .markup-result tr.failed td.meter { color: #b00020; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>Разметка стихотворения</h1>
+<p class="muted">Введите стихотворение. Максимум {{ max_text_length }} символов.</p>
+
+<table class="markup-layout">
+  <tr>
+    <td>
+      <form action="{{ url_for('markup.process') }}" method="post">
+        <textarea name="text" maxlength="{{ max_text_length }}">{{ text or '' }}</textarea>
+        <p class="actions">
+          <button type="submit">Разметить</button>
+          <button type="submit" formaction="{{ url_for('markup.download') }}">Скачать XML разметки</button>
+        </p>
+      </form>
+    </td>
+    <td>
+      {% if error %}
+      <p class="error">{{ error }}</p>
+      {% endif %}
+
+      {% if verses %}
+      {% for verse in verses %}
+      <table class="markup-result">
+        {% for line in verse %}
+        <tr{% if line.failed %} class="failed"{% endif %}>
+          <td class="meter">{{ line.meter }}</td>
+          <td class="text">{{ line.accented }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endfor %}
+      {% elif not error %}
+      <p class="muted">Здесь появится разметка.</p>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+{% endblock %}
+{% block scripts %}
+<script>
+  const input = document.querySelector('.markup-layout textarea[name="text"]');
+  if (input) {
+    const resize = () => {
+      input.style.height = 'auto';
+      const border = input.offsetHeight - input.clientHeight;
+      input.style.height = input.scrollHeight + border + 'px';
+    };
+    input.addEventListener('input', resize);
+    window.addEventListener('resize', resize);
+    resize();
+  }
+</script>
+{% endblock %}

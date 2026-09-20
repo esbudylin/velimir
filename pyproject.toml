@@ -24,6 +24,10 @@ dev = [
     "msgpack==1.0.6",
     "onnx==1.21.0",
 ]
+web = [
+    "flask>=3.0,<4",
+    "gunicorn>=22,<24",
+]
 
 [tool.uv]
 package = false

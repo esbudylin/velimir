@@ -1,136 +1,23 @@
 import logging
 import sys
 
-from velimir.accentuator import build_accent_dict, is_vowel, stress_mark_ord
-from velimir.identifier import FailedLine, ProcessedLine, process_lines
-from velimir.io import read_accent_dicts
-from velimir.ml_preprocess import MeterClassRegistry
-from velimir.onnx import load_onnx_models
-from velimir.settings import ACCENT_DICT_PATHS
 from velimir.logger import LoggingSettings
-
-
-def read_verses_from_stdin() -> list[list[str]]:
-    verses = []
-    current = []
-
-    for raw in sys.stdin:
-        line = raw.rstrip("\n")
-
-        if not line.strip():
-            if current:
-                verses.append(current)
-                current = []
-        else:
-            current.append(line)
-
-    if current:
-        verses.append(current)
-
-    return verses
-
-
-def flatten_verses(verses: list[list[str]]):
-    flat = []
-    stanza_breaks = []
-
-    for verse in verses:
-        stanza_breaks.append(len(flat))
-        flat.extend(verse)
-
-    return flat, stanza_breaks
-
-
-def unflatten(processed: list[ProcessedLine], stanza_breaks: list[int]):
-    """Split flat processed lines back into verses."""
-    res = []
-    current_stanza = []
-
-    for i, line in enumerate(processed):
-        if i in stanza_breaks and current_stanza:
-            res.append(current_stanza)
-            current_stanza = []
-        current_stanza.append(line)
-
-    if current_stanza:
-        res.append(current_stanza)
-
-    return res
-
-
-def put_accents(line: str, mask: list[bool]):
-    res = ""
-    vowel_pos = 0
-
-    for c in line:
-        res += c
-        if is_vowel(c):
-            if mask[vowel_pos]:
-                res += chr(stress_mark_ord)
-            vowel_pos += 1
-
-    return res
-
-
-def emit_result(verses, processed_verses):
-    print('<?xml version="1.0" encoding="utf-8"?>')
-    print("<body>")
-
-    for verse_lines, verse_processed in zip(verses, processed_verses):
-        print(format_verse(verse_lines, verse_processed))
-
-    print("</body>")
-
-
-def format_verse(
-    lines: list[str],
-    processed_lines: list[ProcessedLine | FailedLine],
-) -> str:
-    parts = ['<p class="verse">']
-
-    for line, processed in zip(lines, processed_lines):
-        err = isinstance(processed, FailedLine)
-        meter = processed.to_str() if not err else "???"
-        accline = put_accents(line, processed.poetic_accents) if not err else line
-        parts.append(f'<line meter="{meter}"/>{accline}<br/>')
-
-    parts.append("</p>")
-    return "\n".join(parts)
+from velimir.markup import MarkupEngine, render_xml
 
 
 def main():
     LoggingSettings.setup()
-    MeterClassRegistry.initialize()
 
-    build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
+    text = sys.stdin.read()
 
-    verses = read_verses_from_stdin()
-
-    if not verses:
+    if not text.strip():
         logging.error("No input provided")
         sys.exit(1)
 
-    flat_lines, stanza_breaks = flatten_verses(verses)
+    engine = MarkupEngine()
+    processed_verses = engine.markup_text(text)
 
-    meter_model, accent_model = load_onnx_models()
-
-    processed_flat = process_lines(
-        meter_model,
-        accent_model,
-        flat_lines,
-        stanza_breaks,
-    )
-
-    if len(processed_flat) != len(flat_lines):
-        logging.error(
-            "Mismatch: processed %d lines, expected %d",
-            len(processed_flat),
-            len(flat_lines),
-        )
-        sys.exit(1)
-
-    processed_verses = unflatten(processed_flat, stanza_breaks)
-    emit_result(verses, processed_verses)
+    print(render_xml(processed_verses), end="")
 
 
 if __name__ == "__main__":

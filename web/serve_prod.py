@@ -1,15 +1,8 @@
-# /// script
-# requires-python = ">=3.10,<3.11"
-# dependencies = [
-#     "flask>=3.0,<4",
-#     "gunicorn>=22,<24",
-# ]
-# ///
 import argparse
 
 from gunicorn.app.base import BaseApplication
 
-from web.apps.rhyme import create_app
+from web.app import create_app
 
 
 class WebApplication(BaseApplication):
@@ -28,7 +21,7 @@ class WebApplication(BaseApplication):
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Serve the rhyme dataset web UI in production."
+        description="Serve the Velimir web UI in production."
     )
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
