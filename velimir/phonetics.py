@@ -68,8 +68,6 @@ def to_phonetic_repr(inp: RhymeInput) -> str:
     word = re.sub(r"(а|е|о)(го)($|\s)", r"\1во\3", word)
 
     word = re.sub(r"(ж|ш)и", r"\1ы", word)
-    word = re.sub(r"(ч|щ)а", r"\1я", word)
-    word = re.sub(r"(ч|щ)у", r"\1ю", word)
 
     word = word.replace("здн", "зн")
     word = word.replace("стн", "сн")

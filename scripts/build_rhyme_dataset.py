@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 from dataclasses import dataclass
+from itertools import repeat, islice
 from typing import Iterator
 
 from velimir import accentuator, cyrlat
@@ -15,7 +16,7 @@ from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
 from velimir.parsers import parse_input_lines
-from velimir.rhyme import RhymeVisitor, rhyme_grammar
+from velimir.rhyme import RhymeType, RhymeVisitor, rhyme_grammar
 from velimir.settings import (
     METADATA_TABLE,
     RHYME_DB_PATH,
@@ -28,7 +29,7 @@ IRREGULAR_STANZA_MARK = "нарушения строфики"
 
 @dataclass
 class RhymeSample:
-    rhyme_type: str
+    rhyme_type: RhymeType
 
     seq: int
     order_in_seq: int
@@ -47,6 +48,27 @@ class PoemSamples:
     header: str
     creation_date: CreationDate
     samples: list[RhymeSample]
+
+
+def expand_chain_schema(schema: list[list[int]]) -> Iterator[int]:
+    if len(schema) <= 1:
+        raise ValueError("At least 2 subschemas are needed to make an expansion")
+
+    if len(set(map(len, schema))) > 1:
+        raise ValueError("Subschemas of unequal len in chain rhyme formula")
+
+    diff = [
+        next_part - prev_part for prev_part, next_part in zip(schema[-2], schema[-1])
+    ]
+
+    for subschema in schema:
+        yield from subschema
+
+    last_schema = schema[-1]
+
+    while True:
+        last_schema = [x + d for x, d in zip(last_schema, diff)]
+        yield from last_schema
 
 
 def extract_rhyme_features(
@@ -74,18 +96,28 @@ def extract_rhyme_features(
 
     entry, *_ = rhyme_formula
 
-    type = entry["type"]
-    schema = entry.get("schema")
+    rhyme_type = entry["type"]
+    parsed_schema = entry.get("schema")
 
-    if not schema:
-        return  # TODO: монорим
+    if not parsed_schema and rhyme_type != RhymeType.MONORHYME:
+        return
 
     input_lines, _ = parse_input_lines(xml, allow_latin=True)
+    input_len = len(input_lines)
+
+    if input_len == 0:
+        return
+
+    if rhyme_type == RhymeType.MONORHYME:
+        schema = list(repeat(0, input_len))
+    elif rhyme_type == RhymeType.CHAIN:
+        schema = list(islice(expand_chain_schema(parsed_schema), input_len))
+    else:
+        schema = [x for subschema in parsed_schema for x in subschema]  # flattening
 
     rhyme_seq_len = len(schema)
     rhyme_seqs = [
-        input_lines[i : i + rhyme_seq_len]
-        for i in range(0, len(input_lines), rhyme_seq_len)
+        input_lines[i : i + rhyme_seq_len] for i in range(0, input_len, rhyme_seq_len)
     ]
 
     for seq_idx, seq in enumerate(rhyme_seqs):
@@ -113,7 +145,7 @@ def extract_rhyme_features(
             yield RhymeSample(
                 seq=seq_idx,
                 order_in_seq=order_in_seq,
-                rhyme_type=type,
+                rhyme_type=rhyme_type,
                 rhyme_group=rhyme_group,
                 accents=accents,
                 word=cleaned_word,
@@ -188,18 +220,9 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
 
     cursor.execute(
         """
-        CREATE TABLE rhyme_types (
-            id INTEGER PRIMARY KEY,
-            name TEXT UNIQUE NOT NULL
-        )
-        """
-    )
-
-    cursor.execute(
-        """
         CREATE TABLE rhymes (
             poem_id INTEGER NOT NULL REFERENCES poems(rowid),
-            rhyme_type_id INTEGER NOT NULL REFERENCES rhyme_types(id),
+            rhyme_type INTEGER NOT NULL,
 
             seq INTEGER,
             order_in_seq INTEGER,
@@ -225,7 +248,6 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
 
     poem_id_cache: dict[str, int] = {}
     author_id_cache: dict[str, int] = {}
-    rhyme_type_id_cache: dict[str, int] = {}
 
     for batch in batched(transformed_data, size=10000):
         insert_buffer = []
@@ -277,23 +299,10 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
             for sample in poem.samples:
                 accent_str = "".join(str(int(accent)) for accent in sample.accents)
 
-                if sample.rhyme_type not in rhyme_type_id_cache:
-                    result = cursor.execute(
-                        "INSERT OR IGNORE INTO rhyme_types (name) VALUES (?) RETURNING id",
-                        (sample.rhyme_type,),
-                    )
-                    row = result.fetchone()
-                    if row is None:
-                        raise ValueError(
-                            "Rhyme type %s is already in a db. Missing cache value",
-                            sample.rhyme_type,
-                        )
-                    rhyme_type_id_cache[sample.rhyme_type] = row[0]
-
                 insert_buffer.append(
                     (
                         poem_id,
-                        rhyme_type_id_cache[sample.rhyme_type],
+                        int(sample.rhyme_type),
                         sample.seq,
                         sample.order_in_seq,
                         sample.rhyme_group,
@@ -305,7 +314,7 @@ def write_into_sqlite(conn, transformed_data: Iterator[PoemSamples]):
         cursor.executemany(
             """
                 INSERT INTO rhymes
-                    (poem_id, rhyme_type_id, seq, order_in_seq, rhyme_group, word, accents)
+                    (poem_id, rhyme_type, seq, order_in_seq, rhyme_group, word, accents)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
             insert_buffer,
