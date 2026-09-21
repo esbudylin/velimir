@@ -31,6 +31,9 @@ GRAMMAR_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "grammar_test.db")
 RHYME_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme.db")
 RHYME_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_test.db")
 
+RHYME_PAIRS_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_pairs.db")
+RHYME_PAIRS_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_pairs_test.db")
+
 DATASET_FILES = [
     os.path.basename(GRAMMAR_DB_PATH),
     os.path.basename(OUTPUT_FILE),

@@ -263,7 +263,7 @@ def extract_lines(
                 idx=idx,
                 text=text,
                 meter=meter.strip(),
-                rhyme_zone=rhyme_zone,
+                rhyme_zone=rhyme_zone.strip(),
             )
 
 

@@ -136,7 +136,7 @@ def extract_rhyme_features(
                 continue
 
             word = accentuator.remove_accent_marks(line.rhyme_zone).lower()
-            cleaned_word = re.sub(r"[^а-я-\sё]", "", word).strip("-").strip()
+            cleaned_word = re.sub(r"[^а-я-\sё]", "", word).strip("- ")
 
             if not cleaned_word:
                 logging.warning(

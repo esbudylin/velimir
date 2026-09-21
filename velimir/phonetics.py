@@ -1,10 +1,46 @@
 import re
+from dataclasses import dataclass
 
 from velimir import accentuator
 
 voiced = ["б", "з", "д", "в", "г", "ж"]
 voiceless = ["п", "с", "т", "ф", "к", "ш"]
 consonant_pairs = [a + b for a, b in zip(voiced, voiceless)]
+
+PHONETIC_VOCAB = {
+    "а": 1,
+    "б": 2,
+    "в": 3,
+    "г": 4,
+    "д": 5,
+    "ж": 6,
+    "з": 7,
+    "и": 8,
+    "й": 9,
+    "к": 10,
+    "л": 11,
+    "м": 12,
+    "н": 13,
+    "о": 14,
+    "п": 15,
+    "р": 16,
+    "с": 17,
+    "т": 18,
+    "у": 19,
+    "ф": 20,
+    "х": 21,
+    "ч": 22,
+    "ш": 23,
+    "щ": 24,
+    "ы": 25,
+    "э": 26,
+}
+
+
+@dataclass
+class PhoneticRepr:
+    phonetics: str
+    accents: list[bool]
 
 
 def subst_vowel(ch: str, prev_ch: str, has_accent: bool):
@@ -21,7 +57,6 @@ def subst_vowel(ch: str, prev_ch: str, has_accent: bool):
     subst = {
         **composed_subst,
         "о": "о" if has_accent else "а",
-        "ы": "и" if has_accent else "ы",
     }
     return subst.get(ch, ch)
 
@@ -31,7 +66,7 @@ def is_consonant_pair(a: str, b: str):
 
 
 def subst_consonant(ch: str, next_ch: str):
-    next_sonoric = next_ch and next_ch in "мнл"
+    next_sonoric = next_ch and next_ch in "мнлр"
     next_voiced = next_ch and next_ch in voiced
     next_vowel = next_ch and accentuator.is_vowel(next_ch)
 
@@ -49,8 +84,8 @@ def subst_consonant(ch: str, next_ch: str):
     return ch
 
 
-def to_phonetic_repr(word: str, accents) -> str:
-    out: str = ""
+def to_phonetic_repr(word: str, accents) -> PhoneticRepr:
+    res = PhoneticRepr("", [])
 
     word = word.lower()
 
@@ -78,10 +113,16 @@ def to_phonetic_repr(word: str, accents) -> str:
 
         cur_vowel += vowel
 
-        out += (
+        substituted = (
             subst_vowel(ch, prev_ch, has_accent)
             if vowel
             else subst_consonant(ch, next_ch)
         )
 
-    return out
+        res.phonetics += substituted
+        res.accents.extend(accentuator.is_vowel(c) and has_accent for c in substituted)
+
+    if not all(map(lambda n: n in PHONETIC_VOCAB, res.phonetics)):
+        raise ValueError("Invalid encdoing: %s" % res.phonetics)
+
+    return res
