@@ -21,7 +21,7 @@ rhyme_grammar = Grammar(
     chain_type = "цепная" separator_colon schema ws* ellipsis
 
     schema = schema_entry ( ws+ schema_entry )*
-    schema_entry = ~r"[А-ГХа-лхтмр]+"
+    schema_entry = ~r"[А-ЕХа-лхтмр]+"
 
     ws = ~r"\s+" 
     ellipsis = "..." / "…" / ".."

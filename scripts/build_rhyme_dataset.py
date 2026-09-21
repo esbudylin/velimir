@@ -74,7 +74,7 @@ def expand_chain_schema(schema: list[list[int]]) -> Iterator[int]:
 
 
 def extract_rhyme_features(
-    rhyme_vistor: RhymeVisitor,
+    rhyme_visitor: RhymeVisitor,
     poem: InputPoem,
     xml: str,
 ) -> Iterator[RhymeSample]:
@@ -87,7 +87,7 @@ def extract_rhyme_features(
         return
 
     try:
-        rhyme_formula = rhyme_vistor.parse(raw_rhyme)
+        rhyme_formula = rhyme_visitor.parse(raw_rhyme)
     except Exception:
         delayed_logger.record()
         logging.warning("Can't parse rhyme formula: %s", poem.rhyme)

@@ -6,7 +6,7 @@ import sqlite3
 from bitarray import bitarray
 
 from velimir.logger import LoggingSettings
-from velimir.phonetics import RhymeInput, calc_rhyming_coef
+from velimir.rhyme_identifier import RhymeInput, calc_rhyming_coef
 from velimir.settings import (
     RHYME_DB_PATH,
     RHYME_TEST_DB_PATH,
