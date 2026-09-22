@@ -271,7 +271,7 @@ def build(test_run: bool = False):
     negatives = make_negative_pairs(reader)
 
     if test_run:
-        testing_subset = 1000
+        testing_subset = 100
         positives = islice(positives, testing_subset)
         negatives = islice(negatives, testing_subset)
 

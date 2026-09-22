@@ -33,6 +33,8 @@ RHYME_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_test.db")
 
 RHYME_PAIRS_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_pairs.db")
 RHYME_PAIRS_TEST_DB_PATH = os.path.join(DATASETS_DIRECTORY, "rhyme_pairs_test.db")
+RHYME_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme")
+RHYME_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme-test")
 
 DATASET_FILES = [
     os.path.basename(GRAMMAR_DB_PATH),
