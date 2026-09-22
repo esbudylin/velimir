@@ -20,6 +20,7 @@ class RhymePairRow:
     stress_a: str
     phon_b: str
     stress_b: str
+    pair_id: int
 
 
 @dataclass(slots=True)
@@ -52,7 +53,8 @@ def load_rhyme_pairs(db_path: str) -> list[RhymePairRow]:
                 """
                 SELECT label,
                        phon_a, accents_a,
-                       phon_b, accents_b
+                       phon_b, accents_b,
+                       id
                 FROM pairs
                 ORDER BY id
                 """

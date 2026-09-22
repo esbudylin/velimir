@@ -101,7 +101,35 @@ class OnnxAccent:
         return accent_logits
 
 
+class OnnxRhyme:
+    def __init__(self, onnx_path: str):
+        self.session = ort.InferenceSession(onnx_path, providers=available_providers())
+
+    @onnx_call
+    def __call__(self, ids_a, stress_a, ids_b, stress_b):
+        ids_a = pad_to_length(ids_a, MAX_SEQ_LEN, pad_value=0)
+        stress_a = pad_to_length(stress_a, MAX_SEQ_LEN, pad_value=0.0)
+        ids_b = pad_to_length(ids_b, MAX_SEQ_LEN, pad_value=0)
+        stress_b = pad_to_length(stress_b, MAX_SEQ_LEN, pad_value=0.0)
+        outputs = self.session.run(
+            None,
+            {
+                "ids_a": ids_a,
+                "stress_a": stress_a,
+                "ids_b": ids_b,
+                "stress_b": stress_b,
+            },
+        )
+        return outputs[0]
+
+
 def load_onnx_models():
     from velimir.settings import METER_ONNX_MODEL, ACCENT_ONNX_MODEL
 
     return OnnxMeter(METER_ONNX_MODEL), OnnxAccent(ACCENT_ONNX_MODEL)
+
+
+def load_rhyme_onnx_model() -> OnnxRhyme:
+    from velimir.settings import RHYME_ONNX_MODEL
+
+    return OnnxRhyme(RHYME_ONNX_MODEL)
