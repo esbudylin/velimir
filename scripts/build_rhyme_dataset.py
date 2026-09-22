@@ -98,8 +98,8 @@ def extract_rhyme_features(
 
     entry, *_ = rhyme_formula
 
-    rhyme_type = entry["type"]
-    parsed_schema = entry.get("schema")
+    rhyme_type = entry.rhyme_type
+    parsed_schema = entry.schema
 
     if not parsed_schema and rhyme_type != RhymeType.MONORHYME:
         return

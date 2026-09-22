@@ -1,9 +1,12 @@
+from dataclasses import dataclass, field
 from enum import IntEnum
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
 from .domain_models import CodeIntEnum
+
+RHYME_SCHEMA_ALPHABET = "абвгдежзийкл"
 
 
 rhyme_grammar = Grammar(
@@ -57,6 +60,38 @@ class SpecialRhymeEntry(IntEnum):
     REFRAIN = -4
 
 
+@dataclass
+class RhymeFormula:
+    rhyme_type: RhymeType
+    formula: list[int] = field(default_factory=list)
+
+    def to_str(self) -> str:
+        if self.formula:
+            return f"{self.rhyme_type.to_str()} : {format_rhyme_schema(self.formula)}"
+
+        else:
+            return self.rhyme_type.to_str()
+
+
+def format_rhyme_schema(schema: list[int]) -> str:
+    letters = []
+
+    for entry in schema:
+        match entry:
+            case SpecialRhymeEntry.NO_RHYME:
+                letters.append("х")
+            case SpecialRhymeEntry.TAUTO:
+                letters.append("т")
+            case SpecialRhymeEntry.MONO:
+                letters.append("м")
+            case SpecialRhymeEntry.REFRAIN:
+                letters.append("р")
+            case _:
+                letters.append(RHYME_SCHEMA_ALPHABET[entry])
+
+    return "".join(letters)
+
+
 def schema_letter_to_int(let: str) -> int:
     match let.lower():
         case "х":  # нет рифмы
@@ -91,21 +126,23 @@ class RhymeVisitor(NodeVisitor):
         return output
 
     def visit_schemaless_type(self, node, _):
-        return {"type": RhymeType.from_str(node.text)}
+        return RhymeFormula(
+            RhymeType.from_str(node.text),
+        )
 
     def visit_type_with_schema(self, _, visited_children):
         rhyme_type, _, schema = visited_children
-        return {
-            "type": RhymeType.from_str(rhyme_type.text),
-            "schema": schema,
-        }
+        return RhymeFormula(
+            RhymeType.from_str(rhyme_type.text),
+            schema,
+        )
 
     def visit_chain_type(self, _, visited_children):
         rhyme_type, _, schema, *_ = visited_children
-        return {
-            "type": RhymeType.from_str(rhyme_type.text),
-            "schema": schema,
-        }
+        return RhymeFormula(
+            RhymeType.from_str(rhyme_type.text),
+            schema,
+        )
 
     def visit_schema(self, _, visited_children):
         def text_to_nums(text):

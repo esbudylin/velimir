@@ -1,6 +1,5 @@
 from collections import Counter
 from dataclasses import dataclass
-from statistics import mean
 from itertools import count
 
 import numpy as np
@@ -8,10 +7,11 @@ from bitarray import bitarray
 from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import squareform
 
-from velimir.phonetics import to_phonetic_repr
-from velimir.rhyme import SpecialRhymeEntry
+from velimir.onnx import MAX_SEQ_LEN, OnnxRhyme
+from velimir.phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
+from velimir.rhyme import RhymeFormula, SpecialRhymeEntry
 
-RHYME_SCHEMA_ALPHABET = "абвгдежзийкл"
+RHYME_BATCH_SIZE = 4096
 
 
 @dataclass
@@ -20,40 +20,62 @@ class RhymeInput:
     accents: bitarray
 
 
-def calc_rhyming_coef(rhymes: list[RhymeInput]) -> float:
-    phonetic_words = list(map(lambda r: to_phonetic_repr(r.word, r.accents), rhymes))
+def encode_phonetic(phon: PhoneticRepr) -> tuple[np.ndarray, np.ndarray]:
+    ids = [PHONETIC_VOCAB[ch] for ch in phon.phonetics[:MAX_SEQ_LEN]]
+    stress = [float(flag) for flag in phon.accents[:MAX_SEQ_LEN]]
 
-    phonetic_pairs = []
+    padding = MAX_SEQ_LEN - len(ids)
 
-    for i, word in enumerate(phonetic_words):
-        if i + 1 == len(phonetic_words):
-            break
-
-        next_word = phonetic_words[i + 1]
-        phonetic_pairs.append((word, next_word))
-
-    phonetic_pairs = list(map(trim_phonetic_pair, phonetic_pairs))
-
-    weighted_distances = map(
-        lambda pair: calc_phonetic_rhyme_coef(*pair), phonetic_pairs
+    return (
+        np.array(ids + [0] * padding, dtype=np.int64),
+        np.array(stress + [0.0] * padding, dtype=np.float32),
     )
 
-    return mean(weighted_distances)
+
+def calc_rhyme_probs(
+    pairs: list[tuple[PhoneticRepr, PhoneticRepr]],
+    model: OnnxRhyme,
+) -> np.ndarray:
+    if not pairs:
+        return np.array([], dtype=np.float64)
+
+    probs = []
+
+    for start in range(0, len(pairs), RHYME_BATCH_SIZE):
+        chunk = pairs[start : start + RHYME_BATCH_SIZE]
+        encoded = [(encode_phonetic(a), encode_phonetic(b)) for a, b in chunk]
+
+        logits = model(
+            np.stack([a[0] for a, _ in encoded]),
+            np.stack([a[1] for a, _ in encoded]),
+            np.stack([b[0] for _, b in encoded]),
+            np.stack([b[1] for _, b in encoded]),
+        )
+
+        probs.append(1.0 / (1.0 + np.exp(-logits)))
+
+    return np.concatenate(probs)
 
 
-def calc_rhyme_matrix(rhymes: list[RhymeInput]) -> np.ndarray:
+def calc_rhyme_matrix(rhymes: list[RhymeInput], model: OnnxRhyme) -> np.ndarray:
     phonetic_words = [to_phonetic_repr(rhyme.word, rhyme.accents) for rhyme in rhymes]
 
     size = len(phonetic_words)
-    matrix = np.zeros((size, size), dtype=np.float64)
+    matrix = np.eye(size, dtype=np.float64)
 
-    for i in range(size):
-        matrix[i, i] = 1.0
+    index_pairs = [(i, j) for i in range(size) for j in range(i + 1, size)]
 
-        for j in range(i + 1, size):
-            coef = calc_phonetic_rhyme_coef(phonetic_words[i], phonetic_words[j])
-            matrix[i, j] = coef
-            matrix[j, i] = coef
+    if not index_pairs:
+        return matrix
+
+    probs = calc_rhyme_probs(
+        [(phonetic_words[i], phonetic_words[j]) for i, j in index_pairs],
+        model,
+    )
+
+    for (i, j), prob in zip(index_pairs, probs):
+        matrix[i, j] = prob
+        matrix[j, i] = prob
 
     return matrix
 
@@ -61,7 +83,7 @@ def calc_rhyme_matrix(rhymes: list[RhymeInput]) -> np.ndarray:
 def cluster_rhyme_matrix(
     matrix: np.ndarray,
     *,
-    max_distance: float = 0.8,
+    max_distance: float = 0.5,
 ) -> list[int]:
     size = matrix.shape[0]
 
@@ -99,27 +121,12 @@ def extract_rhyme_schema(labels: list[int]) -> list[int]:
     return schema
 
 
-def format_rhyme_schema(schema: list[int]) -> str:
-    letters = []
-
-    for entry in schema:
-        match entry:
-            case SpecialRhymeEntry.NO_RHYME:
-                letters.append("х")
-            case SpecialRhymeEntry.TAUTO:
-                letters.append("т")
-            case SpecialRhymeEntry.MONO:
-                letters.append("м")
-            case SpecialRhymeEntry.REFRAIN:
-                letters.append("р")
-            case _:
-                letters.append(RHYME_SCHEMA_ALPHABET[entry])
-
-    return "".join(letters)
+def transform_clusters_into_formula(clusters: list[int]) -> RhymeFormula:
+    pass
 
 
-def identify_rhyme_schema(rhymes: list[RhymeInput]) -> str:
-    m = calc_rhyme_matrix(rhymes)
+def identify_rhyme_schema(rhymes: list[RhymeInput], model: OnnxRhyme) -> str:
+    m = calc_rhyme_matrix(rhymes, model)
     c = cluster_rhyme_matrix(m)
 
     return " ".join(map(lambda a: str(int(a)), extract_rhyme_schema(c)))
