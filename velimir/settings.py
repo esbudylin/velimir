@@ -40,6 +40,7 @@ DATASET_FILES = [
     os.path.basename(GRAMMAR_DB_PATH),
     os.path.basename(OUTPUT_FILE),
     os.path.basename(RHYME_DB_PATH),
+    os.path.basename(RHYME_PAIRS_DB_PATH),
 ]
 
 METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
