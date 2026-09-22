@@ -60,8 +60,6 @@ $(eval $(call SCRIPT_TARGET_WITH_TESTS,build_rhyme_pairs,scripts))
 
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,train_rhyme,entry,$(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE))))
 
-$(eval $(call SCRIPT_TARGET_WITH_TESTS,evaluate_rhyme,scripts))
-
 $(eval $(call SCRIPT_TARGET,export_onnx,scripts))
 
 $(eval $(call SCRIPT_TARGET,evaluate_onnx,scripts))
