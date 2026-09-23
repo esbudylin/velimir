@@ -66,7 +66,15 @@ class RhymeFormula:
     formula: list[list[int]] = field(default_factory=list)
 
     def to_str(self) -> str:
-        if self.formula:
+        schemaless_types = [
+            RhymeType.MONORHYME,
+            RhymeType.FREE,
+            RhymeType.NONE,
+            RhymeType.SPORADIC,
+            RhymeType.FREE,
+        ]
+
+        if self.rhyme_type not in schemaless_types and self.formula:
             formatted_schema = " ".join(map(format_rhyme_subschema, self.formula))
             return f"{self.rhyme_type.to_str()} : {formatted_schema}"
 
