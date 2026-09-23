@@ -121,13 +121,71 @@ def extract_rhyme_schema(labels: list[int]) -> list[int]:
     return schema
 
 
-def transform_clusters_into_formula(clusters: list[int]) -> RhymeFormula:
-    pass
+@dataclass
+class PatternEntry:
+    patterns: list[int]
+    diff: int
+    repeats: int
+
+    def matches(self, next_pattern, next_diff):
+        if self.diff != next_diff:
+            return False
+        if len(self.patterns) != len(next_pattern):
+            return False
+        if (
+            list(map(lambda a: a + (self.diff * self.repeats), self.patterns))
+            != next_pattern
+        ):
+            return False
+        return True
 
 
-def identify_rhyme_schema(rhymes: list[RhymeInput], model: OnnxRhyme) -> str:
-    m = calc_rhyme_matrix(rhymes, model)
-    c = cluster_rhyme_matrix(m)
+def build_patterns(inp: list[int], acc: list[PatternEntry]) -> list[PatternEntry]:
+    max_period_len = 14
+    period_diffs = [1, 2]  # 2 - обычная рифма, 1 - цепная
 
-    return " ".join(map(lambda a: str(int(a)), extract_rhyme_schema(c)))
-    # return format_rhyme_schema(extract_rhyme_schema(c))
+    outs = []
+
+    for period in range(1, max_period_len + 1):
+        if period > len(inp):
+            break
+
+        for diff in period_diffs:
+            last_res = acc[-1] if len(acc) > 0 else None
+
+            new_pattern = inp[:period]
+
+            if last_res and last_res.matches(new_pattern, diff):
+                new_acc = acc[:-1] + [
+                    PatternEntry(
+                        patterns=last_res.patterns,
+                        diff=diff,
+                        repeats=last_res.repeats + 1,
+                    )
+                ]
+
+                return build_patterns(inp[period:], new_acc)
+
+            new_acc = acc + [
+                PatternEntry(
+                    patterns=new_pattern,
+                    diff=diff,
+                    repeats=1,
+                )
+            ]
+
+            outs.append(build_patterns(inp[period:], new_acc))
+
+    # TODO handle cases with same len
+    return sorted(outs, key=len)[0] if outs else acc
+
+
+def identify_rhyme_schema(
+    rhymes: list[RhymeInput],
+    model: OnnxRhyme,
+) -> list[RhymeFormula]:
+    rhyme_matrix = calc_rhyme_matrix(rhymes, model)
+    clusters = cluster_rhyme_matrix(rhyme_matrix)
+    poem_schema = extract_rhyme_schema(clusters)
+
+    return build_patterns(poem_schema, [])

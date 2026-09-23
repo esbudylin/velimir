@@ -63,17 +63,18 @@ class SpecialRhymeEntry(IntEnum):
 @dataclass
 class RhymeFormula:
     rhyme_type: RhymeType
-    formula: list[int] = field(default_factory=list)
+    formula: list[list[int]] = field(default_factory=list)
 
     def to_str(self) -> str:
         if self.formula:
-            return f"{self.rhyme_type.to_str()} : {format_rhyme_schema(self.formula)}"
+            formatted_schema = " ".join(map(format_rhyme_subschema, self.formula))
+            return f"{self.rhyme_type.to_str()} : {formatted_schema}"
 
         else:
             return self.rhyme_type.to_str()
 
 
-def format_rhyme_schema(schema: list[int]) -> str:
+def format_rhyme_subschema(schema: list[int]) -> str:
     letters = []
 
     for entry in schema:
