@@ -119,12 +119,7 @@ class RhymeVisitor(NodeVisitor):
         return output
 
     def visit_entry(self, _, visited_children):
-        output = {}
-
-        for child in visited_children:
-            output.update(child)
-
-        return output
+        return visited_children[0]
 
     def visit_schemaless_type(self, node, _):
         return RhymeFormula(
