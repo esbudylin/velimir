@@ -19,7 +19,7 @@ from velimir.settings import METADATA_TABLE, InputDialect
 from velimir.parsers import parse_input_lines
 from velimir.io import read_poem_xml
 
-MAX_POEM_LINES = 20
+MAX_POEM_LINES = 100
 
 
 @dataclass

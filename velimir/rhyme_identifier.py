@@ -1,6 +1,7 @@
 from collections import Counter
 from dataclasses import dataclass
-from itertools import count, chain
+from functools import cache
+from itertools import count
 
 import numpy as np
 from bitarray import bitarray
@@ -130,126 +131,127 @@ class PatternEntry:
     diff: np.ndarray
     repeats: int
 
-    def matches(self, next_pattern: list[int]) -> bool:
+    def matches(self, next_pattern: np.ndarray) -> bool:
         if len(self.pattern) < 2:
             return False
         if len(self.pattern) != len(next_pattern):
             return False
 
-        diff = np.asarray(self.diff)
-
-        if not np.any(diff):
+        if not np.any(self.diff):
             return False
 
-        expected = np.asarray(self.pattern) + diff * self.repeats
+        expected = self.pattern + self.diff * self.repeats
 
-        return bool(np.array_equal(expected, np.asarray(next_pattern)))
+        return bool(np.array_equal(expected, next_pattern))
 
-
-def decomposition_cost(entries: list[PatternEntry]) -> tuple[int, int, int]:
-    singleton_lines = 0
-    zero_shifts = 0
-
-    for entry in entries:
-        counts = Counter(entry.pattern.tolist())
-
-        # Паттерн без внутренних повторов (все метки уникальны) не является
-        # рифмовкой, поэтому его строки считаем как одиночные
-        if entry.repeats == 1 or len(counts) == len(entry.pattern):
-            singleton_lines += len(entry.pattern) * entry.repeats
-            continue
-
-        # Уникальная положительная метка не рифмуется, её строки одиночные.
-        # Цепная рифмовка (diff == 1) связывает строфы уникальной меткой,
-        # поэтому её не считаем одиночной.
-        if not np.all(entry.diff == 1):
-            unique_positive_lines = sum(
-                c for label, c in counts.items() if label >= 0 and c == 1
-            )
-            singleton_lines += unique_positive_lines * entry.repeats
-
-        # Понижаем приоритет паттернов с 0 в diff векторе
-        # 0 обозначает монотонные и отсутвующие рифмы
-        # которые реже встречаются в текстах
-        zero_shifts += int(np.count_nonzero((entry.diff == 0) & (entry.pattern >= 0)))
-
-    return (singleton_lines, zero_shifts, len(entries))
-
-
-def build_patterns(inp_l: list[int], acc: list[PatternEntry]) -> list[PatternEntry]:
-    max_period_len = 14
-
-    inp = np.asarray(inp_l)
-    outs = []
-
-    last_res = acc[-1] if len(acc) > 0 else None
-
-    periods = range(1, max_period_len + 1)
-
-    if last_res:
-        last_period = len(last_res.pattern)
-        periods = chain([last_period], filter(lambda n: n != last_period, periods))
-
-    periods = filter(lambda n: n <= len(inp), periods)
-
-    for period in periods:
-        new_pattern = inp[:period]
-
-        if last_res and last_res.matches(new_pattern):
-            new_acc = acc[:-1] + [
-                PatternEntry(
-                    pattern=last_res.pattern,
-                    diff=last_res.diff,
-                    repeats=last_res.repeats + 1,
-                )
-            ]
-
-            return build_patterns(inp[period:], new_acc)
-
-        if period >= 2 and 2 * period <= len(inp):
-            diff = inp[period : 2 * period] - new_pattern
-
-            # 0 - нет рифмы / монотонная рифма / рефрен
-            # нулевая рифмовка возможна только для строк,
-            # ранее отмеченных отрицательными числами
-            negative_ok = np.all(new_pattern[diff == 0] < 0)
-
-            # 1 - цепная рифма, двойная/тройная...
-            first_type = np.all((diff == 1) | (diff == 0))
-
-            # 2 - всё прочее
-            second_type = np.all((diff == 2) | (diff == 0))
-
-            if np.any(diff) and negative_ok and (first_type or second_type):
-                outs.append(
-                    build_patterns(
-                        inp[period:],
-                        acc
-                        + [
-                            PatternEntry(
-                                pattern=new_pattern,
-                                diff=diff,
-                                repeats=1,
-                            )
-                        ],
-                    )
-                )
-
-        outs.append(
-            build_patterns(
-                inp[period:],
-                acc
-                + [
-                    PatternEntry(
-                        pattern=new_pattern,
-                        diff=np.zeros(period),
-                        repeats=1,
-                    )
-                ],
-            )
+    def _key(self) -> tuple:
+        return (
+            self.pattern.tobytes(),
+            self.diff.tobytes(),
+            self.repeats,
         )
 
-    return min(outs, key=decomposition_cost) if outs else acc
+    def __hash__(self) -> int:
+        return hash(self._key())
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PatternEntry):
+            return NotImplemented
+        return self._key() == other._key()
+
+
+@dataclass
+class PatternCandidate:
+    cost: int
+    count: int
+    entries: tuple[PatternEntry, ...]
+
+
+@cache
+def entry_cost(entry: PatternEntry) -> int:
+    counts = Counter(entry.pattern.tolist())
+
+    # Паттерн без внутренних повторов (все метки уникальны) не является
+    # рифмовкой, поэтому его строки считаем как одиночные
+    if entry.repeats == 1 or len(counts) == len(entry.pattern):
+        return len(entry.pattern) * entry.repeats
+
+    # Уникальная положительная метка не рифмуется, её строки одиночные.
+    # Цепная рифмовка (diff == 1) связывает строфы уникальной меткой,
+    # поэтому её не считаем одиночной.
+    if not np.all(entry.diff == 1):
+        return (
+            sum(c for label, c in counts.items() if label >= 0 and c == 1)
+            * entry.repeats
+        )
+
+    return 0
+
+
+def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
+    arr = np.asarray(inp_l)
+    size = len(arr)
+    max_period_len = 14
+
+    @cache
+    def solve(idx: int, last: PatternEntry | None) -> PatternCandidate:
+        if idx >= size:
+            if last is None:
+                return PatternCandidate(0, 0, ())
+
+            return PatternCandidate(entry_cost(last), 1, (last,))
+
+        if last is not None:
+            period = len(last.pattern)
+
+            if idx + period <= size and last.matches(arr[idx : idx + period]):
+                extended = PatternEntry(last.pattern, last.diff, last.repeats + 1)
+                return solve(idx + period, extended)
+
+        def start_entry(new_entry: PatternEntry) -> PatternCandidate:
+            result = solve(idx + len(new_entry.pattern), new_entry)
+
+            if last is None:
+                return result
+
+            return PatternCandidate(
+                entry_cost(last) + result.cost,
+                1 + result.count,
+                (last,) + result.entries,
+            )
+
+        candidates = []
+
+        for period in range(1, max_period_len + 1):
+            if period > size - idx:
+                continue
+
+            new_pattern = arr[idx : idx + period]
+
+            if period >= 2 and 2 * period <= size - idx:
+                diff = arr[idx + period : idx + 2 * period] - new_pattern
+
+                # 0 - нет рифмы / монотонная рифма / рефрен
+                # нулевая рифмовка возможна только для строк,
+                # ранее отмеченных отрицательными числами
+                negative_ok = bool(np.all(new_pattern[diff == 0] < 0))
+
+                # 1 - цепная рифма, двойная/тройная...
+                first_type = bool(np.all((diff == 1) | (diff == 0)))
+
+                # 2 - всё прочее
+                second_type = bool(np.all((diff == 2) | (diff == 0)))
+
+                if np.any(diff) and negative_ok and (first_type or second_type):
+                    candidates.append(start_entry(PatternEntry(new_pattern, diff, 1)))
+
+            candidates.append(
+                start_entry(PatternEntry(new_pattern, np.zeros(period), 1))
+            )
+
+        return min(candidates, key=lambda res: (res.cost, res.count))
+
+    return list(solve(0, None).entries)
 
 
 def canonicalize_pattern(pattern: list[int]) -> list[int]:
@@ -328,6 +330,6 @@ def identify_rhyme_schema(
     rhyme_matrix = calc_rhyme_matrix(rhymes, model)
     clusters = cluster_rhyme_matrix(rhyme_matrix)
     poem_schema = extract_rhyme_schema(clusters)
-    patterns = build_patterns(poem_schema, [])
+    patterns = build_patterns(poem_schema)
 
     return build_rhyme_formulas(patterns, len(rhymes))
