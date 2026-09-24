@@ -10,7 +10,13 @@ from scipy.spatial.distance import squareform
 
 from velimir.onnx import MAX_SEQ_LEN, OnnxRhyme
 from velimir.phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
-from velimir.rhyme import RhymeFormula, RhymeType, SpecialRhymeEntry, SCHEMALESS_TYPES
+from velimir.rhyme import (
+    RhymeFormula,
+    RhymeType,
+    SpecialRhymeEntry,
+    SCHEMALESS_TYPES,
+    RHYME_SCHEMA_ALPHABET,
+)
 
 RHYME_BATCH_SIZE = 4096
 
@@ -88,7 +94,7 @@ def calc_rhyme_matrix(rhymes: list[RhymeInput], model: OnnxRhyme) -> np.ndarray:
 def cluster_rhyme_matrix(
     matrix: np.ndarray,
     *,
-    max_distance: float = 0.1,
+    max_distance: float = 0.3,
 ) -> list[int]:
     size = matrix.shape[0]
 
@@ -192,7 +198,7 @@ def entry_cost(entry: PatternEntry) -> int:
 def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
     arr = np.asarray(inp_l)
     size = len(arr)
-    max_period_len = 14
+    max_period_len = len(RHYME_SCHEMA_ALPHABET)
 
     @cache
     def solve(idx: int, last: PatternEntry | None) -> PatternCandidate:
@@ -257,7 +263,7 @@ def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
 
 def canonicalize_pattern(pattern: list[int]) -> list[int]:
     mapping: dict[int, int] = {}
-    next_label = 0
+    next_label = count()
     result = []
 
     for label in pattern:
@@ -266,8 +272,7 @@ def canonicalize_pattern(pattern: list[int]) -> list[int]:
             continue
 
         if label not in mapping:
-            mapping[label] = next_label
-            next_label += 1
+            mapping[label] = next(next_label)
 
         result.append(mapping[label])
 
@@ -277,6 +282,7 @@ def canonicalize_pattern(pattern: list[int]) -> list[int]:
 def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
     pattern = canonicalize_pattern(entry.pattern.tolist())
     unique_entries = len(set(pattern))
+    counts = Counter(entry.pattern.tolist())
 
     match pattern:
         case [0, 1, 0, 1]:
@@ -302,22 +308,26 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
         return RhymeType.DELAYED
     if unique_entries == 1:
         return RhymeType.MONORHYME
-
     # Цепная рифмовка: единый сдвиг на 1 и наличие внутренних повторов
     if np.all(entry.diff == 1) == 1 and len(set(pattern)) < len(pattern):
         return RhymeType.CHAIN
 
-    # Различие между вольной/спорадической/нулевой рифмой
-    non_rhyming = sum(label == -1 for label in pattern)
-    non_rhyming += sum(v for k, v in Counter(pattern).items() if v == 1 and k > 0)
-    nr_percent = non_rhyming / len(pattern)
+    non_repeated_entries = sum(
+        c for label, c in counts.items() if label >= 0 and c == 1
+    )
+    if entry.repeats > 1 and not non_repeated_entries:
+        return RhymeType.COMPLEX
 
-    if nr_percent > RHYME_COVERAGE_THRESHOLD:
+    return RhymeType.UNKNOWN
+
+
+def test_rhyming_percent(rhyming_percent) -> RhymeType:
+    if rhyming_percent > RHYME_COVERAGE_THRESHOLD:
         return RhymeType.FREE
-    elif nr_percent > SPORADIC_COVERAGE_THRESHOLD:
+    elif rhyming_percent > SPORADIC_COVERAGE_THRESHOLD:
         return RhymeType.SPORADIC
-
-    return RhymeType.NONE
+    else:
+        return RhymeType.NONE
 
 
 def build_rhyme_formulas(
@@ -333,7 +343,6 @@ def build_rhyme_formulas(
             repeats=entry.repeats,
         )
         for entry in patterns
-        if entry.repeats > 1 or len(entry.pattern) * entry.repeats >= threshold
     ]
 
     grouped = groupby(
@@ -344,11 +353,40 @@ def build_rhyme_formulas(
         ),
     )
 
-    return [
-        RhymeFormula(rtype, [list(formula)])
-        for (rtype, formula), patterns in grouped
-        if sum(len(p["pattern"]) * p["repeats"] for p in patterns) >= threshold
-    ]
+    joined = []
+
+    for (rtype, formula), ipatterns in grouped:
+        patterns = list(ipatterns)
+        patterns_len = sum(len(p["pattern"]) * p["repeats"] for p in patterns)
+
+        if patterns_len < threshold:
+            continue
+
+        if rtype == RhymeType.UNKNOWN:
+            pattern = [s for p in patterns for s in p]
+
+            # Различие между вольной/спорадической/нулевой рифмой
+            non_rhyming = sum(label == -1 for label in pattern)
+            rhyming_percent = 1 - (non_rhyming / len(pattern))
+
+            joined.append((test_rhyming_percent(rhyming_percent), None))
+        else:
+            joined.append((rtype, formula))
+
+    if not joined:
+        non_rhyming = sum(label == -1 for label in poem_schema)
+        rhyming_percent = 1 - (non_rhyming / len(poem_schema))
+        return [RhymeFormula(test_rhyming_percent(rhyming_percent))]
+
+    res = []
+
+    for (rt, formula), _ in groupby(joined):
+        if formula:
+            res.append(RhymeFormula(rt, [list(formula)]))
+        else:
+            res.append(RhymeFormula(rt))
+
+    return res
 
 
 def render_rhyme_formulas(formulas: list[RhymeFormula]) -> str:
