@@ -8,7 +8,6 @@ from .domain_models import CodeIntEnum
 
 RHYME_SCHEMA_ALPHABET = "абвгдежзийкл"
 
-
 rhyme_grammar = Grammar(
     """
     expr = entry ( separator_sharp entry )*
@@ -53,6 +52,15 @@ class RhymeType(CodeIntEnum):
     UNKNOWN = 17, "неизвестно"
 
 
+SCHEMALESS_TYPES = [
+    RhymeType.MONORHYME,
+    RhymeType.FREE,
+    RhymeType.NONE,
+    RhymeType.SPORADIC,
+    RhymeType.FREE,
+]
+
+
 class SpecialRhymeEntry(IntEnum):
     NO_RHYME = -1
     TAUTO = -2
@@ -66,15 +74,7 @@ class RhymeFormula:
     formula: list[list[int]] = field(default_factory=list)
 
     def to_str(self) -> str:
-        schemaless_types = [
-            RhymeType.MONORHYME,
-            RhymeType.FREE,
-            RhymeType.NONE,
-            RhymeType.SPORADIC,
-            RhymeType.FREE,
-        ]
-
-        if self.rhyme_type not in schemaless_types and self.formula:
+        if self.rhyme_type not in SCHEMALESS_TYPES and self.formula:
             formatted_schema = " ".join(map(format_rhyme_subschema, self.formula))
             return f"{self.rhyme_type.to_str()} : {formatted_schema}"
 

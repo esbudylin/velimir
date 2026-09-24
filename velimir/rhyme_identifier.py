@@ -1,7 +1,7 @@
 from collections import Counter
 from dataclasses import dataclass
 from functools import cache
-from itertools import count
+from itertools import count, groupby
 
 import numpy as np
 from bitarray import bitarray
@@ -10,10 +10,11 @@ from scipy.spatial.distance import squareform
 
 from velimir.onnx import MAX_SEQ_LEN, OnnxRhyme
 from velimir.phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
-from velimir.rhyme import RhymeFormula, RhymeType, SpecialRhymeEntry
+from velimir.rhyme import RhymeFormula, RhymeType, SpecialRhymeEntry, SCHEMALESS_TYPES
 
 RHYME_BATCH_SIZE = 4096
 
+RHYME_PATTERN_THRESHOLD = 0.25
 RHYME_COVERAGE_THRESHOLD = 0.25
 SPORADIC_COVERAGE_THRESHOLD = 0.05
 
@@ -87,7 +88,7 @@ def calc_rhyme_matrix(rhymes: list[RhymeInput], model: OnnxRhyme) -> np.ndarray:
 def cluster_rhyme_matrix(
     matrix: np.ndarray,
     *,
-    max_distance: float = 0.5,
+    max_distance: float = 0.1,
 ) -> list[int]:
     size = matrix.shape[0]
 
@@ -301,21 +302,52 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
         return RhymeType.DELAYED
     if unique_entries == 1:
         return RhymeType.MONORHYME
+
     # Цепная рифмовка: единый сдвиг на 1 и наличие внутренних повторов
     if np.all(entry.diff == 1) == 1 and len(set(pattern)) < len(pattern):
         return RhymeType.CHAIN
 
-    return RhymeType.COMPLEX
+    # Различие между вольной/спорадической/нулевой рифмой
+    non_rhyming = sum(label == -1 for label in pattern)
+    non_rhyming += sum(v for k, v in Counter(pattern).items() if v == 1 and k > 0)
+    nr_percent = non_rhyming / len(pattern)
+
+    if nr_percent > RHYME_COVERAGE_THRESHOLD:
+        return RhymeType.FREE
+    elif nr_percent > SPORADIC_COVERAGE_THRESHOLD:
+        return RhymeType.SPORADIC
+
+    return RhymeType.NONE
 
 
 def build_rhyme_formulas(
     patterns: list[PatternEntry],
-    inp_len: int,
+    poem_schema: list[int],
 ) -> list[RhymeFormula]:
-    return [
-        RhymeFormula(classify_rhyme_type(entry), [canonicalize_pattern(entry.pattern)])
+    threshold = len(poem_schema) * RHYME_PATTERN_THRESHOLD
+
+    cleaned = [
+        dict(
+            rtype=classify_rhyme_type(entry),
+            pattern=tuple(canonicalize_pattern(entry.pattern)),
+            repeats=entry.repeats,
+        )
         for entry in patterns
-        if entry.repeats > 1 or len(patterns) == 1
+        if entry.repeats > 1 or len(entry.pattern) * entry.repeats >= threshold
+    ]
+
+    grouped = groupby(
+        cleaned,
+        lambda k: (
+            k["rtype"],
+            k["pattern"] if k["rtype"] not in SCHEMALESS_TYPES else tuple(),
+        ),
+    )
+
+    return [
+        RhymeFormula(rtype, [list(formula)])
+        for (rtype, formula), patterns in grouped
+        if sum(len(p["pattern"]) * p["repeats"] for p in patterns) >= threshold
     ]
 
 
@@ -332,4 +364,4 @@ def identify_rhyme_schema(
     poem_schema = extract_rhyme_schema(clusters)
     patterns = build_patterns(poem_schema)
 
-    return build_rhyme_formulas(patterns, len(rhymes))
+    return build_rhyme_formulas(patterns, poem_schema)

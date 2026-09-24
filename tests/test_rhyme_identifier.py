@@ -89,11 +89,6 @@ class TestBuildRhymePatterns(unittest.TestCase):
 class TestBuildRhymeFormulaStrings(unittest.TestCase):
     @parameterized.expand([(inp, formula_str) for inp, _, formula_str in CASES])
     def test_build_rhyme_formula_strings(self, inp, out):
-        res = render_rhyme_formulas(
-            build_rhyme_formulas(
-                build_patterns(inp),
-                len(inp),
-            )
-        )
+        res = render_rhyme_formulas(build_rhyme_formulas(build_patterns(inp), inp))
 
         self.assertEqual(res, out)
