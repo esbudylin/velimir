@@ -1,6 +1,6 @@
 from collections import Counter
 from dataclasses import dataclass
-from itertools import count
+from itertools import count, chain
 
 import numpy as np
 from bitarray import bitarray
@@ -12,6 +12,9 @@ from velimir.phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
 from velimir.rhyme import RhymeFormula, RhymeType, SpecialRhymeEntry
 
 RHYME_BATCH_SIZE = 4096
+
+RHYME_COVERAGE_THRESHOLD = 0.25
+SPORADIC_COVERAGE_THRESHOLD = 0.05
 
 
 @dataclass
@@ -123,8 +126,8 @@ def extract_rhyme_schema(labels: list[int]) -> list[int]:
 
 @dataclass
 class PatternEntry:
-    pattern: list[int]
-    diff: list[int]
+    pattern: np.ndarray
+    diff: np.ndarray
     repeats: int
 
     def matches(self, next_pattern: list[int]) -> bool:
@@ -148,34 +151,48 @@ def decomposition_cost(entries: list[PatternEntry]) -> tuple[int, int, int]:
     zero_shifts = 0
 
     for entry in entries:
+        counts = Counter(entry.pattern.tolist())
+
         # Паттерн без внутренних повторов (все метки уникальны) не является
         # рифмовкой, поэтому его строки считаем как одиночные
-        if entry.repeats == 1 or len(set(entry.pattern)) == len(entry.pattern):
+        if entry.repeats == 1 or len(counts) == len(entry.pattern):
             singleton_lines += len(entry.pattern) * entry.repeats
             continue
 
-        pattern = np.asarray(entry.pattern)
-        diff = np.asarray(entry.diff)
+        # Уникальная положительная метка не рифмуется, её строки одиночные.
+        # Цепная рифмовка (diff == 1) связывает строфы уникальной меткой,
+        # поэтому её не считаем одиночной.
+        if not np.all(entry.diff == 1):
+            unique_positive_lines = sum(
+                c for label, c in counts.items() if label >= 0 and c == 1
+            )
+            singleton_lines += unique_positive_lines * entry.repeats
 
         # Понижаем приоритет паттернов с 0 в diff векторе
         # 0 обозначает монотонные и отсутвующие рифмы
         # которые реже встречаются в текстах
-        zero_shifts += int(np.count_nonzero((diff == 0) & (pattern >= 0)))
+        zero_shifts += int(np.count_nonzero((entry.diff == 0) & (entry.pattern >= 0)))
 
     return (singleton_lines, zero_shifts, len(entries))
 
 
-def build_patterns(inp: list[int], acc: list[PatternEntry]) -> list[PatternEntry]:
+def build_patterns(inp_l: list[int], acc: list[PatternEntry]) -> list[PatternEntry]:
     max_period_len = 14
 
+    inp = np.asarray(inp_l)
     outs = []
 
-    for period in range(1, max_period_len + 1):
-        if period > len(inp):
-            break
+    last_res = acc[-1] if len(acc) > 0 else None
 
-        last_res = acc[-1] if len(acc) > 0 else None
+    periods = range(1, max_period_len + 1)
 
+    if last_res:
+        last_period = len(last_res.pattern)
+        periods = chain([last_period], filter(lambda n: n != last_period, periods))
+
+    periods = filter(lambda n: n <= len(inp), periods)
+
+    for period in periods:
         new_pattern = inp[:period]
 
         if last_res and last_res.matches(new_pattern):
@@ -190,12 +207,20 @@ def build_patterns(inp: list[int], acc: list[PatternEntry]) -> list[PatternEntry
             return build_patterns(inp[period:], new_acc)
 
         if period >= 2 and 2 * period <= len(inp):
-            diff = np.asarray(inp[period : 2 * period]) - np.asarray(new_pattern)
+            diff = inp[period : 2 * period] - new_pattern
 
-            # 0 - нет рифмы / монотонная рифма
+            # 0 - нет рифмы / монотонная рифма / рефрен
+            # нулевая рифмовка возможна только для строк,
+            # ранее отмеченных отрицательными числами
+            negative_ok = np.all(new_pattern[diff == 0] < 0)
+
             # 1 - цепная рифма, двойная/тройная...
+            first_type = np.all((diff == 1) | (diff == 0))
+
             # 2 - всё прочее
-            if np.all(diff >= 0) and np.all(diff <= 2) and np.any(diff):
+            second_type = np.all((diff == 2) | (diff == 0))
+
+            if np.any(diff) and negative_ok and (first_type or second_type):
                 outs.append(
                     build_patterns(
                         inp[period:],
@@ -203,7 +228,7 @@ def build_patterns(inp: list[int], acc: list[PatternEntry]) -> list[PatternEntry
                         + [
                             PatternEntry(
                                 pattern=new_pattern,
-                                diff=diff.tolist(),
+                                diff=diff,
                                 repeats=1,
                             )
                         ],
@@ -217,7 +242,7 @@ def build_patterns(inp: list[int], acc: list[PatternEntry]) -> list[PatternEntry
                 + [
                     PatternEntry(
                         pattern=new_pattern,
-                        diff=[0] * period,
+                        diff=np.zeros(period),
                         repeats=1,
                     )
                 ],
@@ -247,7 +272,7 @@ def canonicalize_pattern(pattern: list[int]) -> list[int]:
 
 
 def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
-    pattern = canonicalize_pattern(entry.pattern)
+    pattern = canonicalize_pattern(entry.pattern.tolist())
     unique_entries = len(set(pattern))
 
     match pattern:
@@ -275,13 +300,16 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
     if unique_entries == 1:
         return RhymeType.MONORHYME
     # Цепная рифмовка: единый сдвиг на 1 и наличие внутренних повторов
-    if set(entry.diff) == {1} and len(set(pattern)) < len(pattern):
+    if np.all(entry.diff == 1) == 1 and len(set(pattern)) < len(pattern):
         return RhymeType.CHAIN
 
     return RhymeType.COMPLEX
 
 
-def build_rhyme_formulas(patterns: list[PatternEntry]) -> list[RhymeFormula]:
+def build_rhyme_formulas(
+    patterns: list[PatternEntry],
+    inp_len: int,
+) -> list[RhymeFormula]:
     return [
         RhymeFormula(classify_rhyme_type(entry), [canonicalize_pattern(entry.pattern)])
         for entry in patterns
@@ -302,4 +330,4 @@ def identify_rhyme_schema(
     poem_schema = extract_rhyme_schema(clusters)
     patterns = build_patterns(poem_schema, [])
 
-    return build_rhyme_formulas(patterns)
+    return build_rhyme_formulas(patterns, len(rhymes))

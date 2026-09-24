@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 
 from velimir import accentuator
+from velimir.rhyme import RhymeVisitor, rhyme_grammar
 from velimir.logger import LoggingSettings
 from velimir.onnx import load_rhyme_onnx_model
 from velimir.rhyme_identifier import (
@@ -45,6 +46,9 @@ def sample_rows(sample_size: int, seed: int) -> list[InputPoem]:
 def compare_poem(row: InputPoem, lines, model) -> Comparison:
     annotation = row.rhyme.strip()
 
+    rhyme_visitor = RhymeVisitor()
+    rhyme_visitor.grammar = rhyme_grammar
+
     ri = []
 
     for line in lines:
@@ -57,6 +61,11 @@ def compare_poem(row: InputPoem, lines, model) -> Comparison:
         ri.append(RhymeInput(rz, am))
 
     try:
+        parsed_formula = rhyme_visitor.parse(annotation)
+    except Exception:
+        return Comparison(row.path, annotation, "", "processing_error")
+
+    try:
         ours = render_rhyme_formulas(identify_rhyme_schema(ri, model))
     except Exception:
         logging.exception("Can't identify rhyme schema for %s", row.path)
@@ -66,7 +75,7 @@ def compare_poem(row: InputPoem, lines, model) -> Comparison:
         row.path,
         annotation,
         ours,
-        "match" if ours == annotation else "mismatch",
+        "match" if ours == render_rhyme_formulas(parsed_formula) else "mismatch",
     )
 
 
