@@ -330,7 +330,7 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
             return RhymeType.QUINTUPLE
 
     if all(label == -1 for label in pattern):
-        return RhymeType.NONE
+        return RhymeType.UNKNOWN
     if unique_entries == 2 and len(pattern) == 5:
         return RhymeType.DELAYED
     if unique_entries == 1:
@@ -384,7 +384,6 @@ def build_rhyme_formulas(
     )
 
     joined = []
-    unknown = []
 
     for (rtype, formula), ipatterns in grouped:
         entry_patterns = list(ipatterns)
@@ -394,31 +393,14 @@ def build_rhyme_formulas(
             continue
 
         if rtype == RhymeType.UNKNOWN:
-            # Остаточные строки собираются в один пул, чтобы вольная/
-            # спорадическая/нулевая рифма определялась один раз
-            for p in entry_patterns:
-                for _ in range(p["repeats"]):
-                    unknown.extend(p["pattern"])
-        else:
-            joined.append((rtype, formula))
+            continue
 
-    if unknown:
-        # Различие между вольной/спорадической/нулевой рифмой
-        rhyming = sum(label != -1 for label in unknown)
-        joined.append((test_rhyming_percent(rhyming / len(unknown)), None))
+        joined.append((rtype, formula))
 
     if not joined:
+        # Различие между вольной/спорадической/нулевой рифмой
         rhyming = sum(label != -1 for label in poem_schema)
         return [RhymeFormula(test_rhyming_percent(rhyming / len(poem_schema)))]
-
-    structured = [(rt, f) for rt, f in joined if rt not in SCHEMALESS_TYPES]
-
-    if structured:
-        # Есть реальная схема — schemaless-«хвост» избыточен
-        joined = structured
-    elif len(joined) > 1:
-        # Одиночный NONE осмыслен, NONE вместе с другими формулами — нет
-        joined = [(rt, f) for rt, f in joined if rt != RhymeType.NONE]
 
     res = []
 
