@@ -312,7 +312,7 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
     counts = Counter(entry.pattern.tolist())
 
     match pattern:
-        case [0, 1, 0, 1]:
+        case [0, 1, 0, 1] | [0, 1, 0, 1, 0, 1]:
             return RhymeType.CROSS
         case [0, 1, 1, 0]:
             return RhymeType.ENCIRCLING
