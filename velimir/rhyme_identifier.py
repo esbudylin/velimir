@@ -21,6 +21,7 @@ from velimir.rhyme import (
 RHYME_BATCH_SIZE = 4096
 
 RHYME_PATTERN_THRESHOLD = 0.25
+
 RHYME_COVERAGE_THRESHOLD = 0.25
 SPORADIC_COVERAGE_THRESHOLD = 0.05
 
@@ -147,9 +148,10 @@ class PatternEntry:
         if not np.any(self.diff):
             return False
 
-        expected = self.pattern + self.diff * self.repeats
-
-        return bool(np.array_equal(expected, next_pattern))
+        return np.array_equal(
+            self.diff,
+            calc_diff(self.pattern + self.diff * (self.repeats - 1), next_pattern),
+        )
 
     def _key(self) -> tuple:
         return (
@@ -195,6 +197,31 @@ def entry_cost(entry: PatternEntry) -> int:
     return 0
 
 
+def calc_diff(arr1, arr2):
+    # Отрицательные числа остаются без изменений
+    # Ноль и положительные преобразуются. Например:
+    # arr2 - [0, 4, 0, 4]
+    # arr1 - [2, 3, 2, 3]
+    # =>
+    # arr2 - [4, 5, 4, 5]
+    # arr1 - [2, 3, 2, 3]
+
+    introduced = set(arr1.tolist())
+    freevals = count(np.max(arr1) + 1)
+    visited = {}
+
+    canon_arr2 = []
+    for n in arr2:
+        if n in introduced or n < 0:
+            canon_arr2.append(n)
+        else:
+            if n not in visited:
+                visited[n] = next(freevals)
+            canon_arr2.append(visited[n])
+
+    return np.array(canon_arr2) - arr1
+
+
 def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
     arr = np.asarray(inp_l)
     size = len(arr)
@@ -236,18 +263,18 @@ def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
             new_pattern = arr[idx : idx + period]
 
             if period >= 2 and 2 * period <= size - idx:
-                diff = arr[idx + period : idx + 2 * period] - new_pattern
+                diff = calc_diff(new_pattern, arr[idx + period : idx + 2 * period])
 
                 # 0 - нет рифмы / монотонная рифма / рефрен
                 # нулевая рифмовка возможна только для строк,
                 # ранее отмеченных отрицательными числами
-                negative_ok = bool(np.all(new_pattern[diff == 0] < 0))
+                negative_ok = np.all(new_pattern[diff == 0] < 0)
 
                 # 1 - цепная рифма, двойная/тройная...
-                first_type = bool(np.all((diff == 1) | (diff == 0)))
+                first_type = np.all((diff == 1) | (diff == 0))
 
                 # 2 - всё прочее
-                second_type = bool(np.all((diff == 2) | (diff == 0)))
+                second_type = np.all((diff == 2) | (diff == 0))
 
                 if np.any(diff) and negative_ok and (first_type or second_type):
                     candidates.append(start_entry(PatternEntry(new_pattern, diff, 1)))
@@ -308,8 +335,11 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
         return RhymeType.DELAYED
     if unique_entries == 1:
         return RhymeType.MONORHYME
-    # Цепная рифмовка: единый сдвиг на 1 и наличие внутренних повторов
-    if np.all(entry.diff == 1) == 1 and len(set(pattern)) < len(pattern):
+    if (
+        np.all(entry.diff == 1) == 1
+        and len(set(pattern)) < len(pattern)
+        and entry.repeats > 2
+    ):
         return RhymeType.CHAIN
 
     non_repeated_entries = sum(
@@ -366,17 +396,14 @@ def build_rhyme_formulas(
             pattern = [s for p in patterns for s in p]
 
             # Различие между вольной/спорадической/нулевой рифмой
-            non_rhyming = sum(label == -1 for label in pattern)
-            rhyming_percent = 1 - (non_rhyming / len(pattern))
-
-            joined.append((test_rhyming_percent(rhyming_percent), None))
+            rhyming = sum(label != -1 for label in pattern)
+            joined.append((test_rhyming_percent(rhyming / len(pattern)), None))
         else:
             joined.append((rtype, formula))
 
     if not joined:
-        non_rhyming = sum(label == -1 for label in poem_schema)
-        rhyming_percent = 1 - (non_rhyming / len(poem_schema))
-        return [RhymeFormula(test_rhyming_percent(rhyming_percent))]
+        rhyming = sum(label != -1 for label in poem_schema)
+        return [RhymeFormula(test_rhyming_percent(rhyming / len(poem_schema)))]
 
     res = []
 

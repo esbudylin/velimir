@@ -8,6 +8,7 @@ from velimir.rhyme_identifier import (
     build_patterns,
     build_rhyme_formulas,
     render_rhyme_formulas,
+    calc_diff,
 )
 
 CASES = [
@@ -71,6 +72,16 @@ CASES = [
         ],
         "четная : хаха",
     ),
+    (
+        # совпадение между первой и последней строфой
+        [0, 1, 0, 1, 2, 3, 2, 3, 0, 4, 0, 4],
+        [
+            PatternEntry(
+                pattern=np.array([0, 1, 0, 1]), diff=np.array([2, 2, 2, 2]), repeats=3
+            ),
+        ],
+        "перекрестная : абаб",
+    ),
 ]
 
 
@@ -92,3 +103,23 @@ class TestBuildRhymeFormulaStrings(unittest.TestCase):
         res = render_rhyme_formulas(build_rhyme_formulas(build_patterns(inp), inp))
 
         self.assertEqual(res, out)
+
+
+class TestCalculateArrayDiff(unittest.TestCase):
+    def test_calc_diff(self):
+        arr1 = np.array([2, 3, 2, 3])
+        arr2 = np.array([0, 4, 0, 4])
+
+        np.testing.assert_array_equal(calc_diff(arr1, arr2), np.array([2] * 4))
+
+    def test_calc_diff_chain(self):
+        arr1 = np.array([1, 2, 1])
+        arr2 = np.array([2, 0, 2])
+
+        np.testing.assert_array_equal(calc_diff(arr1, arr2), np.array([1] * 3))
+
+    def test_calc_diff_negatives(self):
+        arr1 = np.array([-1, 1, -1, 1])
+        arr2 = np.array([-1, 3, -1, 3])
+
+        np.testing.assert_array_equal(calc_diff(arr1, arr2), np.array([0, 1, 0, 1]))
