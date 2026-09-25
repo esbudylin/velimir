@@ -145,13 +145,10 @@ class PatternEntry:
         if len(self.pattern) != len(next_pattern):
             return False
 
-        if not np.any(self.diff):
-            return False
+        pattern_canonical = canonicalize_pattern(self.pattern.tolist())
+        next_pattern_canonical = canonicalize_pattern(next_pattern.tolist())
 
-        return np.array_equal(
-            self.diff,
-            calc_diff(self.pattern + self.diff * (self.repeats - 1), next_pattern),
-        )
+        return pattern_canonical == next_pattern_canonical
 
     def _key(self) -> tuple:
         return (
@@ -171,30 +168,32 @@ class PatternEntry:
 
 @dataclass
 class PatternCandidate:
-    cost: int
+    cost: tuple[int, int, int]
     count: int
     entries: tuple[PatternEntry, ...]
 
 
 @cache
-def entry_cost(entry: PatternEntry) -> int:
+def entry_cost(entry: PatternEntry) -> tuple[int, int, int]:
     counts = Counter(entry.pattern.tolist())
+    singletones = 0
 
     # Паттерн без внутренних повторов (все метки уникальны) не является
     # рифмовкой, поэтому его строки считаем как одиночные
     if entry.repeats == 1 or len(counts) == len(entry.pattern):
-        return len(entry.pattern) * entry.repeats
+        singletones = len(entry.pattern) * entry.repeats
 
     # Уникальная положительная метка не рифмуется, её строки одиночные.
     # Цепная рифмовка (diff == 1) связывает строфы уникальной меткой,
     # поэтому её не считаем одиночной.
     if not np.all(entry.diff == 1):
-        return (
-            sum(c for label, c in counts.items() if label >= 0 and c == 1)
-            * entry.repeats
-        )
+        non_repeating = sum(c for label, c in counts.items() if label >= 0 and c == 1)
+        singletones = non_repeating * entry.repeats
 
-    return 0
+    # Поощраем простые паттерны с наличием рифмовки
+    complexity = np.any(entry.diff > 2) or not np.any(entry.diff)
+
+    return singletones, int(complexity), -len(entry.pattern) * entry.repeats
 
 
 def calc_diff(arr1, arr2):
@@ -225,13 +224,13 @@ def calc_diff(arr1, arr2):
 def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
     arr = np.asarray(inp_l)
     size = len(arr)
-    max_period_len = len(RHYME_SCHEMA_ALPHABET)
+    max_period_len = 18
 
     @cache
     def solve(idx: int, last: PatternEntry | None) -> PatternCandidate:
         if idx >= size:
             if last is None:
-                return PatternCandidate(0, 0, ())
+                return PatternCandidate((0, 0, 0), 0, ())
 
             return PatternCandidate(entry_cost(last), 1, (last,))
 
@@ -249,7 +248,7 @@ def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
                 return result
 
             return PatternCandidate(
-                entry_cost(last) + result.cost,
+                tuple(map(sum, zip(entry_cost(last), result.cost))),
                 1 + result.count,
                 (last,) + result.entries,
             )
@@ -270,13 +269,17 @@ def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
                 # ранее отмеченных отрицательными числами
                 negative_ok = np.all(new_pattern[diff == 0] < 0)
 
+                has_rhyme = False
+
                 # 1 - цепная рифма, двойная/тройная...
-                first_type = np.all((diff == 1) | (diff == 0))
+                # 2 - перекрестные, четные...
+                # >2 - скользящие и сложные рифмы
+                for diff_val in range(1, max_period_len + 1):
+                    if has_rhyme:
+                        break
+                    has_rhyme = has_rhyme or np.all((diff == diff_val) | (diff == 0))
 
-                # 2 - всё прочее
-                second_type = np.all((diff == 2) | (diff == 0))
-
-                if np.any(diff) and negative_ok and (first_type or second_type):
+                if np.any(diff) and negative_ok and has_rhyme:
                     candidates.append(start_entry(PatternEntry(new_pattern, diff, 1)))
 
             candidates.append(
@@ -328,6 +331,8 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
             return RhymeType.QUADRUPLE
         case [0, 0, 0, 0, 0]:
             return RhymeType.QUINTUPLE
+        case [0, 1, 2, 0, 1, 2] | [0, 1, 2, 3, 0, 1, 2, 3]:
+            return RhymeType.SLIDING
 
     if all(label == -1 for label in pattern):
         return RhymeType.UNKNOWN
@@ -370,7 +375,7 @@ def build_rhyme_formulas(
         dict(
             rtype=classify_rhyme_type(entry),
             pattern=tuple(canonicalize_pattern(entry.pattern)),
-            repeats=entry.repeats,
+            size=len(entry.pattern) * entry.repeats,
         )
         for entry in patterns
     ]
@@ -387,7 +392,7 @@ def build_rhyme_formulas(
 
     for (rtype, formula), ipatterns in grouped:
         entry_patterns = list(ipatterns)
-        patterns_len = sum(len(p["pattern"]) * p["repeats"] for p in entry_patterns)
+        patterns_len = sum(p["size"] for p in entry_patterns)
 
         if patterns_len < threshold:
             continue
@@ -425,5 +430,6 @@ def identify_rhyme_schema(
     clusters = cluster_rhyme_matrix(rhyme_matrix)
     poem_schema = extract_rhyme_schema(clusters)
     patterns = build_patterns(poem_schema)
+    formulas = build_rhyme_formulas(patterns, poem_schema)
 
-    return build_rhyme_formulas(patterns, poem_schema)
+    return formulas
