@@ -15,7 +15,6 @@ from velimir.rhyme import (
     RhymeType,
     SpecialRhymeEntry,
     SCHEMALESS_TYPES,
-    RHYME_SCHEMA_ALPHABET,
 )
 
 RHYME_BATCH_SIZE = 4096
@@ -193,7 +192,7 @@ def entry_cost(entry: PatternEntry) -> tuple[int, int, int]:
     # Поощраем простые паттерны с наличием рифмовки
     complexity = np.any(entry.diff > 2) or not np.any(entry.diff)
 
-    return singletones, int(complexity), -len(entry.pattern) * entry.repeats
+    return singletones, int(complexity), -entry.repeats
 
 
 def calc_diff(arr1, arr2):
@@ -365,6 +364,31 @@ def test_rhyming_percent(rhyming_percent) -> RhymeType:
         return RhymeType.NONE
 
 
+def segment_formula(rt: RhymeType, formula: list[int]) -> list[list[int]]:
+    if rt == RhymeType.SLIDING:
+        middle = len(formula) // 2
+        return [formula[:middle], formula[middle:]]
+    if rt == RhymeType.CHAIN:
+        return [formula, [f + 1 for f in formula], [f + 2 for f in formula]]
+    if rt == RhymeType.COMPLEX:
+        res = [[]]
+        unique_in_subformula = set()
+
+        for f in formula:
+            if (
+                len(unique_in_subformula) == 2 and f not in unique_in_subformula
+            ) or len(res[-1]) >= 4:
+                res.append([])
+                unique_in_subformula = set()
+
+            res[-1].append(f)
+            unique_in_subformula.add(f)
+
+        return res
+
+    return [formula]
+
+
 def build_rhyme_formulas(
     patterns: list[PatternEntry],
     poem_schema: list[int],
@@ -411,7 +435,7 @@ def build_rhyme_formulas(
 
     for (rt, formula), _ in groupby(joined):
         if formula:
-            res.append(RhymeFormula(rt, [list(formula)]))
+            res.append(RhymeFormula(rt, segment_formula(rt, formula)))
         else:
             res.append(RhymeFormula(rt))
 
