@@ -10,4 +10,6 @@ def create_app(debug: bool = False) -> Flask:
     app.register_blueprint(rhyme.bp)
     app.register_blueprint(markup.bp, url_prefix="/markup")
 
+    markup.init_engine(app)
+
     return app

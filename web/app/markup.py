@@ -16,6 +16,12 @@ def inject_limits() -> dict:
     return {"max_text_length": MAX_TEXT_LENGTH}
 
 
+def init_engine(app) -> MarkupEngine:
+    engine = MarkupEngine()
+    app.extensions["markup_engine"] = engine
+    return engine
+
+
 def get_engine() -> MarkupEngine:
     if "markup_engine" not in current_app.extensions:
         with _engine_lock:

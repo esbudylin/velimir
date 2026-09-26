@@ -1,6 +1,6 @@
 from collections import Counter
 from dataclasses import dataclass
-from functools import cache
+from functools import cache, lru_cache
 from itertools import count, groupby
 
 import numpy as np
@@ -18,6 +18,8 @@ from velimir.rhyme import (
 )
 
 RHYME_BATCH_SIZE = 4096
+
+ENTRY_COST_CACHE_SIZE = 8192
 
 RHYME_PATTERN_THRESHOLD = 0.25
 
@@ -172,7 +174,7 @@ class PatternCandidate:
     entries: tuple[PatternEntry, ...]
 
 
-@cache
+@lru_cache(maxsize=ENTRY_COST_CACHE_SIZE)
 def entry_cost(entry: PatternEntry) -> tuple[int, int, int]:
     counts = Counter(entry.pattern.tolist())
     singletones = 0
