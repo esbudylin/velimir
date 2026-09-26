@@ -11,8 +11,12 @@ from velimir.logger import LoggingSettings
 from velimir.onnx import load_rhyme_onnx_model
 from velimir.rhyme_identifier import (
     RhymeInput,
+    calc_rhyme_matrix,
+    cluster_rhyme_matrix,
+    extract_rhyme_schema,
     identify_rhyme_schema,
     render_rhyme_formulas,
+    canonicalize_pattern,
 )
 from velimir.domain_models import InputPoem
 from velimir.settings import METADATA_TABLE, InputDialect
@@ -27,6 +31,7 @@ class Comparison:
     path: str
     annotation: str
     ours: str
+    schema: str
     string_outcome: str
 
 
@@ -43,7 +48,7 @@ def sample_rows(sample_size: int, seed: int) -> list[InputPoem]:
     return rows[:sample_size]
 
 
-def compare_poem(row: InputPoem, lines, model) -> Comparison:
+def compare_poem(row: InputPoem, lines, model, stanza_breaks) -> Comparison:
     annotation = row.rhyme.strip()
 
     rhyme_visitor = RhymeVisitor()
@@ -62,20 +67,27 @@ def compare_poem(row: InputPoem, lines, model) -> Comparison:
 
     try:
         parsed_formula = rhyme_visitor.parse(annotation)
+        rendered = render_rhyme_formulas(parsed_formula)
     except Exception:
-        return Comparison(row.path, annotation, "", "processing_error")
+        return Comparison(row.path, annotation, "", "", "processing_error")
 
     try:
         ours = render_rhyme_formulas(identify_rhyme_schema(ri, model))
+
+        rhyme_matrix = calc_rhyme_matrix(ri, model)
+        clusters = cluster_rhyme_matrix(rhyme_matrix)
+        poem_schema = canonicalize_pattern(extract_rhyme_schema(clusters))
+        schema = ",".join(str(int(label)) for label in poem_schema)
     except Exception:
         logging.exception("Can't identify rhyme schema for %s", row.path)
-        return Comparison(row.path, annotation, "", "processing_error")
+        return Comparison(row.path, annotation, "", "", "processing_error")
 
     return Comparison(
         row.path,
         annotation,
         ours,
-        "match" if ours == render_rhyme_formulas(parsed_formula) else "mismatch",
+        schema,
+        "match" if ours == rendered else "mismatch",
     )
 
 
@@ -87,7 +99,7 @@ def iter_comparisons(rows: list[InputPoem]):
         started = time.monotonic()
 
         xml = read_poem_xml(row.path)
-        lines, _ = parse_input_lines(xml)
+        lines, stanza_breaks = parse_input_lines(xml)
 
         if len(lines) > MAX_POEM_LINES:
             logging.info(
@@ -98,7 +110,7 @@ def iter_comparisons(rows: list[InputPoem]):
             )
             continue
 
-        comparison = compare_poem(row, lines, model)
+        comparison = compare_poem(row, lines, model, stanza_breaks)
 
         logging.info(
             "Finished poem: %s (%s) in %.2fs",
@@ -117,7 +129,7 @@ def write_comparisons(comparisons, output: str) -> tuple[int, int]:
     with open(output, "w", encoding="utf8", newline="") as csv_file:
         writer = csv.writer(csv_file)
 
-        writer.writerow(["path", "annotation", "ours", "string_outcome"])
+        writer.writerow(["path", "annotation", "ours", "schema", "string_outcome"])
 
         for comparison in comparisons:
             total += 1
@@ -130,6 +142,7 @@ def write_comparisons(comparisons, output: str) -> tuple[int, int]:
                     comparison.path,
                     comparison.annotation,
                     comparison.ours,
+                    comparison.schema,
                     comparison.string_outcome,
                 ]
             )

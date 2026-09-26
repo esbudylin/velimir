@@ -13,6 +13,7 @@
   .markup-result td.meter { color: #666; font-family: monospace; white-space: nowrap; padding-right: 1.5em; width: 1%; }
   .markup-result td.text { width: 100%; }
   .markup-result tr.failed td.meter { color: #b00020; }
+  .markup-rhyme { color: #444; margin: 0 0 0.8em; }
 </style>
 {% endblock %}
 {% block content %}
@@ -35,8 +36,11 @@
       <p class="error">{{ error }}</p>
       {% endif %}
 
-      {% if verses %}
-      {% for verse in verses %}
+      {% if result %}
+      {% if result.meta.rhyme %}
+      <p class="markup-rhyme">Рифма: {{ result.meta.rhyme }}</p>
+      {% endif %}
+      {% for verse in result.verses %}
       <table class="markup-result">
         {% for line in verse %}
         <tr{% if line.failed %} class="failed"{% endif %}>

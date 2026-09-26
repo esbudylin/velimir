@@ -15,9 +15,9 @@ def main():
         sys.exit(1)
 
     engine = MarkupEngine()
-    processed_verses = engine.markup_text(text)
+    result = engine.markup_text(text)
 
-    print(render_xml(processed_verses), end="")
+    print(render_xml(result), end="")
 
 
 if __name__ == "__main__":

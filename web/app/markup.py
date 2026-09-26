@@ -2,7 +2,7 @@ import threading
 
 from flask import Blueprint, Response, current_app, render_template, request
 
-from velimir.markup import MarkupEngine, MarkupLine, render_xml
+from velimir.markup import MarkupEngine, MarkupResult, render_xml
 
 bp = Blueprint("markup", __name__)
 
@@ -25,7 +25,7 @@ def get_engine() -> MarkupEngine:
     return current_app.extensions["markup_engine"]
 
 
-def run_markup(text: str) -> tuple[list[list[MarkupLine]] | None, str | None]:
+def run_markup(text: str) -> tuple[MarkupResult | None, str | None]:
     if not text.strip():
         return None, "Введите текст стихотворения"
 
@@ -47,21 +47,21 @@ def index():
 @bp.post("/")
 def process():
     text = request.form.get("text", "")
-    verses, error = run_markup(text)
+    result, error = run_markup(text)
 
-    return render_template("markup.html", text=text, verses=verses, error=error)
+    return render_template("markup.html", text=text, result=result, error=error)
 
 
 @bp.post("/download")
 def download():
     text = request.form.get("text", "")
-    verses, error = run_markup(text)
+    result, error = run_markup(text)
 
     if error:
         return render_template("markup.html", text=text, error=error)
 
     return Response(
-        render_xml(verses),
+        render_xml(result),
         mimetype="application/xml",
         headers={"Content-Disposition": "attachment; filename=markup.xml"},
     )
