@@ -29,6 +29,11 @@ web = [
     "flask>=3.0,<4",
     "gunicorn>=22,<24",
 ]
+accent = [
+    "ruaccent",
+    "silero-stress",
+    "transformers<5",
+]
 
 [tool.uv]
 package = false

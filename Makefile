@@ -3,6 +3,8 @@ LOG_DIR := logs
 
 V ?= 0
 
+ACCENT_EXTRA ?= cpu
+
 ifeq ($(V),1)
 Q :=
 else
@@ -73,6 +75,9 @@ push-datasets:
 
 pull-datasets:
 	$(Q)uv run scripts/pull_datasets.py
+
+compare-accentuators:
+	$(Q)LOG_FILE=$(LOG_DIR)/compare_accentuators.log uv run --extra $(ACCENT_EXTRA) --group accent python scripts/compare_accentuators.py
 
 web-serve:
 	$(Q)uv run --group web web/serve.py
