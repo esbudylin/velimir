@@ -41,15 +41,18 @@ class RhymePairBatch:
     labels: torch.Tensor
 
 
-def load_rhyme_pairs(db_path: str) -> list[RhymePairRow]:
+def load_rhyme_pairs(
+    db_path: str,
+    *,
+    limit: int | None = None,
+) -> list[RhymePairRow]:
     logging.info("Loading rhyme pairs from %s", db_path)
 
     conn = sqlite3.connect(db_path)
 
     try:
-        rows = [
-            RhymePairRow(*row)
-            for row in conn.execute(
+        if limit is None:
+            cursor = conn.execute(
                 """
                 SELECT label,
                        phon_a, accents_a,
@@ -59,7 +62,21 @@ def load_rhyme_pairs(db_path: str) -> list[RhymePairRow]:
                 ORDER BY id
                 """
             )
-        ]
+        else:
+            cursor = conn.execute(
+                """
+                SELECT label,
+                       phon_a, accents_a,
+                       phon_b, accents_b,
+                       id
+                FROM pairs
+                ORDER BY RANDOM()
+                LIMIT ?
+                """,
+                (limit,),
+            )
+
+        rows = [RhymePairRow(*row) for row in cursor]
     finally:
         conn.close()
 

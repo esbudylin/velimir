@@ -51,3 +51,6 @@ jobs:
 
       - name: Run train-test
         run: make train-test
+
+      - name: Run train-rhyme-test
+        run: make train-rhyme-test

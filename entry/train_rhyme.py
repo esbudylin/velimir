@@ -9,23 +9,25 @@ from velimir.rhyme.ml_loader import load_rhyme_pairs, split_pairs
 from velimir.settings import (
     RHYME_MODEL,
     RHYME_PAIRS_DB_PATH,
-    RHYME_PAIRS_TEST_DB_PATH,
     RHYME_TEST_MODEL,
 )
 
 SEED = 1046019622
 
+TEST_SAMPLE_SIZE = 100
+
 
 def train(test_run: bool = False, **training_kwargs):
-    db_path = RHYME_PAIRS_TEST_DB_PATH if test_run else RHYME_PAIRS_DB_PATH
     model_path = RHYME_TEST_MODEL if test_run else RHYME_MODEL
+
+    limit = TEST_SAMPLE_SIZE if test_run else None
 
     if test_run:
         training_kwargs.setdefault("max_epochs", 5)
         training_kwargs.setdefault("batch_size", 8)
         training_kwargs.setdefault("num_workers", 0)
 
-    rows = load_rhyme_pairs(db_path)
+    rows = load_rhyme_pairs(RHYME_PAIRS_DB_PATH, limit=limit)
 
     train_rows, val_rows, _ = split_pairs(rows)
 
