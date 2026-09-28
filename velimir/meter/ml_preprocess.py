@@ -1,7 +1,7 @@
 import json
 
-from velimir.domain_models import MeterClass
-from velimir.settings import METER_VOCAB_PATH
+from ..domain_models import MeterClass
+from ..settings import METER_VOCAB_PATH
 
 
 class MeterClassRegistry:

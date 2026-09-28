@@ -5,13 +5,13 @@ from fractions import Fraction
 
 import numpy as np
 
-from . import accentuator, nlp
-from .domain_models import Clausula, Meter, MeterClass, MeterType
+from .. import accentuator, nlp
+from ..domain_models import Clausula, Meter, MeterClass, MeterType
 from .ml_preprocess import (
     MeterClassRegistry,
     break_into_chunks,
 )
-from .nlp import PartOfSpeech
+from ..nlp import PartOfSpeech
 
 
 class FailedLine:

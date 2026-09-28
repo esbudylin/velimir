@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from parameterized import parameterized
 
-from velimir.rhyme_identifier import (
+from velimir.rhyme.identifier import (
     PatternEntry,
     build_patterns,
     build_rhyme_formulas,

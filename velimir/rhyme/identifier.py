@@ -8,9 +8,9 @@ from bitarray import bitarray
 from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import squareform
 
-from velimir.onnx import MAX_SEQ_LEN, OnnxRhyme
-from velimir.phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
-from velimir.rhyme import (
+from ..onnx import MAX_SEQ_LEN, OnnxRhyme
+from .phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
+from .formula import (
     RhymeFormula,
     RhymeType,
     SpecialRhymeEntry,

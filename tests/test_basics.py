@@ -14,7 +14,7 @@ from velimir.accentuator import (
     extract_word_ending_mask,
 )
 from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
-from velimir.identifier import decode_caesura_positions
+from velimir.meter.identifier import decode_caesura_positions
 from velimir.io import read_accent_dicts
 from velimir.parsers import (
     extract_lines,

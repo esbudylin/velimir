@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from velimir import accentuator
+from .. import accentuator
 
 voiced = ["б", "з", "д", "в", "г", "ж"]
 voiceless = ["п", "с", "т", "ф", "к", "ш"]

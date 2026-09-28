@@ -10,10 +10,10 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from velimir.domain_models import Poem, SyllableFeatures
-from velimir.nlp import GrammarFeatures
-from velimir.settings import GRAMMAR_DB_PATH
-from velimir.ml_preprocess import (
+from ..domain_models import Poem, SyllableFeatures
+from ..nlp import GrammarFeatures
+from ..settings import GRAMMAR_DB_PATH
+from .ml_preprocess import (
     MeterClassRegistry,
     break_into_chunks,
 )

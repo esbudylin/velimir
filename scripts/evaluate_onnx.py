@@ -2,19 +2,21 @@ import logging
 
 import torch
 
-from velimir.evaluation import (
+from velimir.meter.evaluation import (
     evaluate_models,
     init_db,
+)
+from velimir.io import load_poems_from_msgpack, load_models
+from velimir.logger import LoggingSettings
+from velimir.meter.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
+from velimir.onnx import load_onnx_models, load_rhyme_onnx_model
+from velimir.rhyme.evaluation import (
     predict_rhyme_probs,
     rhyme_metrics,
     write_rhyme_errors,
 )
-from velimir.io import load_poems_from_msgpack, load_models
-from velimir.logger import LoggingSettings
-from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
-from velimir.onnx import load_onnx_models, load_rhyme_onnx_model
-from velimir.rhyme_ml import RhymePairModel
-from velimir.rhyme_ml_loader import (
+from velimir.rhyme.ml import RhymePairModel
+from velimir.rhyme.ml_loader import (
     get_rhyme_pair_loader,
     load_rhyme_pairs,
     split_pairs,

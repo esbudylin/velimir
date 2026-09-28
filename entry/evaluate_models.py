@@ -3,9 +3,9 @@ import logging
 import torch
 
 from velimir.io import load_poems_from_msgpack, load_models
-from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
+from velimir.meter.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
 from velimir.logger import LoggingSettings
-from velimir.evaluation import evaluate_models, init_db
+from velimir.meter.evaluation import evaluate_models, init_db
 
 
 def evaluate():

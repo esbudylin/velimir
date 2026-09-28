@@ -36,7 +36,7 @@
 : None
 
 #+begin_src python
-  from velimir.ml_loader import MeterClassRegistry
+  from velimir.meter.ml_loader import MeterClassRegistry
 
   TOTAL_SAMPLES = 50
 
@@ -95,7 +95,7 @@
 
   from velimir.parsers import extract_syllable_features, parse_input_lines
   from velimir.io import read_poem_xml
-  from velimir.evaluation import meters_to_str
+  from velimir.meter.evaluation import meters_to_str
 
   samples = [("Файл", "Страта", "Метр (корпус)", "Предсказанный метр", "Текст", "Разметка ударений", "Поэтические ударения")]
 

@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from .ml import train_model
-from .rhyme_ml_loader import (
+from ..training import train_model
+from .ml_loader import (
     EMBEDDING_SIZE,
     PAD_ID,
     RhymePairBatch,

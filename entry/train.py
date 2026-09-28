@@ -6,8 +6,8 @@ import torch
 
 from velimir.io import load_poems_from_msgpack
 from velimir.logger import LoggingSettings
-from velimir.ml import train_models
-from velimir.ml_loader import (
+from velimir.meter.ml import train_models
+from velimir.meter.ml_loader import (
     MeterClassRegistry,
     fetch_raw_samples,
     split_chunks,

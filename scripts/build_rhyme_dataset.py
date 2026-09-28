@@ -16,7 +16,12 @@ from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
 from velimir.parsers import parse_input_lines
-from velimir.rhyme import RhymeType, RhymeVisitor, SpecialRhymeEntry, rhyme_grammar
+from velimir.rhyme.formula import (
+    RhymeType,
+    RhymeVisitor,
+    SpecialRhymeEntry,
+    rhyme_grammar,
+)
 from velimir.settings import (
     METADATA_TABLE,
     RHYME_DB_PATH,

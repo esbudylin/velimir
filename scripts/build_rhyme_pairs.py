@@ -15,7 +15,7 @@ from velimir import accentuator, domain_models
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
 from velimir.parsers import parse_input_lines
-from velimir.phonetics import to_phonetic_repr
+from velimir.rhyme.phonetics import to_phonetic_repr
 from velimir.settings import (
     METADATA_TABLE,
     RHYME_DB_PATH,

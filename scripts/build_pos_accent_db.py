@@ -10,10 +10,10 @@ from pymorphy2 import MorphAnalyzer
 
 from velimir import accentuator, io, nlp
 from velimir.domain_models import InputLine, InputPoem
+from velimir.meter.formula import parse_line_formula
 from velimir.parsers import (
     clean_line,
     extract_lines,
-    parse_line_formula,
 )
 from velimir.settings import METADATA_TABLE, InputDialect
 from velimir.logger import LoggingSettings

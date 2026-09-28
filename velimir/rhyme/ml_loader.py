@@ -7,7 +7,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from velimir.phonetics import PHONETIC_VOCAB
+from .phonetics import PHONETIC_VOCAB
 
 PAD_ID = 0
 EMBEDDING_SIZE = len(PHONETIC_VOCAB) + 1

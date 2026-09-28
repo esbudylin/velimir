@@ -4,7 +4,7 @@ from enum import IntEnum
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
-from .domain_models import CodeIntEnum
+from ..domain_models import CodeIntEnum
 
 RHYME_SCHEMA_ALPHABET = "абвгдежзийкл"
 

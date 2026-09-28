@@ -4,10 +4,10 @@ import torch
 
 from velimir.io import load_models
 from velimir.logger import LoggingSettings
-from velimir.ml_preprocess import MeterClassRegistry
+from velimir.meter.ml_preprocess import MeterClassRegistry
 from velimir.onnx import MAX_SEQ_LEN
-from velimir.rhyme_ml import RhymePairModel
-from velimir.rhyme_ml_loader import PAD_ID
+from velimir.rhyme.ml import RhymePairModel
+from velimir.rhyme.ml_loader import PAD_ID
 from velimir.settings import (
     ACCENT_ONNX_MODEL,
     METER_ONNX_MODEL,

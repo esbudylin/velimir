@@ -6,10 +6,10 @@ import time
 from dataclasses import dataclass
 
 from velimir import accentuator
-from velimir.rhyme import RhymeVisitor, rhyme_grammar
+from velimir.rhyme.formula import RhymeVisitor, rhyme_grammar
 from velimir.logger import LoggingSettings
 from velimir.onnx import load_rhyme_onnx_model
-from velimir.rhyme_identifier import (
+from velimir.rhyme.identifier import (
     RhymeInput,
     calc_rhyme_matrix,
     cluster_rhyme_matrix,

@@ -8,11 +8,11 @@ from pathlib import Path
 
 import torch
 
-from velimir.evaluation import evaluate_models, init_db
+from velimir.meter.evaluation import evaluate_models, init_db
 from velimir.io import load_poems_from_msgpack
 from velimir.logger import LoggingSettings
-from velimir.ml import AccentModel, MeterModel, train_models
-from velimir.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
+from velimir.meter.ml import AccentModel, MeterModel, train_models
+from velimir.meter.ml_loader import MeterClassRegistry, fetch_raw_samples, split_chunks
 
 RUNS = 10
 BASE_SEED = 425065

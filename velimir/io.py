@@ -52,7 +52,7 @@ def read_accent_dicts(filenames):
 def load_models(device):
     import torch
 
-    from .ml import MeterModel, AccentModel
+    from .meter.ml import MeterModel, AccentModel
 
     meter = MeterModel().to(device)
     meter.load_state_dict(torch.load(METER_MODEL, map_location=device))

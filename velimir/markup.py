@@ -8,11 +8,11 @@ from .accentuator import (
     is_vowel,
     stress_mark_ord,
 )
-from .identifier import FailedLine, ProcessedLine, process_lines
+from .meter.identifier import FailedLine, ProcessedLine, process_lines
 from .io import read_accent_dicts
-from .ml_preprocess import MeterClassRegistry
+from .meter.ml_preprocess import MeterClassRegistry
 from .onnx import load_onnx_models, load_rhyme_onnx_model
-from .rhyme_identifier import (
+from .rhyme.identifier import (
     RhymeInput,
     identify_rhyme_schema,
     render_rhyme_formulas,

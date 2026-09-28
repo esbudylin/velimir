@@ -4,8 +4,8 @@ import logging
 import torch
 
 from velimir.logger import LoggingSettings
-from velimir.rhyme_ml import train_rhyme_model
-from velimir.rhyme_ml_loader import load_rhyme_pairs, split_pairs
+from velimir.rhyme.ml import train_rhyme_model
+from velimir.rhyme.ml_loader import load_rhyme_pairs, split_pairs
 from velimir.settings import (
     RHYME_MODEL,
     RHYME_PAIRS_DB_PATH,
