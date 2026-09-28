@@ -46,6 +46,8 @@ $(eval $(call SCRIPT_TARGET_WITH_TESTS,train,entry,$(if $(BATCH_SIZE),--batch-si
 
 $(eval $(call SCRIPT_TARGET,evaluate_models,entry))
 
+$(eval $(call SCRIPT_TARGET,evaluate_rhyme,entry))
+
 $(eval $(call SCRIPT_TARGET,build_dataset,scripts))
 
 $(eval $(call SCRIPT_TARGET,evaluate_accentuator,scripts))
