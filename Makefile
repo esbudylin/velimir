@@ -50,7 +50,7 @@ $(eval $(call SCRIPT_TARGET,evaluate_rhyme,entry))
 
 $(eval $(call SCRIPT_TARGET,build_dataset,scripts))
 
-$(eval $(call SCRIPT_TARGET,evaluate_accentuator,scripts))
+$(eval $(call SCRIPT_TARGET,build_accent_dataset,scripts))
 
 $(eval $(call SCRIPT_TARGET_WITH_TESTS,build_pos_accent_db,scripts))
 

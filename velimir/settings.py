@@ -37,7 +37,7 @@ RHYME_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme")
 RHYME_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme-test")
 RHYME_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme.onnx")
 RHYME_ERRORS_CSV = os.path.join(DATA_DIRECTORY, "rhyme_errors.csv")
-ACCENT_ERRORS_CSV = os.path.join(DATA_DIRECTORY, "accent_errors.csv")
+ACCENT_DATASET_CSV = os.path.join(DATA_DIRECTORY, "accent_dataset.csv")
 
 DATASET_FILES = [
     os.path.basename(GRAMMAR_DB_PATH),
