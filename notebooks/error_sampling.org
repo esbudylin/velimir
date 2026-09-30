@@ -3,7 +3,8 @@
 #+PROPERTY: header-args:sqlite :db data/predictions.db :colnames yes
 
 #+begin_src python
-  from velimir.accentuator import is_vowel, stress_mark_ord, remove_accent_marks
+  from velimir.parsers import is_vowel, remove_accent_marks
+  from velimir.settings import STRESS_MARK_ORD
 
   def put_accents(line: str, mask: list[bool]):
       res = ""
@@ -13,7 +14,7 @@
           res += c
           if is_vowel(c):
               if mask[vowel_pos]:
-                  res += chr(stress_mark_ord)
+                  res += chr(STRESS_MARK_ORD)
               vowel_pos += 1
 
       return res

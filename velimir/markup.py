@@ -2,22 +2,16 @@ import logging
 from dataclasses import dataclass
 from xml.sax.saxutils import escape, quoteattr
 
-from .accentuator import (
-    build_accent_dict,
-    extract_word_ending_mask,
-    is_vowel,
-    stress_mark_ord,
-)
 from .meter.identifier import FailedLine, ProcessedLine, process_lines
-from .io import read_accent_dicts
 from .meter.ml_preprocess import MeterClassRegistry
 from .onnx import load_onnx_models, load_rhyme_onnx_model
+from .parsers import extract_word_ending_mask, is_vowel
 from .rhyme.identifier import (
     RhymeInput,
     identify_rhyme_schema,
     render_rhyme_formulas,
 )
-from .settings import ACCENT_DICT_PATHS
+from .settings import STRESS_MARK_ORD
 
 
 @dataclass
@@ -90,7 +84,7 @@ def put_accents(line: str, mask: list[bool]):
         res += c
         if is_vowel(c):
             if mask[vowel_pos]:
-                res += chr(stress_mark_ord)
+                res += chr(STRESS_MARK_ORD)
             vowel_pos += 1
 
     return res
@@ -181,8 +175,6 @@ def render_xml(result: MarkupResult) -> str:
 class MarkupEngine:
     def __init__(self):
         MeterClassRegistry.initialize()
-
-        build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
 
         self.meter_model, self.accent_model = load_onnx_models()
         self.rhyme_model = load_rhyme_onnx_model()

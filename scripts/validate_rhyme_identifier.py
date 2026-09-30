@@ -5,7 +5,7 @@ import random
 import time
 from dataclasses import dataclass
 
-from velimir import accentuator
+from velimir.parsers import extract_accent_mask
 from velimir.rhyme.formula import RhymeVisitor, rhyme_grammar
 from velimir.logger import LoggingSettings
 from velimir.onnx import load_rhyme_onnx_model
@@ -62,7 +62,7 @@ def compare_poem(row: InputPoem, lines, model, stanza_breaks) -> Comparison:
         else:
             rz = line.text.split()[-1]
 
-        am = accentuator.extract_accent_mask(rz)
+        am = extract_accent_mask(rz)
         ri.append(RhymeInput(rz, am))
 
     try:

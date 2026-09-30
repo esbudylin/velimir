@@ -11,10 +11,14 @@ from typing import Iterator
 
 from bitarray import bitarray
 
-from velimir import accentuator, domain_models
+from velimir import domain_models
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
-from velimir.parsers import parse_input_lines
+from velimir.parsers import (
+    extract_accent_mask,
+    parse_input_lines,
+    remove_accent_marks,
+)
 from velimir.rhyme.phonetics import to_phonetic_repr
 from velimir.settings import (
     METADATA_TABLE,
@@ -91,7 +95,7 @@ def encode_ending(word: str, accents) -> EncodedEnding:
 
 
 def clean_ending(text: str) -> str | None:
-    word = accentuator.remove_accent_marks(text).lower()
+    word = remove_accent_marks(text).lower()
     cleaned = re.sub(r"[^а-я-\sё]", "", word).strip("- ")
 
     if not cleaned:
@@ -106,7 +110,7 @@ def encode_raw_ending(text: str) -> EncodedEnding | None:
     if cleaned is None:
         return None
 
-    accents = accentuator.extract_accent_mask(text)
+    accents = extract_accent_mask(text)
 
     return encode_ending(cleaned, accents)
 
@@ -123,7 +127,7 @@ def extract_line_ending(line: domain_models.InputLine) -> str:
     selected = [tokens[-1]]
 
     for i in range(len(tokens) - 2, -1, -1):
-        if any(accentuator.extract_accent_mask(" ".join(selected))):
+        if any(extract_accent_mask(" ".join(selected))):
             break
 
         selected.insert(0, tokens[i])

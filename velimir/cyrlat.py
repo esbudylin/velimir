@@ -2,7 +2,7 @@ import logging
 import unicodedata
 from enum import IntEnum
 
-from . import accentuator
+from . import settings
 from .logger import delayed_logger
 
 
@@ -13,7 +13,7 @@ class DetectionResult(IntEnum):
     UNKNOWN = 3
 
 
-STRESS = chr(accentuator.stress_mark_ord)
+STRESS = chr(settings.STRESS_MARK_ORD)
 
 BASE_LATIN_TO_CYR = {
     "A": "А",

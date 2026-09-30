@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 import msgpack
-from velimir import accentuator, parsers
+from velimir import parsers
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
@@ -29,7 +29,7 @@ class GrammarSample:
 
 
 def clean_line_for_markup(line):
-    return parsers.clean_line(accentuator.remove_accent_marks(line))
+    return parsers.clean_line(parsers.remove_accent_marks(line))
 
 
 def extract_grammar_features(poem_path: str, xml: str) -> Iterator[GrammarSample]:

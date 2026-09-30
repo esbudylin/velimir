@@ -8,12 +8,16 @@ from typing import Iterator
 from bs4 import BeautifulSoup
 from pymorphy2 import MorphAnalyzer
 
-from velimir import accentuator, io, nlp
+from velimir import io, nlp
 from velimir.domain_models import InputLine, InputPoem
 from velimir.meter.formula import parse_line_formula
 from velimir.parsers import (
     clean_line,
+    extract_accent_mask,
     extract_lines,
+    extract_word_ending_mask,
+    remove_accent_marks,
+    vowel_count,
 )
 from velimir.settings import METADATA_TABLE, InputDialect
 from velimir.logger import LoggingSettings
@@ -55,10 +59,10 @@ def parse_line(line):
 
     meter_repr = "~".join(m.meter.to_str() for m in line_formula.meters)
 
-    cleaned_line = clean_line(accentuator.remove_accent_marks(line.text))
+    cleaned_line = clean_line(remove_accent_marks(line.text))
 
-    poetic_accents = accentuator.extract_accent_mask(line.text)
-    last_in_word = accentuator.extract_word_ending_mask(cleaned_line)
+    poetic_accents = extract_accent_mask(line.text)
+    last_in_word = extract_word_ending_mask(cleaned_line)
 
     words = nlp.extract_words_for_morph(cleaned_line)
     parts_of_speech = map(lambda w: nlp.extract_part_of_speech(w).to_str(), words)
@@ -75,7 +79,7 @@ def parse_line(line):
             has_accent=has_accent,
             meter=meter_repr,
             word=word.casefold(),
-            syllable_count=accentuator.vowel_count(word),
+            syllable_count=vowel_count(word),
         )
         for word, (pos, has_accent) in zip(words, pos_accent_pairs)
     ]

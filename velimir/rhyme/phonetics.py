@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from .. import accentuator
+from ..parsers import is_vowel
 
 voiced = ["б", "з", "д", "в", "г", "ж"]
 voiceless = ["п", "с", "т", "ф", "к", "ш"]
@@ -51,7 +51,7 @@ def subst_vowel(ch: str, prev_ch: str, has_accent: bool):
         "е": "э",
     }
 
-    if prev_ch and accentuator.is_vowel(prev_ch):  # TODO: начало слов
+    if prev_ch and is_vowel(prev_ch):  # TODO: начало слов
         composed_subst = {k: "й" + v for k, v in composed_subst.items()}
 
     subst = {
@@ -68,7 +68,7 @@ def is_consonant_pair(a: str, b: str):
 def subst_consonant(ch: str, next_ch: str):
     next_sonoric = next_ch and next_ch in "мнлр"
     next_voiced = next_ch and next_ch in voiced
-    next_vowel = next_ch and accentuator.is_vowel(next_ch)
+    next_vowel = next_ch and is_vowel(next_ch)
 
     if ch == "ц":
         return "тс"
@@ -104,7 +104,7 @@ def to_phonetic_repr(word: str, accents) -> PhoneticRepr:
     for i, ch in enumerate(word):
         next_ch = "" if i + 1 == len(word) else word[i + 1]
         prev_ch = "" if i == 0 else word[i - 1]
-        vowel = accentuator.is_vowel(ch)
+        vowel = is_vowel(ch)
 
         if next_ch == ch and not vowel:
             continue
@@ -120,7 +120,7 @@ def to_phonetic_repr(word: str, accents) -> PhoneticRepr:
         )
 
         res.phonetics += substituted
-        res.accents.extend(accentuator.is_vowel(c) and has_accent for c in substituted)
+        res.accents.extend(is_vowel(c) and has_accent for c in substituted)
 
     if not all(map(lambda n: n in PHONETIC_VOCAB, res.phonetics)):
         raise ValueError("Invalid encdoing: %s" % res.phonetics)

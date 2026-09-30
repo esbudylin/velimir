@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "ML-based tool for detecting rhythm and meter in Russian poetry"
 requires-python = ">=3.10,<3.11"
 dependencies = [
-    "stressrnn @ git+https://github.com/dbklim/StressRNN.git@0afefac146033b41ef558ac356989c87ef764c79",
+    "stressful @ git+https://github.com/esbudylin/stressful",
     "pymorphy2[fast] @ git+https://github.com/pymorphy2-fork/pymorphy2@4ae2041cd31228cbb45cb4b508483b81a1009d17",
     "numpy<1.24",
     "bitarray==3.8.0",

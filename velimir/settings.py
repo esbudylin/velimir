@@ -37,6 +37,7 @@ RHYME_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme")
 RHYME_TEST_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme-test")
 RHYME_ONNX_MODEL = os.path.join(MODELS_DIRECTORY, "rhyme.onnx")
 RHYME_ERRORS_CSV = os.path.join(DATA_DIRECTORY, "rhyme_errors.csv")
+ACCENT_ERRORS_CSV = os.path.join(DATA_DIRECTORY, "accent_errors.csv")
 
 DATASET_FILES = [
     os.path.basename(GRAMMAR_DB_PATH),
@@ -46,6 +47,8 @@ DATASET_FILES = [
 ]
 
 METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
+
+STRESS_MARK_ORD = 768
 
 
 class InputDialect(csv.unix_dialect):

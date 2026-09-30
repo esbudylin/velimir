@@ -7,21 +7,15 @@ from bs4 import BeautifulSoup
 from parameterized import parameterized
 
 from velimir import cyrlat
-from velimir.accentuator import (
-    accent_line,
-    build_accent_dict,
-    extract_accent_mask,
-    extract_word_ending_mask,
-)
 from velimir.domain_models import Clausula, Line, Meter, MeterType, Poem
 from velimir.meter.identifier import decode_caesura_positions
-from velimir.io import read_accent_dicts
 from velimir.parsers import (
+    extract_accent_mask,
     extract_lines,
     extract_syllable_features,
+    extract_word_ending_mask,
     transform_poem,
 )
-from velimir.settings import ACCENT_DICT_PATHS
 
 xml_line = '<p class="verse"><line meter="Я4ж"/>Ещѐ вкруг со̀лнцев нѐ <rhyme-zone/>враща̀лись<br/>'
 
@@ -137,12 +131,12 @@ class TestParseLine(unittest.TestCase):
                 "100101",
             ),
             (
-                "в доро+гу",
+                "в доро\u0300гу",
                 "010",
                 "001",
             ),
             (
-                "отправля+юсь в доро+гу",
+                "отправля\u0300юсь в доро\u0300гу",
                 "0010010",
                 "0001001",
             ),
@@ -208,40 +202,6 @@ class TestEncoding(unittest.TestCase):
         decoded = Poem.decode(encoded)
 
         self.assertDictEqual(asdict(poem), asdict(decoded))
-
-
-class TestAccentuator(unittest.TestCase):
-    def setUpClass():
-        build_accent_dict(read_accent_dicts(ACCENT_DICT_PATHS))
-
-    @parameterized.expand(
-        [
-            ("Еще вкруг солнцев не вращались", "010100010"),
-            ("Ваше Величество, мы прибыли ко дворцу", "1001000100001"),
-            ("йошкин кот", "100"),
-        ]
-    )
-    def test_accent_line(self, line, with_accents):
-        res = bitarray(accent_line(line))
-
-        self.assertEqual(res, bitarray(with_accents))
-
-    @parameterized.expand(
-        [
-            ("легкий", "10"),
-            ("темно-синий", "1010"),
-            ("ёлка", "10"),
-            ("еще", "01"),
-            ("Еще", "01"),
-            # ("какой-нибудь", "0100"),
-            # ("что-то", "10"),
-            # ("какие-нибудь", "0100"),
-        ]
-    )
-    def test_accent_word(self, word, with_accents):
-        res = bitarray(accent_line(word))
-
-        self.assertEqual(res, bitarray(with_accents))
 
 
 class TestCaesuraDecoding(unittest.TestCase):

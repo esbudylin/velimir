@@ -1,12 +1,9 @@
 import unittest
 
 from bs4 import BeautifulSoup
-from velimir.accentuator import (
-    extract_accent_mask,
-    stress_mark_ord,
-)
 from velimir.markup import rhyme_zone
-from velimir.parsers import extract_lines
+from velimir.parsers import extract_accent_mask, extract_lines
+from velimir.settings import STRESS_MARK_ORD
 
 xml = """
 <p class="verse"><line meter="Ан4м"/>И, садя̀сь, запева̀ли <i>Варя̀га</i> <rhyme-zone/>однѝ,<br/>
@@ -15,7 +12,7 @@ xml = """
 <line meter="Ан3м"/>И тихо̀нько крестѝлась <rhyme-zone/>рука̀.</p>
 """
 
-MARK = chr(stress_mark_ord)
+MARK = chr(STRESS_MARK_ORD)
 
 
 def get_zone(line: str):

@@ -5,7 +5,8 @@ from typing import Iterable, Iterator
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
-from . import accentuator, cyrlat
+from . import cyrlat
+from .accentuation import accent_line
 from .domain_models import (
     InputLine,
     Line,
@@ -13,6 +14,7 @@ from .domain_models import (
 )
 from .logger import delayed_logger
 from .meter.formula import LineFormula, parse_line_formula
+from .settings import STRESS_MARK_ORD
 
 
 def parse_input_lines(
@@ -64,7 +66,7 @@ def extract_syllable_features(
     line: str,
     rhythm_accents: list[bool] = None,
 ) -> SyllableFeatures:
-    poetic_accents = accentuator.extract_accent_mask(line)
+    poetic_accents = extract_accent_mask(line)
     rhythm_accents = rhythm_accents or []
 
     if not sum(poetic_accents) and sum(rhythm_accents):
@@ -72,12 +74,12 @@ def extract_syllable_features(
         logging.warning("Accents are not marked. Using line formula rhythm instead")
         poetic_accents = rhythm_accents
 
-    cleaned_line = clean_line(accentuator.remove_accent_marks(line))
+    cleaned_line = clean_line(remove_accent_marks(line))
 
     return SyllableFeatures(
         poetic_accents=poetic_accents,
-        last_in_word=accentuator.extract_word_ending_mask(cleaned_line),
-        linguistic_accents=accentuator.accent_line(cleaned_line),
+        last_in_word=extract_word_ending_mask(cleaned_line),
+        linguistic_accents=accent_line(cleaned_line),
     )
 
 
@@ -204,3 +206,48 @@ def extract_caesura(
         return caesura
 
     return []
+
+
+def is_vowel(char):
+    vowels = "аеиоуыэюяёАЕИОУЫЭЮЯЁ"
+
+    return char in vowels
+
+
+def vowel_count(word):
+    return sum(map(is_vowel, word))
+
+
+def extract_accent_mask(text: str) -> list[bool]:
+    result = []
+
+    def is_accent_mark(char):
+        return char and ord(char) == STRESS_MARK_ORD
+
+    for i, char in enumerate(text):
+        next_char = text[i + 1] if i + 1 < len(text) else ""
+
+        if is_vowel(char):
+            if is_accent_mark(next_char):
+                result.append(True)
+            else:
+                result.append(False)
+
+    return result
+
+
+def extract_word_ending_mask(text: str) -> list[bool]:
+    result = []
+
+    for word in text.split():
+        word_vowels = list(filter(lambda c: is_vowel(c), word))
+
+        if word_vowels:
+            result += [False] * (len(word_vowels) - 1)
+            result.append(True)
+
+    return result
+
+
+def remove_accent_marks(text: str) -> str:
+    return "".join(c for c in text if ord(c) != STRESS_MARK_ORD)

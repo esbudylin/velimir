@@ -5,13 +5,14 @@ from fractions import Fraction
 
 import numpy as np
 
-from .. import accentuator, nlp
+from .. import nlp
 from ..domain_models import Clausula, Meter, MeterClass, MeterType
 from .ml_preprocess import (
     MeterClassRegistry,
     break_into_chunks,
 )
 from ..nlp import PartOfSpeech
+from ..parsers import accent_line, extract_word_ending_mask
 
 
 class FailedLine:
@@ -313,8 +314,8 @@ def process_lines(
     lines: list[str],
     stanza_breaks: list[int],
 ) -> list[ProcessedLine | FailedLine]:
-    word_ending_masks = [accentuator.extract_word_ending_mask(li) for li in lines]
-    ling_accent_masks = [accentuator.accent_line(li) for li in lines]
+    word_ending_masks = [extract_word_ending_mask(li) for li in lines]
+    ling_accent_masks = [accent_line(li) for li in lines]
 
     gf_expanded = [
         gf.expand(wem) for gf, wem in zip(map(nlp.markup, lines), word_ending_masks)

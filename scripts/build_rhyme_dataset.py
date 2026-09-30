@@ -9,13 +9,17 @@ from dataclasses import dataclass
 from itertools import count, islice, repeat
 from typing import Iterator
 
-from velimir import accentuator, cyrlat
+from velimir import cyrlat
 from velimir.author import get_author_sort_key
 from velimir.creation_date import CreationDate
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings, delayed_logger
-from velimir.parsers import parse_input_lines
+from velimir.parsers import (
+    extract_accent_mask,
+    parse_input_lines,
+    remove_accent_marks,
+)
 from velimir.rhyme.formula import (
     RhymeType,
     RhymeVisitor,
@@ -131,7 +135,7 @@ def extract_rhyme_features(
 
     for seq_idx, seq in enumerate(rhyme_seqs):
         for order_in_seq, (rhyme_group, line) in enumerate(zip(schema, seq)):
-            accents = accentuator.extract_accent_mask(line.rhyme_zone)
+            accents = extract_accent_mask(line.rhyme_zone)
 
             if not line.rhyme_zone:
                 continue
@@ -140,7 +144,7 @@ def extract_rhyme_features(
                 logging.info("Skipping non-cyrillic rhyme: %s", line.rhyme_zone)
                 continue
 
-            word = accentuator.remove_accent_marks(line.rhyme_zone).lower()
+            word = remove_accent_marks(line.rhyme_zone).lower()
             cleaned_word = re.sub(r"[^а-я-\sё]", "", word).strip("- ")
 
             if not cleaned_word:

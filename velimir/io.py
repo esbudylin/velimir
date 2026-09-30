@@ -42,13 +42,6 @@ def load_poems_from_msgpack() -> Iterator[Poem]:
                 yield Poem.decode(poem_data)
 
 
-def read_accent_dicts(filenames):
-    for filename in filenames:
-        with open(filename, encoding="utf8") as file_read:
-            for line in file_read:
-                yield line
-
-
 def load_models(device):
     import torch
 

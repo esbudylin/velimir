@@ -4,8 +4,8 @@ from functools import cache, partial
 
 from pymorphy2 import MorphAnalyzer
 
-from .accentuator import vowel_count
 from .domain_models import CodeIntEnum
+from .parsers import vowel_count
 
 morph_analyzer = MorphAnalyzer()
 
