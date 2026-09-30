@@ -132,9 +132,3 @@ the data themselves are proprietary and used under fair use
 conditions. The datasets only include metadata extracted from the
 corpus; the original corpus files are not included in the repository
 due to copyright constraints.
-
-The directory [[file:data/accent_dicts]] includes files ~accent.dic~ and
-~accent1.dic~ which were copied from the [[https://github.com/yuliya1324/ru_accent][ru_accent]] repo. Minor changes
-were made to ~accent1.dic~. The file ~accent2.dic~ was created
-entirely for this project.
-
