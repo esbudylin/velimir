@@ -10,7 +10,7 @@ from ..domain_models import Clausula, Meter, MeterType
 from ..logger import delayed_logger
 
 grammar = Grammar(
-    """
+    r"""
     expr = meter_schema ( "~" meter_schema )* ( ws rhythm_schema )?
 
     meter_schema = meter unstable? feet clausula

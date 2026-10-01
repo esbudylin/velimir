@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import random
 import sqlite3
 from dataclasses import dataclass
@@ -284,4 +285,6 @@ def collate_samples(batch: list[Sample]):
 
 def get_loader(chunks, **kwargs):
     dataset = SampleDataset(chunks)
+    if kwargs.get("num_workers") and "fork" in multiprocessing.get_all_start_methods():
+        kwargs.setdefault("multiprocessing_context", "fork")
     return DataLoader(dataset, collate_fn=collate_samples, **kwargs)

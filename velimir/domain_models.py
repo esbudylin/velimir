@@ -7,17 +7,16 @@ from bitarray import bitarray
 
 
 class CodeIntEnum(IntEnum):
-    def __init_subclass__(cls):
-        cls._code_to_member = {}
-
     def __new__(cls, value: int, code: str):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.code = code
 
-        cls._code_to_member[code] = obj
-
         return obj
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._code_to_member = {member.code: member for member in cls}
 
     @classmethod
     def from_str(cls, s: str):

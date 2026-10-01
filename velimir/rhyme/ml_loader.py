@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import random
 import sqlite3
 from dataclasses import dataclass
@@ -178,4 +179,6 @@ def get_rhyme_pair_loader(
     **kwargs,
 ) -> DataLoader:
     dataset = RhymePairDataset(rows)
+    if kwargs.get("num_workers") and "fork" in multiprocessing.get_all_start_methods():
+        kwargs.setdefault("multiprocessing_context", "fork")
     return DataLoader(dataset, collate_fn=collate_rhyme_pairs, **kwargs)

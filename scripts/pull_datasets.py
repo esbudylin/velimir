@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.10,<3.11"
+# requires-python = ">=3.14"
 # dependencies = [
 #     "huggingface_hub>=0.27",
 # ]

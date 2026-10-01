@@ -2,25 +2,25 @@
 name = "velimir"
 version = "0.1.0"
 description = "ML-based tool for detecting rhythm and meter in Russian poetry"
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.14"
 dependencies = [
     "stressful @ git+https://github.com/esbudylin/stressful",
     "pymorphy2[fast] @ git+https://github.com/pymorphy2-fork/pymorphy2@4ae2041cd31228cbb45cb4b508483b81a1009d17",
-    "numpy<1.24",
+    "numpy>=2.3.4,<3",
     "bitarray==3.8.0",
-    "onnxruntime==1.23.2",
-    "scipy>=1.15.3",
+    "onnxruntime>=1.24.1,<2",
+    "scipy>=1.16.2",
 ]
 
 [project.optional-dependencies]
-cpu = ["torch>=2.10.0,<2.11"]
-cuda = ["torch>=2.10.0,<2.11"]
+cpu = ["torch>=2.14.1,<2.15"]
+cuda = ["torch>=2.14.1,<2.15"]
 
 [dependency-groups]
 dev = [
     "parameterized==0.9.0",
     "beautifulsoup4==4.14.3",
-    "lxml==4.9.3",
+    "lxml>=6.0.2",
     "parsimonious==0.10.0",
     "msgpack==1.0.6",
     "onnx==1.21.0",

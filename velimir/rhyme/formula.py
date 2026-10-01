@@ -9,7 +9,7 @@ from ..domain_models import CodeIntEnum
 RHYME_SCHEMA_ALPHABET = "абвгдежзийкл"
 
 rhyme_grammar = Grammar(
-    """
+    r"""
     expr = entry ( separator_sharp entry )*
     separator_sharp = ws* "#" ws*
 

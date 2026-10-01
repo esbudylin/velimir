@@ -5,7 +5,7 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
 author_grammar = Grammar(
-    """
+    r"""
     expr = author ( separator author )*
 
     separator = ws? ":" ws?
