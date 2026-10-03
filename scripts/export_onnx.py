@@ -5,6 +5,7 @@ import torch
 from velimir.io import load_models
 from velimir.logger import LoggingSettings
 from velimir.meter.ml_preprocess import MeterClassRegistry
+from velimir.meter.ml_loader import ACCENT_INPUT_CHANNELS
 from velimir.onnx import MAX_SEQ_LEN
 from velimir.rhyme.ml import RhymePairModel
 from velimir.rhyme.ml_loader import PAD_ID
@@ -18,7 +19,7 @@ from velimir.settings import (
 
 def make_dummy_inputs():
     N = 18
-    accent_input = torch.zeros(N, MAX_SEQ_LEN, 2)
+    accent_input = torch.zeros(N, MAX_SEQ_LEN, ACCENT_INPUT_CHANNELS)
     pos_input = torch.zeros(N, MAX_SEQ_LEN, dtype=torch.long)
     meter_target = torch.zeros(N, dtype=torch.long)
     return accent_input, pos_input, meter_target

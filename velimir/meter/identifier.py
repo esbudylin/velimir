@@ -12,7 +12,7 @@ from .ml_preprocess import (
     break_into_chunks,
 )
 from ..nlp import PartOfSpeech
-from ..parsers import accent_line, extract_word_ending_mask
+from ..parsers import accent_line, extract_punctuation, extract_word_ending_mask
 
 
 class FailedLine:
@@ -85,23 +85,41 @@ def extract_input_tensors(
     stanza_breaks: list[int],
     accent_masks: list[list[bool]],
     word_ending_masks: list[list[bool]],
+    mid_punct_masks: list[list[bool]],
+    end_punct_masks: list[list[bool]],
     part_of_speech: list[list[PartOfSpeech]],
 ):
     accent_input = []
     pos_input = []
 
     stanzas = break_into_chunks(
-        list(zip(accent_masks, word_ending_masks, part_of_speech)),
+        list(
+            zip(
+                accent_masks,
+                word_ending_masks,
+                mid_punct_masks,
+                end_punct_masks,
+                part_of_speech,
+            )
+        ),
         stanza_breaks,
     )
 
     for stanza_lines in stanzas:
-        for ling_accent_mask, word_ending_mask, pos in stanza_lines:
+        for (
+            ling_accent_mask,
+            word_ending_mask,
+            mid_punct_mask,
+            end_punct_mask,
+            pos,
+        ) in stanza_lines:
             accent_input.append(
                 np.stack(
                     [
                         np.array(ling_accent_mask, dtype=np.float32),
                         np.array(word_ending_mask, dtype=np.float32),
+                        np.array(mid_punct_mask, dtype=np.float32),
+                        np.array(end_punct_mask, dtype=np.float32),
                     ],
                     axis=1,
                 )
@@ -317,6 +335,10 @@ def process_lines(
     word_ending_masks = [extract_word_ending_mask(li) for li in lines]
     ling_accent_masks = [accent_line(li) for li in lines]
 
+    punct_masks = [extract_punctuation(li) for li in lines]
+    mid_punct_masks = [mid for mid, _ in punct_masks]
+    end_punct_masks = [end for _, end in punct_masks]
+
     gf_expanded = [
         gf.expand(wem) for gf, wem in zip(map(nlp.markup, lines), word_ending_masks)
     ]
@@ -325,6 +347,8 @@ def process_lines(
         stanza_breaks,
         ling_accent_masks,
         word_ending_masks,
+        mid_punct_masks,
+        end_punct_masks,
         [gf.part_of_speech for gf in gf_expanded],
     )
 

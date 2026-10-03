@@ -75,11 +75,14 @@ def extract_syllable_features(
         poetic_accents = rhythm_accents
 
     cleaned_line = clean_line(remove_accent_marks(line))
+    mid_sentence_punct, end_sentence_punct = extract_punctuation(cleaned_line)
 
     return SyllableFeatures(
         poetic_accents=poetic_accents,
         last_in_word=extract_word_ending_mask(cleaned_line),
         linguistic_accents=accent_line(cleaned_line),
+        mid_sentence_punct=mid_sentence_punct,
+        end_sentence_punct=end_sentence_punct,
     )
 
 
@@ -247,6 +250,35 @@ def extract_word_ending_mask(text: str) -> list[bool]:
             result.append(True)
 
     return result
+
+
+END_SENTENCE_PUNCT = frozenset(".!?…")
+MID_SENTENCE_PUNCT = frozenset(",;:—–()")
+
+
+def extract_punctuation(text: str) -> tuple[list[bool], list[bool]]:
+    """Classify punctuation following each syllable.
+
+    Returns two equal-length masks for mid-sentence and end-of-sentence
+    punctuation. A syllable with neither is the absence class. When both kinds
+    occur after the same syllable, the end-of-sentence mark takes precedence.
+    """
+    mid = []
+    end = []
+
+    for char in text:
+        if is_vowel(char):
+            mid.append(False)
+            end.append(False)
+        elif char in END_SENTENCE_PUNCT:
+            if end:
+                end[-1] = True
+                mid[-1] = False
+        elif char in MID_SENTENCE_PUNCT:
+            if mid and not end[-1]:
+                mid[-1] = True
+
+    return mid, end
 
 
 def remove_accent_marks(text: str) -> str:

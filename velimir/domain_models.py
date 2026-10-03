@@ -84,6 +84,11 @@ class SyllableFeatures:
     linguistic_accents: bitarray
     poetic_accents: bitarray
     last_in_word: bitarray
+    # Punctuation following each syllable encodes one of three classes:
+    # absence, mid-sentence punctuation, or end-of-sentence punctuation.
+    # The two masks are mutually exclusive; (False, False) means absence.
+    mid_sentence_punct: bitarray
+    end_sentence_punct: bitarray
 
     def __post_init__(self):
         if not isinstance(self.linguistic_accents, bitarray):
@@ -95,10 +100,18 @@ class SyllableFeatures:
         if not isinstance(self.last_in_word, bitarray):
             self.last_in_word = bitarray(self.last_in_word)
 
+        if not isinstance(self.mid_sentence_punct, bitarray):
+            self.mid_sentence_punct = bitarray(self.mid_sentence_punct)
+
+        if not isinstance(self.end_sentence_punct, bitarray):
+            self.end_sentence_punct = bitarray(self.end_sentence_punct)
+
         inputs = [
             self.linguistic_accents,
             self.poetic_accents,
             self.last_in_word,
+            self.mid_sentence_punct,
+            self.end_sentence_punct,
         ]
 
         lengths = set(map(len, inputs))
@@ -114,6 +127,8 @@ class SyllableFeatures:
             bu.serialize(self.linguistic_accents),
             bu.serialize(self.poetic_accents),
             bu.serialize(self.last_in_word),
+            bu.serialize(self.mid_sentence_punct),
+            bu.serialize(self.end_sentence_punct),
         ]
 
     @classmethod
@@ -122,6 +137,8 @@ class SyllableFeatures:
             linguistic_accents=bu.deserialize(data[0]),
             poetic_accents=bu.deserialize(data[1]),
             last_in_word=bu.deserialize(data[2]),
+            mid_sentence_punct=bu.deserialize(data[3]),
+            end_sentence_punct=bu.deserialize(data[4]),
         )
 
 

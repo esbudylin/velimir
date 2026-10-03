@@ -12,6 +12,7 @@ from velimir.meter.identifier import decode_caesura_positions
 from velimir.parsers import (
     extract_accent_mask,
     extract_lines,
+    extract_punctuation,
     extract_syllable_features,
     extract_word_ending_mask,
     transform_poem,
@@ -189,6 +190,28 @@ class TestParseLine(unittest.TestCase):
             line.syllables.last_in_word,
             bitarray("011011001"),
         )
+
+
+class TestPunctuationExtraction(unittest.TestCase):
+    @parameterized.expand(
+        [
+            ("no punctuation", "Слово", "00", "00"),
+            ("mid sentence", "Привет, мир", "010", "000"),
+            ("end of sentence", "Свет. Тьма?", "00", "11"),
+            ("mixed", "Привет, мир.", "010", "001"),
+            ("dash", "Нет — да", "10", "00"),
+            ("leading punctuation ignored", "— Да", "0", "0"),
+            ("hyphen in word is not punctuation", "кто-то", "00", "00"),
+            ("quotes are not punctuation", "«Слово» \"мир\"", "000", "000"),
+            ("brackets are not punctuation", "Слово [мир]", "000", "000"),
+            ("slashes are not punctuation", "Слово/мир\\да", "0000", "0000"),
+            ("end takes precedence", "Стоп, ...", "0", "1"),
+        ]
+    )
+    def test_punctuation(self, name, text, mid, end):
+        mid_mask, end_mask = extract_punctuation(text)
+        self.assertEqual(bitarray(mid_mask), bitarray(mid))
+        self.assertEqual(bitarray(end_mask), bitarray(end))
 
 
 class TestEncoding(unittest.TestCase):
