@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from fractions import Fraction
 from itertools import count
 from typing import Iterable, Iterator
@@ -6,7 +7,7 @@ from typing import Iterable, Iterator
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from . import cyrlat
-from .accentuation import accent_line
+from .accentuation import accent_probabilities
 from .domain_models import (
     InputLine,
     Line,
@@ -15,6 +16,17 @@ from .domain_models import (
 from .logger import delayed_logger
 from .meter.formula import LineFormula, parse_line_formula
 from .settings import STRESS_MARK_ORD
+
+END_SENTENCE_PUNCT = frozenset(".!?…")
+MID_SENTENCE_PUNCT = frozenset(",;:—–()")
+HYPHEN = "-"
+
+
+@dataclass(slots=True)
+class Punctuation:
+    mid_sentence: list[bool]
+    end_sentence: list[bool]
+    hyphen: list[bool]
 
 
 def parse_input_lines(
@@ -75,14 +87,16 @@ def extract_syllable_features(
         poetic_accents = rhythm_accents
 
     cleaned_line = clean_line(remove_accent_marks(line))
-    mid_sentence_punct, end_sentence_punct = extract_punctuation(cleaned_line)
+    punctuation = extract_punctuation(cleaned_line)
+    probabilities = accent_probabilities(cleaned_line)
 
     return SyllableFeatures(
         poetic_accents=poetic_accents,
         last_in_word=extract_word_ending_mask(cleaned_line),
-        linguistic_accents=accent_line(cleaned_line),
-        mid_sentence_punct=mid_sentence_punct,
-        end_sentence_punct=end_sentence_punct,
+        accent_probabilities=probabilities,
+        mid_sentence_punct=punctuation.mid_sentence,
+        end_sentence_punct=punctuation.end_sentence,
+        hyphen=punctuation.hyphen,
     )
 
 
@@ -252,24 +266,16 @@ def extract_word_ending_mask(text: str) -> list[bool]:
     return result
 
 
-END_SENTENCE_PUNCT = frozenset(".!?…")
-MID_SENTENCE_PUNCT = frozenset(",;:—–()")
-
-
-def extract_punctuation(text: str) -> tuple[list[bool], list[bool]]:
-    """Classify punctuation following each syllable.
-
-    Returns two equal-length masks for mid-sentence and end-of-sentence
-    punctuation. A syllable with neither is the absence class. When both kinds
-    occur after the same syllable, the end-of-sentence mark takes precedence.
-    """
+def extract_punctuation(text: str) -> Punctuation:
     mid = []
     end = []
+    hyphen = []
 
-    for char in text:
+    for i, char in enumerate(text):
         if is_vowel(char):
             mid.append(False)
             end.append(False)
+            hyphen.append(False)
         elif char in END_SENTENCE_PUNCT:
             if end:
                 end[-1] = True
@@ -277,8 +283,18 @@ def extract_punctuation(text: str) -> tuple[list[bool], list[bool]]:
         elif char in MID_SENTENCE_PUNCT:
             if mid and not end[-1]:
                 mid[-1] = True
+        elif char == HYPHEN:
+            previous = text[i - 1] if i else ""
+            following = text[i + 1] if i + 1 < len(text) else ""
 
-    return mid, end
+            # a run of hyphens or a hyphen next to a space is a dash
+            if previous.isalnum() and following.isalnum():
+                if hyphen:
+                    hyphen[-1] = True
+            elif mid and not end[-1]:
+                mid[-1] = True
+
+    return Punctuation(mid_sentence=mid, end_sentence=end, hyphen=hyphen)
 
 
 def remove_accent_marks(text: str) -> str:

@@ -30,19 +30,20 @@ class RawSample:
     grammar: GrammarFeatures
 
 
-# linguistic accents, last-in-word, mid-sentence punctuation,
-# end-of-sentence punctuation
-ACCENT_INPUT_CHANNELS = 4
+# accent probabilities, last-in-word, mid-sentence punctuation,
+# end-of-sentence punctuation, hyphen
+ACCENT_INPUT_CHANNELS = 5
 
 
 def make_accent_input(rs: RawSample) -> torch.Tensor:
     syllables = rs.syllables
     return torch.stack(
         [
-            torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
+            torch.tensor(syllables.accent_probabilities, dtype=torch.float32),
             torch.tensor(syllables.last_in_word, dtype=torch.float32),
             torch.tensor(syllables.mid_sentence_punct, dtype=torch.float32),
             torch.tensor(syllables.end_sentence_punct, dtype=torch.float32),
+            torch.tensor(syllables.hyphen, dtype=torch.float32),
         ],
         dim=1,
     )

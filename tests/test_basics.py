@@ -195,23 +195,30 @@ class TestParseLine(unittest.TestCase):
 class TestPunctuationExtraction(unittest.TestCase):
     @parameterized.expand(
         [
-            ("no punctuation", "Слово", "00", "00"),
-            ("mid sentence", "Привет, мир", "010", "000"),
-            ("end of sentence", "Свет. Тьма?", "00", "11"),
-            ("mixed", "Привет, мир.", "010", "001"),
-            ("dash", "Нет — да", "10", "00"),
-            ("leading punctuation ignored", "— Да", "0", "0"),
-            ("hyphen in word is not punctuation", "кто-то", "00", "00"),
-            ("quotes are not punctuation", "«Слово» \"мир\"", "000", "000"),
-            ("brackets are not punctuation", "Слово [мир]", "000", "000"),
-            ("slashes are not punctuation", "Слово/мир\\да", "0000", "0000"),
-            ("end takes precedence", "Стоп, ...", "0", "1"),
+            ("no punctuation", "Слово", "00", "00", "00"),
+            ("mid sentence", "Привет, мир", "010", "000", "000"),
+            ("end of sentence", "Свет. Тьма?", "00", "11", "00"),
+            ("mixed", "Привет, мир.", "010", "001", "000"),
+            ("dash", "Нет — да", "10", "00", "00"),
+            ("spaced double hyphen dash", "Привет -- мир", "010", "000", "000"),
+            ("spaced single hyphen dash", "Привет - мир", "010", "000", "000"),
+            ("trailing double hyphen dash", "слово--", "01", "00", "00"),
+            ("double hyphen between words", "кто--то", "10", "00", "00"),
+            ("leading double hyphen ignored", "-- Да", "0", "0", "0"),
+            ("leading punctuation ignored", "— Да", "0", "0", "0"),
+            ("hyphen", "кто-то", "00", "00", "10"),
+            ("multiple hyphens", "темно-синий", "0000", "0000", "0100"),
+            ("quotes are not punctuation", "«Слово» \"мир\"", "000", "000", "000"),
+            ("brackets are not punctuation", "Слово [мир]", "000", "000", "000"),
+            ("slashes are not punctuation", "Слово/мир\\да", "0000", "0000", "0000"),
+            ("end takes precedence", "Стоп, ...", "0", "1", "0"),
         ]
     )
-    def test_punctuation(self, name, text, mid, end):
-        mid_mask, end_mask = extract_punctuation(text)
-        self.assertEqual(bitarray(mid_mask), bitarray(mid))
-        self.assertEqual(bitarray(end_mask), bitarray(end))
+    def test_punctuation(self, name, text, mid, end, hyphen):
+        punctuation = extract_punctuation(text)
+        self.assertEqual(bitarray(punctuation.mid_sentence), bitarray(mid))
+        self.assertEqual(bitarray(punctuation.end_sentence), bitarray(end))
+        self.assertEqual(bitarray(punctuation.hyphen), bitarray(hyphen))
 
 
 class TestEncoding(unittest.TestCase):

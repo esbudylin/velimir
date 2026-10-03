@@ -899,7 +899,7 @@ wheels = [
 [[package]]
 name = "stressful"
 version = "0.1.0"
-source = { git = "https://github.com/esbudylin/stressful#c06239233e40323cf060e2273070a3ca430cdccf" }
+source = { git = "https://github.com/esbudylin/stressful#12be2feb897605f16f04cfaa87e429b4d08a9f58" }
 dependencies = [
     { name = "numpy" },
     { name = "onnxruntime" },
