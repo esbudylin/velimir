@@ -13,9 +13,7 @@ from .ml_preprocess import (
 )
 from ..nlp import PartOfSpeech
 from ..parsers import (
-    Punctuation,
     accent_probabilities,
-    extract_punctuation,
     extract_word_ending_mask,
 )
 
@@ -90,7 +88,6 @@ def pad_and_stack(arrays, pad_value=-1):
 class LineInputs:
     accent_probabilities: list[float]
     last_in_word: list[bool]
-    punctuation: Punctuation
     part_of_speech: list[PartOfSpeech]
 
     def accent_input(self) -> np.ndarray:
@@ -98,9 +95,6 @@ class LineInputs:
             [
                 np.array(self.accent_probabilities, dtype=np.float32),
                 np.array(self.last_in_word, dtype=np.float32),
-                np.array(self.punctuation.mid_sentence, dtype=np.float32),
-                np.array(self.punctuation.end_sentence, dtype=np.float32),
-                np.array(self.punctuation.hyphen, dtype=np.float32),
             ],
             axis=1,
         )
@@ -334,7 +328,6 @@ def process_lines(
         LineInputs(
             accent_probabilities=accent_probabilities(line),
             last_in_word=word_ending_mask,
-            punctuation=extract_punctuation(line),
             part_of_speech=grammar.part_of_speech,
         )
         for line, word_ending_mask, grammar in zip(

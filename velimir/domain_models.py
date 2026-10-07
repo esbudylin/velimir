@@ -85,11 +85,6 @@ class SyllableFeatures:
     last_in_word: bitarray
     accent_probabilities: list[float]
 
-    # punctuation
-    mid_sentence_punct: bitarray
-    end_sentence_punct: bitarray
-    hyphen: bitarray
-
     def __post_init__(self):
         if not isinstance(self.poetic_accents, bitarray):
             self.poetic_accents = bitarray(self.poetic_accents)
@@ -97,21 +92,9 @@ class SyllableFeatures:
         if not isinstance(self.last_in_word, bitarray):
             self.last_in_word = bitarray(self.last_in_word)
 
-        if not isinstance(self.mid_sentence_punct, bitarray):
-            self.mid_sentence_punct = bitarray(self.mid_sentence_punct)
-
-        if not isinstance(self.end_sentence_punct, bitarray):
-            self.end_sentence_punct = bitarray(self.end_sentence_punct)
-
-        if not isinstance(self.hyphen, bitarray):
-            self.hyphen = bitarray(self.hyphen)
-
         inputs = [
             self.poetic_accents,
             self.last_in_word,
-            self.mid_sentence_punct,
-            self.end_sentence_punct,
-            self.hyphen,
         ]
 
         lengths = set(map(len, inputs))
@@ -129,9 +112,6 @@ class SyllableFeatures:
         return [
             bu.serialize(self.poetic_accents),
             bu.serialize(self.last_in_word),
-            bu.serialize(self.mid_sentence_punct),
-            bu.serialize(self.end_sentence_punct),
-            bu.serialize(self.hyphen),
             self.accent_probabilities,
         ]
 
@@ -140,10 +120,7 @@ class SyllableFeatures:
         return cls(
             poetic_accents=bu.deserialize(data[0]),
             last_in_word=bu.deserialize(data[1]),
-            mid_sentence_punct=bu.deserialize(data[2]),
-            end_sentence_punct=bu.deserialize(data[3]),
-            hyphen=bu.deserialize(data[4]),
-            accent_probabilities=list(data[5]),
+            accent_probabilities=list(data[2]),
         )
 
 
