@@ -40,7 +40,7 @@ class MeterType(CodeIntEnum):
     AKSTENTNIK = 7, "Ак"
     LOGAED = 8, "Л"
     HEXAMETER = 9, "Гек"
-    PAEON = 10, "Пен"
+    PENTAMETER = 10, "Пен"
     SYLLABIC = 11, "С"
 
 
