@@ -1,0 +1,55 @@
+#+PROPERTY: header-args :dir ..
+#+PROPERTY: header-args:python :session hexameter
+
+Какой процент строк гекзаметра и строк дактиля характеризуется
+ритмической схемой ~10010010010010010~
+
+#+begin_src python
+  from bitarray import bitarray
+  
+  PATTERN = "10010010010010010"
+  pattern_ba = bitarray(PATTERN)
+#+end_src
+
+#+RESULTS:
+: None
+
+#+begin_src python :results output
+  from collections import Counter
+
+  from velimir.domain_models import MeterType
+  from velimir.io import load_poems_from_msgpack
+
+  total_hex = 0
+  hex_match = 0
+
+  dact_lines = 0
+  dact_match = 0
+
+  for poem in load_poems_from_msgpack():
+      for line in poem.lines:
+          if len(line.meters) > 1:
+              continue
+          if line.meters[0].meter == MeterType.HEXAMETER:
+              total_hex += 1
+              hex_match += pattern_ba == line.syllables.poetic_accents
+          if line.meters[0].meter == MeterType.DACTYL:
+              dact_lines += 1
+              dact_match += pattern_ba == line.syllables.poetic_accents
+
+
+  print(f"lines with Гек meters: {total_hex}")
+  print(
+      f"matching {PATTERN}: {hex_match} "
+      f"({100 * hex_match / total_hex:.4f}%)"
+  )
+
+  print(f"single-meter Д lines: {dact_lines}")
+  print(f"matching {PATTERN}: {dact_match} ({100 * dact_match / dact_lines:.4f}%)")
+#+end_src
+
+#+RESULTS:
+: lines with Гек meters: 30934
+: matching 10010010010010010: 11933 (38.5757%)
+: single-meter Д lines: 135188
+: matching 10010010010010010: 24277 (17.9580%)
