@@ -25,9 +25,9 @@
 <body>
   <nav>
     <a href="{{ url_for('rhyme.index') }}">Главная</a>
+    <a href="{{ url_for('markup.index') }}">Разметка</a>
     <a href="{{ url_for('rhyme.authors') }}">Рифмы по авторам</a>
     <a href="{{ url_for('rhyme.search') }}">Поиск рифм</a>
-    <a href="{{ url_for('markup.index') }}">Разметка</a>
   </nav>
   {% block content %}{% endblock %}
   {% block scripts %}{% endblock %}

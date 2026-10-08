@@ -81,14 +81,11 @@ class InputLine:
 
 @dataclass(slots=True)
 class SyllableFeatures:
-    linguistic_accents: bitarray
     poetic_accents: bitarray
     last_in_word: bitarray
+    accent_probabilities: list[float]
 
     def __post_init__(self):
-        if not isinstance(self.linguistic_accents, bitarray):
-            self.linguistic_accents = bitarray(self.linguistic_accents)
-
         if not isinstance(self.poetic_accents, bitarray):
             self.poetic_accents = bitarray(self.poetic_accents)
 
@@ -96,7 +93,6 @@ class SyllableFeatures:
             self.last_in_word = bitarray(self.last_in_word)
 
         inputs = [
-            self.linguistic_accents,
             self.poetic_accents,
             self.last_in_word,
         ]
@@ -109,19 +105,22 @@ class SyllableFeatures:
         if 0 in lengths:
             raise ValueError("Masks are empty")
 
+        if len(self.accent_probabilities) != len(self.poetic_accents):
+            raise ValueError("Accent probabilities must match mask length")
+
     def encode(self):
         return [
-            bu.serialize(self.linguistic_accents),
             bu.serialize(self.poetic_accents),
             bu.serialize(self.last_in_word),
+            self.accent_probabilities,
         ]
 
     @classmethod
     def decode(cls, data):
         return cls(
-            linguistic_accents=bu.deserialize(data[0]),
-            poetic_accents=bu.deserialize(data[1]),
-            last_in_word=bu.deserialize(data[2]),
+            poetic_accents=bu.deserialize(data[0]),
+            last_in_word=bu.deserialize(data[1]),
+            accent_probabilities=list(data[2]),
         )
 
 
@@ -191,7 +190,7 @@ class Line:
 
     def length(self):
         # маски - равной длины, здесь можно использовать любую маску
-        return len(self.syllables.linguistic_accents)
+        return len(self.syllables.poetic_accents)
 
     def encode(self):
         return [

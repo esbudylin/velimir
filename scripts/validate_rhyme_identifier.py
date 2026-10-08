@@ -48,7 +48,7 @@ def sample_rows(sample_size: int, seed: int) -> list[InputPoem]:
     return rows[:sample_size]
 
 
-def compare_poem(row: InputPoem, lines, model, stanza_breaks) -> Comparison:
+def compare_poem(row: InputPoem, lines, model) -> Comparison:
     annotation = row.rhyme.strip()
 
     rhyme_visitor = RhymeVisitor()
@@ -99,7 +99,7 @@ def iter_comparisons(rows: list[InputPoem]):
         started = time.monotonic()
 
         xml = read_poem_xml(row.path)
-        lines, stanza_breaks = parse_input_lines(xml)
+        lines, _ = parse_input_lines(xml)
 
         if len(lines) > MAX_POEM_LINES:
             logging.info(
@@ -110,7 +110,7 @@ def iter_comparisons(rows: list[InputPoem]):
             )
             continue
 
-        comparison = compare_poem(row, lines, model, stanza_breaks)
+        comparison = compare_poem(row, lines, model)
 
         logging.info(
             "Finished poem: %s (%s) in %.2fs",

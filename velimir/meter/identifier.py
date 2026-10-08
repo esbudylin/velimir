@@ -12,7 +12,10 @@ from .ml_preprocess import (
     break_into_chunks,
 )
 from ..nlp import PartOfSpeech
-from ..parsers import accent_line, extract_word_ending_mask
+from ..parsers import (
+    accent_probabilities,
+    extract_word_ending_mask,
+)
 
 
 class FailedLine:
@@ -81,33 +84,34 @@ def pad_and_stack(arrays, pad_value=-1):
     return result
 
 
+@dataclass
+class LineInputs:
+    accent_probabilities: list[float]
+    last_in_word: list[bool]
+    part_of_speech: list[PartOfSpeech]
+
+    def accent_input(self) -> np.ndarray:
+        return np.stack(
+            [
+                np.array(self.accent_probabilities, dtype=np.float32),
+                np.array(self.last_in_word, dtype=np.float32),
+            ],
+            axis=1,
+        )
+
+
 def extract_input_tensors(
     stanza_breaks: list[int],
-    accent_masks: list[list[bool]],
-    word_ending_masks: list[list[bool]],
-    part_of_speech: list[list[PartOfSpeech]],
+    lines: list[LineInputs],
 ):
-    accent_input = []
-    pos_input = []
+    stanzas = list(break_into_chunks(lines, stanza_breaks))
 
-    stanzas = break_into_chunks(
-        list(zip(accent_masks, word_ending_masks, part_of_speech)),
-        stanza_breaks,
-    )
-
-    for stanza_lines in stanzas:
-        for ling_accent_mask, word_ending_mask, pos in stanza_lines:
-            accent_input.append(
-                np.stack(
-                    [
-                        np.array(ling_accent_mask, dtype=np.float32),
-                        np.array(word_ending_mask, dtype=np.float32),
-                    ],
-                    axis=1,
-                )
-            )
-
-            pos_input.append(np.array(pos, dtype=np.int64))
+    accent_input = [line.accent_input() for stanza in stanzas for line in stanza]
+    pos_input = [
+        np.array(line.part_of_speech, dtype=np.int64)
+        for stanza in stanzas
+        for line in stanza
+    ]
 
     accent_input_padded = pad_and_stack(accent_input, pad_value=-1)
     pos_input_padded = pad_and_stack(pos_input, pad_value=-1)
@@ -315,18 +319,23 @@ def process_lines(
     stanza_breaks: list[int],
 ) -> list[ProcessedLine | FailedLine]:
     word_ending_masks = [extract_word_ending_mask(li) for li in lines]
-    ling_accent_masks = [accent_line(li) for li in lines]
 
     gf_expanded = [
         gf.expand(wem) for gf, wem in zip(map(nlp.markup, lines), word_ending_masks)
     ]
 
-    accent_input, pos_input = extract_input_tensors(
-        stanza_breaks,
-        ling_accent_masks,
-        word_ending_masks,
-        [gf.part_of_speech for gf in gf_expanded],
-    )
+    line_inputs = [
+        LineInputs(
+            accent_probabilities=accent_probabilities(line),
+            last_in_word=word_ending_mask,
+            part_of_speech=grammar.part_of_speech,
+        )
+        for line, word_ending_mask, grammar in zip(
+            lines, word_ending_masks, gf_expanded
+        )
+    ]
+
+    accent_input, pos_input = extract_input_tensors(stanza_breaks, line_inputs)
 
     N = len(lines)
     T_max = accent_input.shape[1]

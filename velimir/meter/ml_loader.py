@@ -30,11 +30,15 @@ class RawSample:
     grammar: GrammarFeatures
 
 
+# accent probabilities, last-in-word
+ACCENT_INPUT_CHANNELS = 2
+
+
 def make_accent_input(rs: RawSample) -> torch.Tensor:
     syllables = rs.syllables
     return torch.stack(
         [
-            torch.tensor(syllables.linguistic_accents, dtype=torch.float32),
+            torch.tensor(syllables.accent_probabilities, dtype=torch.float32),
             torch.tensor(syllables.last_in_word, dtype=torch.float32),
         ],
         dim=1,

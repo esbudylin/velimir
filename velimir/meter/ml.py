@@ -9,6 +9,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_se
 from ..nlp import PartOfSpeech
 from ..training import train_model
 from .ml_loader import (
+    ACCENT_INPUT_CHANNELS,
     MeterClassRegistry,
     get_meter_weights,
     get_loader,
@@ -32,7 +33,7 @@ class SharedEncoder(nn.Module):
         self.pos_emb = nn.Embedding(num_pos_classes, pos_emb_dim, padding_idx=0)
 
         self.line_encoder = nn.LSTM(
-            input_size=2 + pos_emb_dim,
+            input_size=ACCENT_INPUT_CHANNELS + pos_emb_dim,
             hidden_size=hidden,
             batch_first=True,
             bidirectional=True,

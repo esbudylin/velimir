@@ -6,7 +6,7 @@ from typing import Iterable, Iterator
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from . import cyrlat
-from .accentuation import accent_line
+from .accentuation import accent_probabilities
 from .domain_models import (
     InputLine,
     Line,
@@ -75,11 +75,12 @@ def extract_syllable_features(
         poetic_accents = rhythm_accents
 
     cleaned_line = clean_line(remove_accent_marks(line))
+    probabilities = accent_probabilities(cleaned_line)
 
     return SyllableFeatures(
         poetic_accents=poetic_accents,
         last_in_word=extract_word_ending_mask(cleaned_line),
-        linguistic_accents=accent_line(cleaned_line),
+        accent_probabilities=probabilities,
     )
 
 
