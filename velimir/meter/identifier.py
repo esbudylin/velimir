@@ -104,7 +104,7 @@ def extract_input_tensors(
     stanza_breaks: list[int],
     lines: list[LineInputs],
 ):
-    stanzas = list(break_into_chunks(lines, stanza_breaks))
+    stanzas = break_into_chunks(lines, stanza_breaks)
 
     accent_input = [line.accent_input() for stanza in stanzas for line in stanza]
     pos_input = [
@@ -224,7 +224,7 @@ def decode_caesura_positions(
                 raise ValueError
 
             caesura_positions.append(caesura)
-        except (IndexError, ValueError):
+        except IndexError, ValueError:
             # используем позицию первого окончания слова в цезурном "интервале" как позицию цезуры
             # применяется к тоническим размерам и строкам с цезурными наращениями/сокращениями
             caesura_positions.append(
@@ -343,7 +343,7 @@ def process_lines(
     all_accent_mask = np.full((N, T_max), -1.0, dtype=np.float32)
 
     line_indices = list(range(N))
-    chunks = list(break_into_chunks(line_indices, stanza_breaks))
+    chunks = break_into_chunks(line_indices, stanza_breaks)
 
     for stanza_lines in chunks:
         indices = np.array(stanza_lines)
