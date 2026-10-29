@@ -11,12 +11,9 @@ from velimir.logger import LoggingSettings
 from velimir.onnx import load_rhyme_onnx_model
 from velimir.rhyme.identifier import (
     RhymeInput,
-    calc_rhyme_matrix,
-    cluster_rhyme_matrix,
-    extract_rhyme_schema,
-    identify_rhyme_schema,
     render_rhyme_formulas,
-    canonicalize_pattern,
+    build_poem_schema,
+    identify_rhyme_formula,
 )
 from velimir.domain_models import InputPoem
 from velimir.settings import METADATA_TABLE, InputDialect
@@ -72,11 +69,9 @@ def compare_poem(row: InputPoem, lines, model) -> Comparison:
         return Comparison(row.path, annotation, "", "", "processing_error")
 
     try:
-        ours = render_rhyme_formulas(identify_rhyme_schema(ri, model))
+        poem_schema = build_poem_schema(ri, model)
+        ours = render_rhyme_formulas(identify_rhyme_formula(poem_schema))
 
-        rhyme_matrix = calc_rhyme_matrix(ri, model)
-        clusters = cluster_rhyme_matrix(rhyme_matrix)
-        poem_schema = canonicalize_pattern(extract_rhyme_schema(clusters))
         schema = ",".join(str(int(label)) for label in poem_schema)
     except Exception:
         logging.exception("Can't identify rhyme schema for %s", row.path)

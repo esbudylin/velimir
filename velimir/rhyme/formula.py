@@ -63,9 +63,9 @@ SCHEMALESS_TYPES = [
 
 class SpecialRhymeEntry(IntEnum):
     NO_RHYME = -1
-    TAUTO = -2
-    MONO = -3
-    REFRAIN = -4
+    TAUTO = -2000
+    MONO = -3000
+    REFRAIN = -4000
 
 
 @dataclass
@@ -86,17 +86,16 @@ def format_rhyme_subschema(schema: list[int]) -> str:
     letters = []
 
     for entry in schema:
-        match entry:
-            case SpecialRhymeEntry.NO_RHYME:
-                letters.append("х")
-            case SpecialRhymeEntry.TAUTO:
-                letters.append("т")
-            case SpecialRhymeEntry.MONO:
-                letters.append("м")
-            case SpecialRhymeEntry.REFRAIN:
-                letters.append("р")
-            case _:
-                letters.append(RHYME_SCHEMA_ALPHABET[entry])
+        if entry == SpecialRhymeEntry.NO_RHYME:
+            letters.append("х")
+        elif SpecialRhymeEntry.TAUTO >= entry > SpecialRhymeEntry.MONO:
+            letters.append("т")
+        elif SpecialRhymeEntry.MONO >= entry > SpecialRhymeEntry.REFRAIN:
+            letters.append("м")
+        elif SpecialRhymeEntry.REFRAIN >= entry:
+            letters.append("р")
+        else:
+            letters.append(RHYME_SCHEMA_ALPHABET[entry])
 
     return "".join(letters)
 

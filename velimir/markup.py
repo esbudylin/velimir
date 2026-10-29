@@ -8,7 +8,8 @@ from .onnx import load_onnx_models, load_rhyme_onnx_model
 from .parsers import extract_word_ending_mask, is_vowel
 from .rhyme.identifier import (
     RhymeInput,
-    identify_rhyme_schema,
+    build_poem_schema,
+    identify_rhyme_formula,
     render_rhyme_formulas,
 )
 from .settings import STRESS_MARK_ORD
@@ -224,7 +225,8 @@ class MarkupEngine:
             return ""
 
         try:
-            formulas = identify_rhyme_schema(rhymes, self.rhyme_model)
+            schema = build_poem_schema(rhymes, self.rhyme_model)
+            formulas = identify_rhyme_formula(schema)
             return render_rhyme_formulas(formulas)
         except Exception:
             logging.exception("Failed to identify rhyme schema")

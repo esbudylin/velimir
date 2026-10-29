@@ -118,6 +118,33 @@ CASES = [
 ]
 
 
+# fmt: off
+CORPUS_CASES = [
+    (
+        "xx/gippius/gip-412",
+        [-2099, 0, -2099, 0, -2098, 1, -2098, 1, -2097, 2, -2097, 2],
+        "перекрестная : тата",
+    ),
+    (
+        "xx/marshak/marshk3-300",
+        [
+            0, -4000, 0, -4000,
+            1, -4000, 1, -4000,
+            2, -4000, 2, -4000,
+            3, -4000, 3, -4000,
+            4, -4000, 4, -4000,
+        ],
+        "перекрестная : арар",
+    ),
+    (
+        "xx/blok/blok1-003",
+        [0, 0, 1, 2, 2, 1, 3, 3, 1, 4, 4, 1],
+        "сложная : аам",
+    ),
+]
+# fmt: on
+
+
 class TestBuildRhymePatterns(unittest.TestCase):
     @parameterized.expand([(inp, patterns) for inp, patterns, _ in CASES])
     def test_build_patterns(self, inp, out):
@@ -133,6 +160,14 @@ class TestBuildRhymePatterns(unittest.TestCase):
 class TestBuildRhymeFormulaStrings(unittest.TestCase):
     @parameterized.expand([(inp, formula_str) for inp, _, formula_str in CASES])
     def test_build_rhyme_formula_strings(self, inp, out):
+        res = render_rhyme_formulas(build_rhyme_formulas(build_patterns(inp), inp))
+
+        self.assertEqual(res, out)
+
+
+class TestCorpusRhymeFormulaStrings(unittest.TestCase):
+    @parameterized.expand([(name, inp, out) for name, inp, out in CORPUS_CASES])
+    def test_build_rhyme_formula_strings(self, name, inp, out):
         res = render_rhyme_formulas(build_rhyme_formulas(build_patterns(inp), inp))
 
         self.assertEqual(res, out)

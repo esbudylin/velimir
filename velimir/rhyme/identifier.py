@@ -1,7 +1,8 @@
-from collections import Counter
+import re
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from functools import cache, lru_cache
-from itertools import count, groupby
+from itertools import count, groupby, repeat
 
 import numpy as np
 from bitarray import bitarray
@@ -9,13 +10,13 @@ from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import squareform
 
 from ..onnx import MAX_SEQ_LEN, OnnxRhyme
-from .phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
 from .formula import (
+    SCHEMALESS_TYPES,
     RhymeFormula,
     RhymeType,
     SpecialRhymeEntry,
-    SCHEMALESS_TYPES,
 )
+from .phonetics import PHONETIC_VOCAB, PhoneticRepr, to_phonetic_repr
 
 RHYME_BATCH_SIZE = 4096
 
@@ -23,8 +24,8 @@ ENTRY_COST_CACHE_SIZE = 8192
 
 RHYME_PATTERN_THRESHOLD = 0.25
 
-RHYME_COVERAGE_THRESHOLD = 0.25
-SPORADIC_COVERAGE_THRESHOLD = 0.05
+RHYME_COVERAGE_THRESHOLD = 0.6
+SPORADIC_COVERAGE_THRESHOLD = 0.3
 
 
 @dataclass
@@ -222,6 +223,26 @@ def calc_diff(arr1, arr2):
     return np.array(canon_arr2) - arr1
 
 
+def is_rhyme_repetition(
+    pattern: list[int], discovered_rhyme_periods: set[int]
+) -> bool:
+    period = len(pattern)
+
+    for rhyme_period in discovered_rhyme_periods:
+        if period <= rhyme_period or period % rhyme_period:
+            continue
+
+        chunks = [
+            canonicalize_pattern(pattern[start : start + rhyme_period])
+            for start in range(0, period, rhyme_period)
+        ]
+
+        if all(chunk == chunks[0] for chunk in chunks[1:]):
+            return True
+
+    return False
+
+
 def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
     arr = np.asarray(inp_l)
     size = len(arr)
@@ -255,6 +276,7 @@ def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
             )
 
         candidates = []
+        discovered_rhyme_periods: set[int] = set()
 
         for period in range(1, max_period_len + 1):
             if period > size - idx:
@@ -282,10 +304,14 @@ def build_patterns(inp_l: list[int]) -> list[PatternEntry]:
 
                 if np.any(diff) and negative_ok and has_rhyme:
                     candidates.append(start_entry(PatternEntry(new_pattern, diff, 1)))
+                    discovered_rhyme_periods.add(period)
 
-            candidates.append(
-                start_entry(PatternEntry(new_pattern, np.zeros(period), 1))
-            )
+            pattern = new_pattern.tolist()
+
+            if not is_rhyme_repetition(pattern, discovered_rhyme_periods):
+                candidates.append(
+                    start_entry(PatternEntry(new_pattern, np.zeros(period), 1))
+                )
 
         return min(candidates, key=lambda res: (res.cost, res.count))
 
@@ -296,8 +322,19 @@ def canonicalize_pattern(pattern: list[int]) -> list[int]:
     mapping: dict[int, int] = {}
     next_label = count()
     result = []
+    tauto_entries = {}
 
     for label in pattern:
+        if len(tauto_entries) > 99:
+            raise ValueError
+
+        if SpecialRhymeEntry.TAUTO >= label > SpecialRhymeEntry.MONO:
+            if not tauto_entries.get(label):
+                offset = 99 - len(tauto_entries)
+                tauto_entries[label] = SpecialRhymeEntry.TAUTO - offset
+            result.append(tauto_entries[label])
+            continue
+
         if label < 0:
             result.append(label)
             continue
@@ -316,14 +353,16 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
     counts = Counter(entry.pattern.tolist())
 
     match pattern:
-        case [0, 1, 0, 1] | [0, 1, 0, 1, 0, 1]:
-            return RhymeType.CROSS
-        case [0, 1, 1, 0]:
-            return RhymeType.ENCIRCLING
-        case [0, -1, 0, -1]:
+        case [a, -1, b, -1] if a == b != -1:
             return RhymeType.ODD
-        case [-1, 0, -1, 0]:
+        case [-1, a, -1, b] if a == b != -1:
             return RhymeType.EVEN
+        case [a, b, c, d] if a == c != -1 and b == d != -1:
+            return RhymeType.CROSS
+        case [a, b, c, d, e, f] if a == c == e != -1 and b == d == f != -1:
+            return RhymeType.CROSS
+        case [a, b, c, d] if a == d != -1 and b == c != -1:
+            return RhymeType.ENCIRCLING
         case [0, 0]:
             return RhymeType.PAIRED
         case [0, 0, 0]:
@@ -339,8 +378,6 @@ def classify_rhyme_type(entry: PatternEntry) -> RhymeType:
         return RhymeType.UNKNOWN
     if unique_entries == 2 and len(pattern) == 5:
         return RhymeType.DELAYED
-    if unique_entries == 1:
-        return RhymeType.MONORHYME
     if (
         np.all(entry.diff == 1) == 1
         and len(set(pattern)) < len(pattern)
@@ -395,6 +432,13 @@ def build_rhyme_formulas(
     patterns: list[PatternEntry],
     poem_schema: list[int],
 ) -> list[RhymeFormula]:
+    if (
+        len(set(poem_schema)) == 1
+        and list(filter(lambda p: p > -1, poem_schema))
+        and len(poem_schema) > 3
+    ):
+        return [RhymeFormula(RhymeType.MONORHYME)]
+
     threshold = len(poem_schema) * RHYME_PATTERN_THRESHOLD
 
     cleaned = [
@@ -430,7 +474,7 @@ def build_rhyme_formulas(
 
     if not joined:
         # Различие между вольной/спорадической/нулевой рифмой
-        rhyming = sum(label != -1 for label in poem_schema)
+        rhyming = sum(label > -1 for label in poem_schema)
         return [RhymeFormula(test_rhyming_percent(rhyming / len(poem_schema)))]
 
     res = []
@@ -444,17 +488,148 @@ def build_rhyme_formulas(
     return res
 
 
+def filter_far_away_rhymes(rhymes: list[int]) -> list[int]:
+    """
+    splits rhyme groups that join lines that are too far away
+    doesn't apply to MONO, REFRAIN, NONE
+    """
+    max_allowed_distance = 8
+    rhyme_group_positions = defaultdict(list)
+
+    for i, rhyme in enumerate(rhymes):
+        rhyme_group_positions[rhyme].append(i)
+
+    modified_group_positions = defaultdict(list)
+
+    for rhyme_group, positions in rhyme_group_positions.items():
+        if rhyme_group < 0:  # don't touch special rhyme entries
+            modified_group_positions[rhyme_group] += positions
+            continue
+
+        current_group = 0
+        subgroups = defaultdict(list)
+        distances = [b - a for a, b in zip(positions, positions[1:])]
+
+        subgroups[current_group].append(positions[0])
+
+        for i, dist in enumerate(distances):
+            if dist > max_allowed_distance:
+                current_group += 1
+
+            subgroups[current_group].append(positions[i + 1])
+
+        max_group = max((g for g in modified_group_positions if g >= 0), default=0)
+
+        for subgroup in subgroups.values():
+            if len(subgroup) == 1:
+                modified_group_positions[SpecialRhymeEntry.NO_RHYME] += subgroup
+                continue
+
+            max_group += 1
+            modified_group_positions[max_group] = subgroup
+
+    result = list(repeat(None, len(rhymes)))
+
+    for group, positions in modified_group_positions.items():
+        for pos in positions:
+            result[pos] = group
+
+    if None in result:
+        raise ValueError
+
+    return result
+
+
+def identify_special_rhyme_entries(
+    rhymes: list[RhymeInput], schema: list[int]
+) -> tuple[list[int], list[int]]:
+    cleaned_words = []
+    for r in rhymes:
+        word = r.word.lower()
+        word = re.sub(r"[^а-яё]", "", word)
+
+        cleaned_words.append(word)
+
+    # TAUTO - the rhyme based on repetition of the same word
+    # REFRAIN - the rhyme based on repetition of the same word at regular intervals
+    words_with_positions = defaultdict(list)
+    for i, word in enumerate(cleaned_words):
+        words_with_positions[word].append(i)
+
+    tauto_candidates = []
+    refrain = 0
+
+    for positions in words_with_positions.values():
+        if len(positions) == 1:
+            continue
+
+        distances = [b - a for a, b in zip(positions, positions[1:])]
+
+        if len(distances) > 1 and len(set(distances)) == 1:
+            if refrain > 99:
+                raise ValueError
+
+            for pos in positions:
+                schema[pos] = SpecialRhymeEntry.REFRAIN - refrain
+
+            refrain += 1
+        else:
+            tauto_candidates.append(positions)
+
+    # TODO: add step for identifying
+    # MONO - repeating rhyme through text
+
+    return schema, tauto_candidates
+
+
+def process_tauto_candidates(
+    poem_schema: list[int], tauto_candidates: list[list[int]]
+) -> list[int]:
+    # проверяем, есть ли в группах, к которым принадлежат найденные кандидаты
+    # слова, которые не относятся к тавторифмам-кандидатам
+    # если нет - однозначно классифицируем кандидат как тавторифму
+    group_positions = defaultdict(set)
+    for pos, group_index in enumerate(poem_schema):
+        if group_index >= 0:
+            group_positions[group_index].add(pos)
+
+    for candidate, positions in enumerate(tauto_candidates):
+        if candidate > 99:
+            raise ValueError
+
+        pos_set = set(positions)
+        related_group_indexes = {poem_schema[pos] for pos in positions}
+
+        for group_index in related_group_indexes:
+            group = group_positions.get(group_index)
+            if group is not None and len(group) > 1 and group <= pos_set:
+                for pos in group:
+                    poem_schema[pos] = SpecialRhymeEntry.TAUTO - (99 - candidate)
+
+    return poem_schema
+
+
+def build_poem_schema(
+    rhymes: list[RhymeInput],
+    model: OnnxRhyme,
+) -> list[int]:
+    rhyme_matrix = calc_rhyme_matrix(rhymes, model)
+
+    labels = cluster_rhyme_matrix(rhyme_matrix)
+
+    poem_schema = extract_rhyme_schema(labels)
+    poem_schema, tauto_candidates = identify_special_rhyme_entries(rhymes, poem_schema)
+    poem_schema = filter_far_away_rhymes(poem_schema)
+    poem_schema = process_tauto_candidates(poem_schema, tauto_candidates)
+
+    return canonicalize_pattern(poem_schema)
+
+
 def render_rhyme_formulas(formulas: list[RhymeFormula]) -> str:
     return " # ".join(formula.to_str() for formula in formulas)
 
 
-def identify_rhyme_schema(
-    rhymes: list[RhymeInput],
-    model: OnnxRhyme,
-) -> list[RhymeFormula]:
-    rhyme_matrix = calc_rhyme_matrix(rhymes, model)
-    clusters = cluster_rhyme_matrix(rhyme_matrix)
-    poem_schema = extract_rhyme_schema(clusters)
+def identify_rhyme_formula(poem_schema: list[int]) -> list[RhymeFormula]:
     patterns = build_patterns(poem_schema)
     formulas = build_rhyme_formulas(patterns, poem_schema)
 
