@@ -1,18 +1,27 @@
-import pymorphy2
+from functools import lru_cache
+from itertools import groupby
 
-morph = pymorphy2.MorphAnalyzer()
+from spylls.hunspell import Dictionary
+from velimir.parsers import is_vowel
+
+dictionary = Dictionary.from_files("data/wikt/ru_RU")
 
 
+@lru_cache(maxsize=2048)
 def is_word(word):
     if len(word) == 1:
         return word in ["к", "в", "я", "а", "с", "и", "о"]
 
+    if not any(map(is_vowel, word)):
+        return False
+
     forms = [
         word,
         *(word[:i] + "ь" + word[i:] for i in range(1, len(word) + 1)),
-        word.replace("и", "й"),
+        *(word[:i] + "й" + word[i + 1 :] for i, c in enumerate(word) if c == "и"),
+        *(word[:i] + "ы" + word[i + 1 :] for i, c in enumerate(word) if c == "и"),
     ]
-    return any(map(morph.word_is_known, forms))
+    return any(map(lambda w: dictionary.lookup(w.capitalize()), forms))
 
 
 def find_acro_variants(inp: str) -> list[list[str]]:
@@ -41,18 +50,26 @@ def find_acro_variants(inp: str) -> list[list[str]]:
 def detect_acro(inp: str) -> list[str]:
     variants = find_acro_variants(inp)
 
-    if variants:
-        best = sorted(find_acro_variants(inp), key=len)[0]
+    if not variants:
+        return []
+
+    variants = sorted(variants, key=len)
+    grouped = groupby(variants, len)
+    _, best = next(grouped)
+
+    res = []
+
+    for variant in best:
 
         def count_shorts(threshold):
-            return len([n for n in best if len(n) < threshold])
+            return sum(1 for word in variant if len(word) < threshold)
 
-        if count_shorts(3) / len(best) > 0.4:
-            return []
+        if count_shorts(3) / len(variant) > 0.4:
+            continue
 
-        if count_shorts(4) / len(best) > 0.5:
-            return []
+        if count_shorts(4) / len(variant) > 0.5:
+            continue
 
-        return best
-    else:
-        return []
+        res.append(" ".join(word for word in variant))
+
+    return res
