@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from functools import lru_cache
+from itertools import groupby
 
 from velimir.nlp import morph_analyzer
+from velimir.parsers import is_vowel
 
 MIN_PARTIAL_LENGTH = 6
 
@@ -12,10 +14,10 @@ SINGLE_LETTER_WORDS = ("к", "в", "я", "а", "с", "и", "о", "б")
 known_forms: set[str] = set()
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass
 class Acro:
-    words: tuple[str, ...]
-    forms: tuple[str, ...]
+    words: list[str]
+    forms: list[str]
     coverage: int
     total: int
 
@@ -45,6 +47,9 @@ def matched_form(word: str) -> str | None:
     if len(word) == 1:
         return word if word in SINGLE_LETTER_WORDS else None
 
+    if not any(map(is_vowel, word)):
+        return None
+
     forms = [
         word,
         *(word[:i] + "ь" + word[i:] for i in range(1, len(word) + 1)),
@@ -59,135 +64,101 @@ def matched_form(word: str) -> str | None:
     return None
 
 
-def is_word(word) -> bool:
-    return matched_form(word) is not None
-
-
 def load_dictionary(forms) -> None:
     known_forms.clear()
     known_forms.update(forms)
     matched_form.cache_clear()
 
 
-def find_acro_variants(inp: str) -> list[list[str]]:
+@lru_cache(maxsize=8192)
+def find_acro_variants(inp: str, is_partial=False):
     if len(inp) == 0:
         raise ValueError
 
-    unreachable = len(inp) + 1
-    word_counts = [unreachable] * (len(inp) + 1)
-    prev_starts: list[list[int]] = [[] for _ in range(len(inp) + 1)]
-    word_counts[0] = 0
+    acc = tuple()
 
-    for end in range(1, len(inp) + 1):
-        best = unreachable
-        starts = []
+    for i in range(len(inp), 0, -1):
+        candidate = inp[:i]
+        candidate_matched_form = matched_form(candidate)
 
-        for start in range(end):
-            if word_counts[start] == unreachable:
+        if i == len(inp) and (not is_partial or candidate_matched_form):
+            acc = (*acc, ((candidate, candidate_matched_form),))
+
+            if candidate_matched_form:
+                break
+            else:
                 continue
 
-            if not is_word(inp[start:end]):
-                continue
+        if not candidate_matched_form and is_partial:
+            continue
 
-            count = word_counts[start] + 1
+        solved = find_acro_variants(inp[i:], not candidate_matched_form)
+        if solved:
+            for candidates in solved:
+                acc = (*acc, ((candidate, candidate_matched_form), *candidates))
 
-            if count < best:
-                best = count
-                starts = [start]
-            elif count == best:
-                starts.append(start)
+    return acc
 
-        word_counts[end] = best
-        prev_starts[end] = starts
 
-    shortest = min(MIN_PARTIAL_LENGTH, len(inp))
-    ends = range(len(inp), shortest - 1, -1)
+def valid_variant(variant):
+    in_dict_count = sum(1 for _, in_dict in variant if in_dict)
+    in_dict_total_len = sum(len(w) for w, in_dict in variant if in_dict)
+    total_len = sum(len(w) for w, _ in variant)
 
-    cache: dict[int, list[tuple[str, ...]]] = {0: [()]}
+    if not in_dict_count:
+        return False
 
-    def build(pos: int) -> list[tuple[str, ...]]:
-        if pos in cache:
-            return cache[pos]
+    if total_len != in_dict_total_len and in_dict_total_len < MIN_PARTIAL_LENGTH:
+        return False
 
-        variants = []
+    # отсекаем варианты, в которых преобладают короткие слова (1-3 символа)
+    def count_shorts(threshold):
+        return sum(
+            len(word) for word, in_dict in variant if len(word) < threshold and in_dict
+        )
 
-        for start in prev_starts[pos]:
-            for prefix in build(start):
-                variants.append((*prefix, inp[start:pos]))
+    if count_shorts(3) / in_dict_total_len > 0.4:
+        return False
 
-        cache[pos] = variants
-        return variants
+    if count_shorts(4) / in_dict_total_len > 0.5:
+        return False
+
+    # либо несловарное сочетание единственное и находится последним в строке
+    if len(variant) - in_dict_count == 1 and not variant[-1][1]:
+        return True
+
+    # либо словарные сочетания занимают большую часть строки
+    if in_dict_total_len / total_len > 0.75:
+        return True
+
+    return False
+
+
+def detect_acro(inp: str) -> list[Acro]:
+    variants = find_acro_variants(inp)
+
+    if not variants:
+        return []
+
+    variants = sorted(
+        variants,
+        key=lambda n: (-all(in_dict for _, in_dict in n), len(n)),
+    )
+
+    variants = filter(valid_variant, variants)
+
+    grouped = groupby(variants, len)
+
+    _, best = next(grouped, (False, []))
 
     res = []
 
-    for end in ends:
-        if word_counts[end] == unreachable:
-            continue
+    for variant in best:
+        words = [word for word, dict_form in variant if dict_form]
+        forms = [dict_form for _, dict_form in variant if dict_form]
+        total = sum(len(word) for word, _ in variant)
+        coverage = sum(map(len, words))
 
-        for variant in build(end):
-            res.append(list(variant))
+        res.append(Acro(words=words, forms=forms, total=total, coverage=coverage))
 
     return res
-
-
-def validate_variant(variant: list[str]) -> bool:
-
-    def count_shorts(threshold):
-        return sum(1 for word in variant if len(word) < threshold)
-
-    if count_shorts(3) / len(variant) > 0.4:
-        return False
-
-    if count_shorts(4) / len(variant) > 0.5:
-        return False
-
-    return True
-
-
-def detect_acros(inp: str) -> list[Acro]:
-    variants = find_acro_variants(inp)
-
-    grouped: dict[int, list[list[str]]] = {}
-
-    for variant in variants:
-        coverage = sum(map(len, variant))
-        grouped.setdefault(coverage, []).append(variant)
-
-    for coverage in sorted(grouped, reverse=True):
-        group = grouped[coverage]
-        min_words = min(map(len, group))
-        group = [variant for variant in group if len(variant) == min_words]
-
-        matches = []
-
-        for variant in group:
-            if not validate_variant(variant):
-                continue
-
-            forms = []
-
-            for word in variant:
-                form = matched_form(word)
-
-                if form is None:
-                    break
-
-                forms.append(form)
-            else:
-                matches.append(
-                    Acro(
-                        words=tuple(variant),
-                        forms=tuple(forms),
-                        coverage=coverage,
-                        total=len(inp),
-                    )
-                )
-
-        if matches:
-            return matches
-
-    return []
-
-
-def detect_acro(inp: str) -> list[str]:
-    return [" ".join(acro.words) for acro in detect_acros(inp)]

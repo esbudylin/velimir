@@ -1,5 +1,6 @@
 import csv
 import logging
+import os
 import re
 from collections import Counter
 
@@ -7,16 +8,59 @@ from bs4 import BeautifulSoup
 from spylls.hunspell import Dictionary
 
 from velimir import cyrlat
-from velimir.acro import detect_acros, load_dictionary, normalize_yo
+from velimir.acro import detect_acro, load_dictionary, normalize_yo
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings
 from velimir.parsers import parse_input_lines, remove_accent_marks
-from velimir.settings import ACRO_TABLE_PATH, METADATA_TABLE, InputDialect
+from velimir.settings import (
+    ACRO_DICTIONARY_CACHE_PATH,
+    ACRO_TABLE_PATH,
+    METADATA_TABLE,
+    InputDialect,
+)
 from web.rnc_url import build_rnc_url
 
 WORD_RE = re.compile(r"[а-яё]+")
 WIKI_DICTIONARY_PATH = "data/wikt/ru_RU"
+
+
+def find_acros():
+    with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:
+        input_reader = csv.DictReader(csv_file, dialect=InputDialect)
+
+        for i, row in enumerate(input_reader):
+            if (i + 1) % 100 == 0:
+                logging.info("Processing %d poem", i + 1)
+
+            poem = InputPoem.from_row(row)
+            xml_str = read_poem_xml(poem.path)
+            lines, _ = parse_input_lines(xml_str, allow_latin=True)
+
+            if len(lines) < 4:
+                continue
+
+            if len(lines) > 15:
+                lines = lines[:15]
+
+            def extract_first_char(line):
+                subbed = re.sub("[^а-яё]", "", line.text.lower())
+                return subbed[0] if subbed else ""
+
+            first_letters = "".join(map(extract_first_char, lines))
+
+            if not first_letters:
+                continue
+
+            acros = detect_acro(first_letters)
+
+            if acros:
+                logging.info(
+                    "Acro found %s, %s",
+                    poem.path,
+                    "; ".join(" ".join(acro.forms) for acro in acros),
+                )
+                yield poem, acros
 
 
 def extract_xml_words(xml_str: str):
@@ -49,7 +93,46 @@ def build_corpus_forms() -> Counter[str]:
     return forms
 
 
-def build_dictionary() -> set[str]:
+def load_cached_dictionary(cache_path: str) -> set[str] | None:
+    try:
+        with open(cache_path, "r", encoding="utf8") as cache_file:
+            forms = {line.strip() for line in cache_file if line.strip()}
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        logging.warning("Could not read dictionary cache %s: %s", cache_path, error)
+        return None
+
+    logging.info(
+        "Loaded dictionary with %d forms from cache %s", len(forms), cache_path
+    )
+
+    return forms
+
+
+def save_cached_dictionary(cache_path: str, forms: set[str]) -> None:
+    try:
+        cache_directory = os.path.dirname(cache_path)
+        if cache_directory:
+            os.makedirs(cache_directory, exist_ok=True)
+
+        with open(cache_path, "w", encoding="utf8") as cache_file:
+            for form in sorted(forms):
+                cache_file.write(form + "\n")
+    except OSError as error:
+        logging.warning("Could not write dictionary cache %s: %s", cache_path, error)
+        return
+
+    logging.info("Saved dictionary cache to %s", cache_path)
+
+
+def build_dictionary(cache_path: str | None = None) -> set[str]:
+    cache_path = cache_path or ACRO_DICTIONARY_CACHE_PATH
+    cached_forms = load_cached_dictionary(cache_path)
+
+    if cached_forms is not None:
+        return cached_forms
+
     corpus_forms = build_corpus_forms()
 
     wiki = Dictionary.from_files(WIKI_DICTIONARY_PATH)
@@ -65,45 +148,9 @@ def build_dictionary() -> set[str]:
         len(forms),
     )
 
+    save_cached_dictionary(cache_path, forms)
+
     return forms
-
-
-def find_acros():
-    with open(METADATA_TABLE, "r", encoding="utf8") as csv_file:
-        input_reader = csv.DictReader(csv_file, dialect=InputDialect)
-
-        for i, row in enumerate(input_reader):
-            if (i + 1) % 100 == 0:
-                logging.info("Processing %d poem", i + 1)
-
-            poem = InputPoem.from_row(row)
-            xml_str = read_poem_xml(poem.path)
-            lines, _ = parse_input_lines(xml_str, allow_latin=True)
-
-            if len(lines) < 4:
-                continue
-
-            if len(lines) > 30:
-                lines = lines[:30]
-
-            def extract_first_char(line):
-                subbed = re.sub("[^а-яё]", "", line.text.lower())
-                return subbed[0] if subbed else ""
-
-            first_letters = "".join(map(extract_first_char, lines))
-
-            if not first_letters:
-                continue
-
-            acros = detect_acros(first_letters)
-
-            if acros:
-                logging.info(
-                    "Acro found %s, %s",
-                    poem.path,
-                    "; ".join(" ".join(acro.words) for acro in acros),
-                )
-                yield poem, acros
 
 
 def write_output(acros):

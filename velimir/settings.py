@@ -49,6 +49,9 @@ DATASET_FILES = [
 METER_VOCAB_PATH = os.path.join(DATA_DIRECTORY, "meter_vocab.jsonl")
 
 ACRO_TABLE_PATH = os.path.join(DATA_DIRECTORY, "acro.csv")
+ACRO_DICTIONARY_CACHE_PATH = os.path.join(
+    DATASETS_DIRECTORY, "acro_dictionary.txt"
+)
 
 STRESS_MARK_ORD = 768
 
