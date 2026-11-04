@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from itertools import groupby
 
+import numpy as np
+
 from velimir.nlp import morph_analyzer
 from velimir.parsers import is_vowel
 
@@ -12,14 +14,16 @@ NAME_GRAMMEMES = {"Name", "Surn", "Patr"}
 SINGLE_LETTER_WORDS = ("к", "в", "я", "а", "с", "и", "о", "б")
 
 known_forms: set[str] = set()
+char_probabilities: dict[str, float] = {}
 
 
 @dataclass
 class Acro:
-    words: list[str]
+    sequence: str
     forms: list[str]
     coverage: int
     total: int
+    statistics: dict
 
     @property
     def partial(self) -> bool:
@@ -38,6 +42,100 @@ def is_name(word: str) -> bool:
         parse.is_known and parse.tag.grammemes & NAME_GRAMMEMES
         for parse in morph_analyzer.parse(word)
     )
+
+
+@lru_cache(maxsize=128)
+def simulated_chi2(
+    n: int,
+    simulations: int,
+    seed: int | None,
+    chars: tuple[str, ...],
+    probs: tuple[float, ...],
+) -> np.ndarray:
+    probs_array = np.array(probs)
+    expected = n * probs_array
+    valid = expected > 0
+
+    rng = np.random.default_rng(seed)
+    simulated = rng.multinomial(n, probs_array, size=simulations)
+    chi2 = np.sum(
+        (simulated[:, valid] - expected[valid]) ** 2 / expected[valid],
+        axis=1,
+    )
+    chi2.sort()
+
+    return chi2
+
+
+def calculate_sequence_statistics(
+    sequence: str,
+    simulations: int = 100_000,
+    seed: int | None = 98514,
+) -> dict:
+    """
+    Test whether a sequence deviates from an independent character
+    generation model with known character probabilities.
+
+    Uses Pearson's chi-square statistic with Monte Carlo calibration.
+    """
+
+    if not sequence:
+        raise ValueError("Sequence cannot be empty")
+
+    if any(p < 0 for p in char_probabilities.values()):
+        raise ValueError("Probabilities cannot be negative")
+
+    if not np.isclose(sum(char_probabilities.values()), 1.0):
+        raise ValueError("Probabilities must sum to 1")
+
+    if any(char not in char_probabilities for char in sequence):
+        raise ValueError("Sequence contains unknown characters")
+
+    chars = list(char_probabilities)
+    probs = np.array([char_probabilities[c] for c in chars])
+
+    n = len(sequence)
+    observed = np.array([sequence.count(c) for c in chars])
+    expected = n * probs
+
+    # Pearson's chi-square statistic.
+    # Characters with zero probability must also have zero observations.
+    valid = expected > 0
+
+    if np.any(observed[~valid] > 0):
+        return {
+            "exact_probability": 0.0,
+            "chi2": float("inf"),
+            "p_value": 1 / (simulations + 1),
+        }
+
+    chi2_observed = np.sum((observed[valid] - expected[valid]) ** 2 / expected[valid])
+
+    # Exact probability of the ordered sequence.
+    log_probability = sum(np.log(char_probabilities[c]) for c in sequence)
+    exact_probability = np.exp(log_probability)
+
+    # Monte Carlo calibration.
+    chi2_simulated = simulated_chi2(
+        n,
+        simulations,
+        seed,
+        tuple(chars),
+        tuple(probs),
+    )
+
+    # Include observed statistic using the standard +1 correction.
+    count = len(chi2_simulated) - np.searchsorted(
+        chi2_simulated, chi2_observed, side="left"
+    )
+    p_value = (count + 1) / (simulations + 1)
+
+    return {
+        "exact_probability": exact_probability,
+        "log_probability": log_probability,
+        "chi2": chi2_observed,
+        "p_value": p_value,
+    }
 
 
 @lru_cache(maxsize=8192)
@@ -68,6 +166,11 @@ def load_dictionary(forms) -> None:
     known_forms.clear()
     known_forms.update(forms)
     matched_form.cache_clear()
+
+
+def load_char_probabilities(probabilities: dict[str, float]) -> None:
+    char_probabilities.clear()
+    char_probabilities.update(probabilities)
 
 
 @lru_cache(maxsize=8192)
@@ -117,10 +220,10 @@ def valid_variant(variant):
             len(word) for word, in_dict in variant if len(word) < threshold and in_dict
         )
 
-    if count_shorts(3) / in_dict_total_len > 0.4:
+    if count_shorts(3) / in_dict_total_len > 0.3:
         return False
 
-    if count_shorts(4) / in_dict_total_len > 0.5:
+    if count_shorts(4) / in_dict_total_len > 0.4:
         return False
 
     # либо несловарное сочетание единственное и находится последним в строке
@@ -128,7 +231,7 @@ def valid_variant(variant):
         return True
 
     # либо словарные сочетания занимают большую часть строки
-    if in_dict_total_len / total_len > 0.75:
+    if in_dict_total_len / total_len > 0.7:
         return True
 
     return False
@@ -140,25 +243,38 @@ def detect_acro(inp: str) -> list[Acro]:
     if not variants:
         return []
 
-    variants = sorted(
-        variants,
-        key=lambda n: (-all(in_dict for _, in_dict in n), len(n)),
-    )
+    def rank_variants(variant):
+        in_dict_words = [word for word, in_dict in variant if in_dict]
+
+        all_in_dict = len(variant) == len(in_dict_words)
+        total_len = sum(len(word) for word, _ in variant)
+        total_words = len(variant)
+        in_dict_len = sum(map(len, in_dict_words))
+
+        return -all_in_dict, -total_len, total_words, -in_dict_len
+
+    variants = sorted(variants, key=rank_variants)
 
     variants = filter(valid_variant, variants)
 
-    grouped = groupby(variants, len)
+    grouped = groupby(variants, rank_variants)
 
     _, best = next(grouped, (False, []))
 
     res = []
 
     for variant in best:
-        words = [word for word, dict_form in variant if dict_form]
         forms = [dict_form for _, dict_form in variant if dict_form]
-        total = sum(len(word) for word, _ in variant)
-        coverage = sum(map(len, words))
+        sequence = "".join(word for word, _ in variant)
 
-        res.append(Acro(words=words, forms=forms, total=total, coverage=coverage))
+        res.append(
+            Acro(
+                sequence=sequence,
+                forms=forms,
+                total=len(sequence),
+                coverage=sum(map(len, forms)),
+                statistics=calculate_sequence_statistics(normalize_yo(sequence)),
+            )
+        )
 
     return res

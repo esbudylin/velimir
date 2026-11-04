@@ -8,12 +8,18 @@ from bs4 import BeautifulSoup
 from spylls.hunspell import Dictionary
 
 from velimir import cyrlat
-from velimir.acro import detect_acro, load_dictionary, normalize_yo
+from velimir.acro import (
+    detect_acro,
+    load_char_probabilities,
+    load_dictionary,
+    normalize_yo,
+)
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings
 from velimir.parsers import parse_input_lines, remove_accent_marks
 from velimir.settings import (
+    ACRO_CHAR_PROBABILITIES_CACHE_PATH,
     ACRO_DICTIONARY_CACHE_PATH,
     ACRO_TABLE_PATH,
     METADATA_TABLE,
@@ -93,6 +99,16 @@ def build_corpus_forms() -> Counter[str]:
     return forms
 
 
+def build_corpus_first_letter_counts(corpus_forms: Counter[str]) -> Counter[str]:
+    letter_counts: Counter[str] = Counter()
+
+    for form, count in corpus_forms.items():
+        if form:
+            letter_counts[form[0]] += count
+
+    return letter_counts
+
+
 def load_cached_dictionary(cache_path: str) -> set[str] | None:
     try:
         with open(cache_path, "r", encoding="utf8") as cache_file:
@@ -126,14 +142,64 @@ def save_cached_dictionary(cache_path: str, forms: set[str]) -> None:
     logging.info("Saved dictionary cache to %s", cache_path)
 
 
-def build_dictionary(cache_path: str | None = None) -> set[str]:
-    cache_path = cache_path or ACRO_DICTIONARY_CACHE_PATH
-    cached_forms = load_cached_dictionary(cache_path)
+def load_cached_char_probabilities(cache_path: str) -> dict[str, float] | None:
+    try:
+        with open(cache_path, "r", encoding="utf8") as cache_file:
+            rows = [
+                line.rstrip("\n").split("\t") for line in cache_file if line.strip()
+            ]
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        logging.warning(
+            "Could not read char probabilities cache %s: %s", cache_path, error
+        )
+        return None
+
+    try:
+        probabilities = {char: float(value) for char, value in rows}
+    except ValueError:
+        logging.warning("Invalid char probabilities cache %s", cache_path)
+        return None
+
+    if not probabilities or abs(sum(probabilities.values()) - 1.0) > 1e-6:
+        logging.warning("Invalid char probabilities cache %s", cache_path)
+        return None
+
+    logging.info(
+        "Loaded %d char probabilities from cache %s",
+        len(probabilities),
+        cache_path,
+    )
+
+    return probabilities
+
+
+def save_cached_char_probabilities(
+    cache_path: str, probabilities: dict[str, float]
+) -> None:
+    try:
+        cache_directory = os.path.dirname(cache_path)
+        if cache_directory:
+            os.makedirs(cache_directory, exist_ok=True)
+
+        with open(cache_path, "w", encoding="utf8") as cache_file:
+            for char, probability in sorted(probabilities.items()):
+                cache_file.write(f"{char}\t{probability!r}\n")
+    except OSError as error:
+        logging.warning(
+            "Could not write char probabilities cache %s: %s", cache_path, error
+        )
+        return
+
+    logging.info("Saved char probabilities cache to %s", cache_path)
+
+
+def build_dictionary(corpus_forms: Counter[str]) -> set[str]:
+    cached_forms = load_cached_dictionary(ACRO_DICTIONARY_CACHE_PATH)
 
     if cached_forms is not None:
         return cached_forms
-
-    corpus_forms = build_corpus_forms()
 
     wiki = Dictionary.from_files(WIKI_DICTIONARY_PATH)
     forms = {
@@ -148,9 +214,59 @@ def build_dictionary(cache_path: str | None = None) -> set[str]:
         len(forms),
     )
 
-    save_cached_dictionary(cache_path, forms)
+    save_cached_dictionary(ACRO_DICTIONARY_CACHE_PATH, forms)
 
     return forms
+
+
+def build_char_probabilities(corpus_forms: Counter[str]) -> dict[str, float]:
+    cached_probabilities = load_cached_char_probabilities(
+        ACRO_CHAR_PROBABILITIES_CACHE_PATH
+    )
+
+    if cached_probabilities is not None:
+        return cached_probabilities
+
+    letter_counts = build_corpus_first_letter_counts(corpus_forms)
+    total = sum(letter_counts.values())
+
+    if not total:
+        raise ValueError("Corpus contains no words")
+
+    probabilities = {
+        letter: count / total for letter, count in sorted(letter_counts.items())
+    }
+
+    logging.info(
+        "Built char probabilities for %d first letters from %d corpus words",
+        len(probabilities),
+        total,
+    )
+
+    save_cached_char_probabilities(ACRO_CHAR_PROBABILITIES_CACHE_PATH, probabilities)
+
+    return probabilities
+
+
+def build_acro_data() -> tuple[set[str], dict[str, float]]:
+    cached_forms = load_cached_dictionary(ACRO_DICTIONARY_CACHE_PATH)
+    cached_probabilities = load_cached_char_probabilities(
+        ACRO_CHAR_PROBABILITIES_CACHE_PATH
+    )
+
+    if cached_forms is not None and cached_probabilities is not None:
+        return cached_forms, cached_probabilities
+
+    corpus_forms = build_corpus_forms()
+
+    forms = cached_forms if cached_forms is not None else build_dictionary(corpus_forms)
+    probabilities = (
+        cached_probabilities
+        if cached_probabilities is not None
+        else build_char_probabilities(corpus_forms)
+    )
+
+    return forms, probabilities
 
 
 def write_output(acros):
@@ -161,11 +277,12 @@ def write_output(acros):
                 "author",
                 "path",
                 "created",
-                "acro",
+                "sequence",
                 "forms",
                 "partial",
                 "coverage",
                 "total",
+                "p_value",
                 "corpus_url",
             ]
         )
@@ -176,11 +293,12 @@ def write_output(acros):
                     poem.author,
                     poem.path,
                     poem.created,
-                    "; ".join(" ".join(acro.words) for acro in matches),
+                    "; ".join(acro.sequence for acro in matches),
                     "; ".join(" ".join(acro.forms) for acro in matches),
                     matches[0].partial,
                     matches[0].coverage,
                     matches[0].total,
+                    matches[0].statistics["p_value"],
                     build_rnc_url(poem.path),
                 ]
             )
@@ -188,5 +306,9 @@ def write_output(acros):
 
 if __name__ == "__main__":
     LoggingSettings.setup()
-    load_dictionary(build_dictionary())
+
+    forms, probabilities = build_acro_data()
+    load_dictionary(forms)
+    load_char_probabilities(probabilities)
+
     write_output(find_acros())
