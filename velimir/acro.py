@@ -1,9 +1,10 @@
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from functools import lru_cache
 from itertools import groupby
+from math import inf
 
 import numpy as np
-
 from velimir.nlp import morph_analyzer
 from velimir.parsers import is_vowel
 
@@ -11,7 +12,7 @@ MIN_PARTIAL_LENGTH = 6
 
 NAME_GRAMMEMES = {"Name", "Surn", "Patr"}
 
-SINGLE_LETTER_WORDS = ("к", "в", "я", "а", "с", "и", "о", "б")
+SINGLE_LETTER_WORDS = ("к", "в", "я", "а", "с", "и", "о", "б", "у")
 
 known_forms: set[str] = set()
 char_probabilities: dict[str, float] = {}
@@ -151,6 +152,7 @@ def matched_form(word: str) -> str | None:
     forms = [
         word,
         *(word[:i] + "ь" + word[i:] for i in range(1, len(word) + 1)),
+        *(word[:i] + "ъ" + word[i:] for i in range(1, len(word) + 1)),
         *(word[:i] + "й" + word[i + 1 :] for i, c in enumerate(word) if c == "и"),
         *(word[:i] + "ы" + word[i + 1 :] for i, c in enumerate(word) if c == "и"),
     ]
@@ -173,34 +175,73 @@ def load_char_probabilities(probabilities: dict[str, float]) -> None:
     char_probabilities.update(probabilities)
 
 
-@lru_cache(maxsize=8192)
-def find_acro_variants(inp: str, is_partial=False):
+def find_acro_variants(inp: str):
     if len(inp) == 0:
         raise ValueError
 
-    acc = tuple()
+    # build graph
+    candidates_by_slice = {}
+    vertices = {}
 
-    for i in range(len(inp), 0, -1):
-        candidate = inp[:i]
-        candidate_matched_form = matched_form(candidate)
+    for i in range(len(inp) + 1):
+        vertices[i] = []
 
-        if i == len(inp) and (not is_partial or candidate_matched_form):
-            acc = (*acc, ((candidate, candidate_matched_form),))
-
-            if candidate_matched_form:
-                break
-            else:
+        for j in range(i + 1, len(inp) + 1):
+            if i == j:
                 continue
 
-        if not candidate_matched_form and is_partial:
-            continue
+            candidate = inp[i:j]
+            candidate_matched_form = matched_form(candidate)
 
-        solved = find_acro_variants(inp[i:], not candidate_matched_form)
-        if solved:
-            for candidates in solved:
-                acc = (*acc, ((candidate, candidate_matched_form), *candidates))
+            if not candidate_matched_form:
+                continue
 
-    return acc
+            candidates_by_slice[(i, j)] = candidate_matched_form
+
+            vertices[i].append(j)
+
+    # apply Floyd–Warshall algorithm
+    dist = {(i, j): inf for i in vertices for j in vertices}
+    prev = {(i, j): None for i in vertices for j in vertices}
+    N = len(vertices)
+
+    for i, neighbors in vertices.items():
+        for j in neighbors:
+            dist[i, j] = -len(inp[i:j])  # reward longest words
+            prev[i, j] = i
+
+    for k in range(N):
+        for i in range(N):
+            for j in range(N):
+                if dist[i, j] > dist[i, k] + dist[k, j]:
+                    dist[i, j] = dist[i, k] + dist[k, j]
+                    prev[i, j] = prev[k, j]
+
+    # reconstruct path and word sequence
+    def recostruct_path(u, v):
+        if prev[u, v] is None:
+            return [], inf
+        path = deque([v])
+        while u != v:
+            v = prev[u, v]
+            path.appendleft(v)
+        return path
+
+    longest_path_pairs = sorted(
+        [(i, j) for i in range(N) for j in range(i + 1, N) if dist[i, j] < inf],
+        key=lambda k: dist[k],
+    )
+
+    if not longest_path_pairs:
+        return []
+
+    best_path = list(recostruct_path(*longest_path_pairs[0]))
+    res = []
+
+    for i, j in zip(best_path, best_path[1:]):
+        res.append((inp[i:j], candidates_by_slice[i, j]))
+
+    return res
 
 
 def valid_variant(variant):
@@ -238,43 +279,20 @@ def valid_variant(variant):
 
 
 def detect_acro(inp: str) -> list[Acro]:
-    variants = find_acro_variants(inp)
+    variant = find_acro_variants(inp)
 
-    if not variants:
+    if not variant:
         return []
 
-    def rank_variants(variant):
-        in_dict_words = [word for word, in_dict in variant if in_dict]
+    forms = [dict_form for _, dict_form in variant if dict_form]
+    sequence = "".join(word for word, _ in variant)
 
-        all_in_dict = len(variant) == len(in_dict_words)
-        total_len = sum(len(word) for word, _ in variant)
-        total_words = len(variant)
-        in_dict_len = sum(map(len, in_dict_words))
-
-        return -all_in_dict, -total_len, total_words, -in_dict_len
-
-    variants = sorted(variants, key=rank_variants)
-
-    variants = filter(valid_variant, variants)
-
-    grouped = groupby(variants, rank_variants)
-
-    _, best = next(grouped, (False, []))
-
-    res = []
-
-    for variant in best:
-        forms = [dict_form for _, dict_form in variant if dict_form]
-        sequence = "".join(word for word, _ in variant)
-
-        res.append(
-            Acro(
-                sequence=sequence,
-                forms=forms,
-                total=len(sequence),
-                coverage=sum(map(len, forms)),
-                statistics=calculate_sequence_statistics(normalize_yo(sequence)),
-            )
+    return [
+        Acro(
+            sequence=sequence,
+            forms=forms,
+            total=len(sequence),
+            coverage=sum(map(len, forms)),
+            statistics=calculate_sequence_statistics(normalize_yo(sequence)),
         )
-
-    return res
+    ]

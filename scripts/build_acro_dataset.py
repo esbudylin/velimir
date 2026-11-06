@@ -46,8 +46,8 @@ def find_acros():
             if len(lines) < 4:
                 continue
 
-            if len(lines) > 15:
-                lines = lines[:15]
+            if len(lines) > 30:
+                lines = lines[:30]
 
             def extract_first_char(line):
                 subbed = re.sub("[^а-яё]", "", line.text.lower())
