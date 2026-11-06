@@ -5,7 +5,6 @@ import re
 from collections import Counter
 
 from bs4 import BeautifulSoup
-from spylls.hunspell import Dictionary
 
 from velimir import cyrlat
 from velimir.acro import (
@@ -29,7 +28,6 @@ from velimir.settings import (
 from web.rnc_url import build_rnc_url
 
 WORD_RE = re.compile(r"[а-яё]+")
-WIKI_DICTIONARY_PATH = "data/wikt/ru_RU"
 
 
 def find_acros():
@@ -194,31 +192,66 @@ def save_cached_char_probabilities(
     logging.info("Saved char probabilities cache to %s", cache_path)
 
 
+def normalize_corpus_forms(
+    corpus_forms: Counter[str],
+) -> tuple[Counter[str], set[str]]:
+    normalized_forms: Counter[str] = Counter()
+    known_normals: set[str] = set()
+
+    for form, count in corpus_forms.items():
+        parses = [parse for parse in morph_analyzer.parse(form) if parse.is_known]
+
+        if not parses:
+            normalized_forms[form] += count
+            continue
+
+        for normal_form in {normalize_yo(parse.normal_form) for parse in parses}:
+            normalized_forms[normal_form] += count
+            known_normals.add(normal_form)
+
+    return normalized_forms, known_normals
+
+
+def passes_threshold(form: str, count: int, known_normals: set[str]) -> bool:
+    if len(form) >= 4:
+        return count > 20
+
+    if len(form) == 3:
+        return count > 50 and form in known_normals
+
+    return False
+
+
 def build_dictionary(corpus_forms: Counter[str]) -> set[str]:
     cached_forms = load_cached_dictionary(ACRO_DICTIONARY_CACHE_PATH)
 
     if cached_forms is not None:
         return cached_forms
 
-    wiki = Dictionary.from_files(WIKI_DICTIONARY_PATH)
-    forms = {
-        form
-        for form, count in corpus_forms.items()
-        if (len(form) > 4 and count > 20)
-        or (len(form) == 3 and count > 50 and wiki.lookup(form.capitalize()))
-    }
+    normalized_forms, known_normals = normalize_corpus_forms(corpus_forms)
 
-    normal_forms = set()
-    for form in forms:
-        normal_forms.union(
-            {variant.normal_form for variant in morph_analyzer.parse(form)}
-        )
+    forms: set[str] = set()
 
-    forms.union(normal_forms)
+    for form, count in normalized_forms.items():
+        if not passes_threshold(form, count, known_normals):
+            continue
+
+        forms.add(form)
+
+        if form not in known_normals:
+            continue
+
+        for parse in morph_analyzer.parse(form):
+            if parse.is_known and normalize_yo(parse.normal_form) == form:
+                forms.update(
+                    normalize_yo(word.word)
+                    for word in morph_analyzer.get_lexeme(parse)
+                )
 
     logging.info(
-        "Corpus forms: %d, after wiki validation: %d",
+        "Corpus forms: %d, normalized: %d, after threshold validation: %d",
         len(corpus_forms),
+        len(normalized_forms),
         len(forms),
     )
 
@@ -300,7 +333,8 @@ def write_output(acros):
                     poem.path,
                     poem.created,
                     match.sequence,
-                    match.forms,
+                    " ".join(match.forms),
+                    match.partial,
                     match.statistics["p_value"],
                     build_rnc_url(poem.path),
                 ]

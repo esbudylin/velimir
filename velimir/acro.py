@@ -1,16 +1,12 @@
 from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
-from itertools import islice
 from math import inf
 
 import numpy as np
-from velimir.nlp import morph_analyzer
 from velimir.parsers import is_vowel
 
 MIN_PARTIAL_LENGTH = 6
-
-NAME_GRAMMEMES = {"Name", "Surn", "Patr"}
 
 SINGLE_LETTER_WORDS = ("к", "в", "я", "а", "с", "и", "о", "б", "у")
 
@@ -124,15 +120,6 @@ def calculate_sequence_statistics(
     }
 
 
-def is_name(parsed) -> bool:
-    return any(parse.tag.grammemes & NAME_GRAMMEMES for parse in parsed)
-
-
-@lru_cache(maxsize=4096)
-def parse_word(word: str):
-    return tuple(w for w in morph_analyzer.parse(word) if w.is_known)
-
-
 @lru_cache(maxsize=8192)
 def matched_form(word: str) -> str | None:
     word = normalize_yo(word.lower())
@@ -154,16 +141,6 @@ def matched_form(word: str) -> str | None:
 
     for form in forms:
         if form in known_forms:
-            return form
-
-        parsed = parse_word(form)
-
-        if is_name(parsed):
-            return form
-
-        normal_forms = {w.normal_form for w in parsed}
-
-        if known_forms.intersection(normal_forms):
             return form
 
     return None
@@ -215,10 +192,12 @@ def find_acro(inp: str):
         single_source[start] = (0, None)
 
         def relax(u, v):
-            u_d, u_p = single_source[u]
+            u_d, _ = single_source[u]
+            v_d, _ = single_source[v]
+
             new_distance = u_d + dist[u, v]
 
-            if u_d > new_distance:
+            if v_d > new_distance:
                 single_source[v] = (new_distance, u)
 
         for i, neighbors in vertices.items():
@@ -231,19 +210,25 @@ def find_acro(inp: str):
         return single_source
 
     # reconstruct path and word sequence
-    def reconstruct_path(start, source):
-        ps = {p: i for i, (_, p) in enumerate(source) if p is not None}
+    def reconstruct_path(source):
+        reachable = [
+            (distance, vertex)
+            for vertex, (distance, parent) in enumerate(source)
+            if parent is not None
+        ]
 
-        if not ps:
+        if not reachable:
             return []
 
-        current = start
-        res = [current]
+        _, current = min(reachable)
 
-        while current := ps.get(current):
-            res.append(current)
+        res = deque([current])
 
-        return res
+        while (parent := source[current][1]) is not None:
+            res.appendleft(parent)
+            current = parent
+
+        return list(res)
 
     paths = []
 
@@ -252,7 +237,7 @@ def find_acro(inp: str):
             continue
 
         source = dag_critical_path(start)
-        path = reconstruct_path(start, source)
+        path = reconstruct_path(source)
 
         if not path:
             continue
