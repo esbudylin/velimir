@@ -1,7 +1,7 @@
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
-from itertools import groupby
+from itertools import islice
 from math import inf
 
 import numpy as np
@@ -22,27 +22,12 @@ char_probabilities: dict[str, float] = {}
 class Acro:
     sequence: str
     forms: list[str]
-    coverage: int
-    total: int
     statistics: dict
-
-    @property
-    def partial(self) -> bool:
-        return self.coverage < self.total
+    partial: bool
 
 
 def normalize_yo(word: str) -> str:
     return word.replace("ё", "е").replace("Ё", "Е")
-
-
-@lru_cache(maxsize=4096)
-def is_name(word: str) -> bool:
-    word = normalize_yo(word.lower())
-
-    return any(
-        parse.is_known and parse.tag.grammemes & NAME_GRAMMEMES
-        for parse in morph_analyzer.parse(word)
-    )
 
 
 @lru_cache(maxsize=128)
@@ -139,12 +124,22 @@ def calculate_sequence_statistics(
     }
 
 
+def is_name(parsed) -> bool:
+    return any(parse.tag.grammemes & NAME_GRAMMEMES for parse in parsed)
+
+
+@lru_cache(maxsize=4096)
+def parse_word(word: str):
+    return tuple(w for w in morph_analyzer.parse(word) if w.is_known)
+
+
 @lru_cache(maxsize=8192)
 def matched_form(word: str) -> str | None:
     word = normalize_yo(word.lower())
 
-    if len(word) == 1:
-        return word if word in SINGLE_LETTER_WORDS else None
+    if len(word) == 1 or len(word) == 2:
+        return False
+        # return word if word in SINGLE_LETTER_WORDS else None
 
     if not any(map(is_vowel, word)):
         return None
@@ -158,7 +153,17 @@ def matched_form(word: str) -> str | None:
     ]
 
     for form in forms:
-        if form in known_forms or is_name(form):
+        if form in known_forms:
+            return form
+
+        parsed = parse_word(form)
+
+        if is_name(parsed):
+            return form
+
+        normal_forms = {w.normal_form for w in parsed}
+
+        if known_forms.intersection(normal_forms):
             return form
 
     return None
@@ -175,7 +180,7 @@ def load_char_probabilities(probabilities: dict[str, float]) -> None:
     char_probabilities.update(probabilities)
 
 
-def find_acro_variants(inp: str):
+def find_acro(inp: str):
     if len(inp) == 0:
         raise ValueError
 
@@ -187,9 +192,6 @@ def find_acro_variants(inp: str):
         vertices[i] = []
 
         for j in range(i + 1, len(inp) + 1):
-            if i == j:
-                continue
-
             candidate = inp[i:j]
             candidate_matched_form = matched_form(candidate)
 
@@ -200,99 +202,97 @@ def find_acro_variants(inp: str):
 
             vertices[i].append(j)
 
-    # apply Floyd–Warshall algorithm
+    # calculate distances
     dist = {(i, j): inf for i in vertices for j in vertices}
-    prev = {(i, j): None for i in vertices for j in vertices}
-    N = len(vertices)
 
     for i, neighbors in vertices.items():
         for j in neighbors:
             dist[i, j] = -len(inp[i:j])  # reward longest words
-            prev[i, j] = i
 
-    for k in range(N):
-        for i in range(N):
-            for j in range(N):
-                if dist[i, j] > dist[i, k] + dist[k, j]:
-                    dist[i, j] = dist[i, k] + dist[k, j]
-                    prev[i, j] = prev[k, j]
+    # apply search
+    def dag_critical_path(start):
+        single_source = [(inf, None) for v in vertices]
+        single_source[start] = (0, None)
+
+        def relax(u, v):
+            u_d, u_p = single_source[u]
+            new_distance = u_d + dist[u, v]
+
+            if u_d > new_distance:
+                single_source[v] = (new_distance, u)
+
+        for i, neighbors in vertices.items():
+            if i < start:
+                continue
+
+            for j in neighbors:
+                relax(i, j)
+
+        return single_source
 
     # reconstruct path and word sequence
-    def recostruct_path(u, v):
-        if prev[u, v] is None:
-            return [], inf
-        path = deque([v])
-        while u != v:
-            v = prev[u, v]
-            path.appendleft(v)
-        return path
+    def reconstruct_path(start, source):
+        ps = {p: i for i, (_, p) in enumerate(source) if p is not None}
 
-    longest_path_pairs = sorted(
-        [(i, j) for i in range(N) for j in range(i + 1, N) if dist[i, j] < inf],
-        key=lambda k: dist[k],
-    )
+        if not ps:
+            return []
 
-    if not longest_path_pairs:
+        current = start
+        res = [current]
+
+        while current := ps.get(current):
+            res.append(current)
+
+        return res
+
+    paths = []
+
+    for start in vertices:
+        if not vertices[start]:
+            continue
+
+        source = dag_critical_path(start)
+        path = reconstruct_path(start, source)
+
+        if not path:
+            continue
+
+        paths.append(path)
+        # path already takes the whole substring
+        if path[-1] - path[0] == len(inp) - start:
+            break
+
+    if not paths:
         return []
 
-    best_path = list(recostruct_path(*longest_path_pairs[0]))
+    paths = sorted(paths, key=lambda p: p[0] - p[-1])
+    best_path = paths[0]
+
     res = []
 
     for i, j in zip(best_path, best_path[1:]):
-        res.append((inp[i:j], candidates_by_slice[i, j]))
+        res.append((inp[i:j], candidates_by_slice[i, j], i))
 
     return res
 
 
-def valid_variant(variant):
-    in_dict_count = sum(1 for _, in_dict in variant if in_dict)
-    in_dict_total_len = sum(len(w) for w, in_dict in variant if in_dict)
-    total_len = sum(len(w) for w, _ in variant)
-
-    if not in_dict_count:
-        return False
-
-    if total_len != in_dict_total_len and in_dict_total_len < MIN_PARTIAL_LENGTH:
-        return False
-
-    # отсекаем варианты, в которых преобладают короткие слова (1-3 символа)
-    def count_shorts(threshold):
-        return sum(
-            len(word) for word, in_dict in variant if len(word) < threshold and in_dict
-        )
-
-    if count_shorts(3) / in_dict_total_len > 0.3:
-        return False
-
-    if count_shorts(4) / in_dict_total_len > 0.4:
-        return False
-
-    # либо несловарное сочетание единственное и находится последним в строке
-    if len(variant) - in_dict_count == 1 and not variant[-1][1]:
-        return True
-
-    # либо словарные сочетания занимают большую часть строки
-    if in_dict_total_len / total_len > 0.7:
-        return True
-
-    return False
-
-
-def detect_acro(inp: str) -> list[Acro]:
-    variant = find_acro_variants(inp)
+def detect_acro(inp: str) -> Acro | None:
+    variant = find_acro(inp)
 
     if not variant:
-        return []
+        return None
 
-    forms = [dict_form for _, dict_form in variant if dict_form]
-    sequence = "".join(word for word, _ in variant)
+    forms = [dict_form for _, dict_form, _ in variant if dict_form]
+    sequence = "".join(word for word, _, _ in variant)
+    partial = variant[0][2] != 0
 
-    return [
-        Acro(
-            sequence=sequence,
-            forms=forms,
-            total=len(sequence),
-            coverage=sum(map(len, forms)),
-            statistics=calculate_sequence_statistics(normalize_yo(sequence)),
-        )
-    ]
+    # TODO : move to find_acro_variants
+    if len(sequence) < 4 or partial and len(sequence) < 7:
+        return None
+
+    return Acro(
+        sequence=sequence,
+        forms=forms,
+        statistics=calculate_sequence_statistics(normalize_yo(sequence)),
+        partial=partial,
+    )

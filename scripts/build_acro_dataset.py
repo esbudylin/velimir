@@ -14,6 +14,7 @@ from velimir.acro import (
     load_dictionary,
     normalize_yo,
 )
+from velimir.nlp import morph_analyzer
 from velimir.domain_models import InputPoem
 from velimir.io import read_poem_xml
 from velimir.logger import LoggingSettings
@@ -58,15 +59,13 @@ def find_acros():
             if not first_letters:
                 continue
 
-            acros = detect_acro(first_letters)
-
-            if acros:
+            if acro := detect_acro(first_letters):
                 logging.info(
                     "Acro found %s, %s",
                     poem.path,
-                    "; ".join(" ".join(acro.forms) for acro in acros),
+                    " ".join(acro.forms),
                 )
-                yield poem, acros
+                yield poem, acro
 
 
 def extract_xml_words(xml_str: str):
@@ -205,8 +204,17 @@ def build_dictionary(corpus_forms: Counter[str]) -> set[str]:
     forms = {
         form
         for form, count in corpus_forms.items()
-        if len(form) > 4 or (count > 20 and wiki.lookup(form.capitalize()))
+        if (len(form) > 4 and count > 20)
+        or (len(form) == 3 and count > 50 and wiki.lookup(form.capitalize()))
     }
+
+    normal_forms = set()
+    for form in forms:
+        normal_forms.union(
+            {variant.normal_form for variant in morph_analyzer.parse(form)}
+        )
+
+    forms.union(normal_forms)
 
     logging.info(
         "Corpus forms: %d, after wiki validation: %d",
@@ -280,25 +288,20 @@ def write_output(acros):
                 "sequence",
                 "forms",
                 "partial",
-                "coverage",
-                "total",
                 "p_value",
                 "corpus_url",
             ]
         )
 
-        for poem, matches in acros:
+        for poem, match in acros:
             writer.writerow(
                 [
                     poem.author,
                     poem.path,
                     poem.created,
-                    "; ".join(acro.sequence for acro in matches),
-                    "; ".join(" ".join(acro.forms) for acro in matches),
-                    matches[0].partial,
-                    matches[0].coverage,
-                    matches[0].total,
-                    matches[0].statistics["p_value"],
+                    match.sequence,
+                    match.forms,
+                    match.statistics["p_value"],
                     build_rnc_url(poem.path),
                 ]
             )
