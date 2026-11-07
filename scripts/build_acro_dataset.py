@@ -213,10 +213,16 @@ def normalize_corpus_forms(
 
 
 def passes_threshold(form: str, count: int, known_normals: set[str]) -> bool:
-    if len(form) >= 4:
+    if len(form) >= 5:
+        return True
+
+    if len(form) == 4:
         return count > 20
 
     if len(form) == 3:
+        return count > 30
+
+    if len(form) == 2:
         return count > 50 and form in known_normals
 
     return False
@@ -244,8 +250,7 @@ def build_dictionary(corpus_forms: Counter[str]) -> set[str]:
         for parse in morph_analyzer.parse(form):
             if parse.is_known and normalize_yo(parse.normal_form) == form:
                 forms.update(
-                    normalize_yo(word.word)
-                    for word in morph_analyzer.get_lexeme(parse)
+                    normalize_yo(word.word) for word in morph_analyzer.get_lexeme(parse)
                 )
 
     logging.info(

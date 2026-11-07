@@ -6,9 +6,8 @@ from math import inf
 import numpy as np
 from velimir.parsers import is_vowel
 
-MIN_PARTIAL_LENGTH = 6
 
-SINGLE_LETTER_WORDS = ("к", "в", "я", "а", "с", "и", "о", "б", "у")
+SINGLE_LETTER_WORDS = {"к", "в", "я", "а", "с", "и", "о", "б", "у"}
 
 known_forms: set[str] = set()
 char_probabilities: dict[str, float] = {}
@@ -124,19 +123,23 @@ def calculate_sequence_statistics(
 def matched_form(word: str) -> str | None:
     word = normalize_yo(word.lower())
 
-    if len(word) == 1 or len(word) == 2:
-        return False
-        # return word if word in SINGLE_LETTER_WORDS else None
+    if len(word) == 1:
+        return word if word in SINGLE_LETTER_WORDS else None
 
     if not any(map(is_vowel, word)):
         return None
 
+    if word.endswith("ъ"):  # редкий случай - дореформенная орфография
+        word = word[:-1]
+
     forms = [
         word,
         *(word[:i] + "ь" + word[i:] for i in range(1, len(word) + 1)),
-        *(word[:i] + "ъ" + word[i:] for i in range(1, len(word) + 1)),
+        *(word[:i] + "ъ" + word[i:] for i in range(1, len(word))),
         *(word[:i] + "й" + word[i + 1 :] for i, c in enumerate(word) if c == "и"),
         *(word[:i] + "ы" + word[i + 1 :] for i, c in enumerate(word) if c == "и"),
+        *(word[:i] + "е" + word[i + 1 :] for i, c in enumerate(word) if c == "э"),
+        *(word[:i] + "э" + word[i + 1 :] for i, c in enumerate(word) if c == "е"),
     ]
 
     for form in forms:
@@ -155,6 +158,28 @@ def load_dictionary(forms) -> None:
 def load_char_probabilities(probabilities: dict[str, float]) -> None:
     char_probabilities.clear()
     char_probabilities.update(probabilities)
+
+
+def valid_variant(variant, is_partial):
+    total_len = sum(len(w) for w, _, _ in variant)
+
+    if total_len < 4:
+        return False
+
+    if is_partial and total_len < 6:
+        return False
+
+    # отсекаем варианты, в которых преобладают короткие слова (1-3 символа)
+    def count_shorts(threshold):
+        return sum(len(word) for word, in_dict, _ in variant if len(word) < threshold)
+
+    if count_shorts(3) / total_len > 0.3:
+        return False
+
+    if is_partial and count_shorts(4) / total_len > 0.4:
+        return False
+
+    return True
 
 
 def find_acro(inp: str):
@@ -209,7 +234,7 @@ def find_acro(inp: str):
 
         return single_source
 
-    # reconstruct path and word sequence
+    # reconstruct path
     def reconstruct_path(source):
         reachable = [
             (distance, vertex)
@@ -248,32 +273,34 @@ def find_acro(inp: str):
             break
 
     if not paths:
-        return []
+        return [], None
+
+    def reconstruct_word_seq(path):
+        res = []
+        for i, j in zip(path, path[1:]):
+            res.append((inp[i:j], candidates_by_slice[i, j], i))
+
+        return res
 
     paths = sorted(paths, key=lambda p: p[0] - p[-1])
-    best_path = paths[0]
 
-    res = []
+    for path in paths:
+        seq = reconstruct_word_seq(path)
+        is_partial = path[0] != 0 or path[-1] != len(inp)
+        if valid_variant(seq, is_partial):
+            return seq, is_partial
 
-    for i, j in zip(best_path, best_path[1:]):
-        res.append((inp[i:j], candidates_by_slice[i, j], i))
-
-    return res
+    return [], None
 
 
 def detect_acro(inp: str) -> Acro | None:
-    variant = find_acro(inp)
+    variant, partial = find_acro(inp)
 
     if not variant:
         return None
 
     forms = [dict_form for _, dict_form, _ in variant if dict_form]
     sequence = "".join(word for word, _, _ in variant)
-    partial = variant[0][2] != 0
-
-    # TODO : move to find_acro_variants
-    if len(sequence) < 4 or partial and len(sequence) < 7:
-        return None
 
     return Acro(
         sequence=sequence,
