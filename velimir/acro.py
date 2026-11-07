@@ -1,7 +1,7 @@
 from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
-from math import inf
+from math import inf, log1p
 
 import numpy as np
 from velimir.parsers import is_vowel
@@ -9,7 +9,14 @@ from velimir.parsers import is_vowel
 
 SINGLE_LETTER_WORDS = {"к", "в", "я", "а", "с", "и", "о", "б", "у"}
 
-known_forms: set[str] = set()
+LENGTH_REWARD = 1.0
+SHORT_WORD_THRESHOLD = 4
+SHORT_WORD_PENALTY = 1.0
+FREQUENCY_WEIGHT = 0.1
+NAME_BONUS = 0.1
+WORD_PENALTY = 2.0
+
+known_forms: dict[str, "WordInfo"] = {}
 char_probabilities: dict[str, float] = {}
 
 
@@ -19,6 +26,29 @@ class Acro:
     forms: list[str]
     statistics: dict
     partial: bool
+    score: float
+
+
+@dataclass(frozen=True)
+class WordInfo:
+    frequency: int = 0
+    is_name: bool = False
+
+
+def word_score(word: str, form: str) -> float:
+    info = known_forms.get(form)
+    frequency = info.frequency if info else 0
+    length = len(form)
+
+    short_penalty = SHORT_WORD_PENALTY * max(0, SHORT_WORD_THRESHOLD - len(word))
+
+    return (
+        LENGTH_REWARD * length
+        + FREQUENCY_WEIGHT * log1p(frequency)
+        + (NAME_BONUS if info and info.is_name else 0.0)
+        - short_penalty
+        - WORD_PENALTY
+    )
 
 
 def normalize_yo(word: str) -> str:
@@ -149,7 +179,7 @@ def matched_form(word: str) -> str | None:
     return None
 
 
-def load_dictionary(forms) -> None:
+def load_dictionary(forms: dict[str, WordInfo]) -> None:
     known_forms.clear()
     known_forms.update(forms)
     matched_form.cache_clear()
@@ -158,28 +188,6 @@ def load_dictionary(forms) -> None:
 def load_char_probabilities(probabilities: dict[str, float]) -> None:
     char_probabilities.clear()
     char_probabilities.update(probabilities)
-
-
-def valid_variant(variant, is_partial):
-    total_len = sum(len(w) for w, _, _ in variant)
-
-    if total_len < 4:
-        return False
-
-    if is_partial and total_len < 6:
-        return False
-
-    # отсекаем варианты, в которых преобладают короткие слова (1-3 символа)
-    def count_shorts(threshold):
-        return sum(len(word) for word, in_dict, _ in variant if len(word) < threshold)
-
-    if count_shorts(3) / total_len > 0.3:
-        return False
-
-    if is_partial and count_shorts(4) / total_len > 0.4:
-        return False
-
-    return True
 
 
 def find_acro(inp: str):
@@ -209,7 +217,7 @@ def find_acro(inp: str):
 
     for i, neighbors in vertices.items():
         for j in neighbors:
-            dist[i, j] = -len(inp[i:j])  # reward longest words
+            dist[i, j] = -word_score(inp[i:j], candidates_by_slice[(i, j)])
 
     # apply search
     def dag_critical_path(start):
@@ -267,13 +275,10 @@ def find_acro(inp: str):
         if not path:
             continue
 
-        paths.append(path)
-        # path already takes the whole substring
-        if path[-1] - path[0] == len(inp) - start:
-            break
+        paths.append((path, -source[path[-1]][0]))
 
     if not paths:
-        return [], None
+        return [], None, 0.0
 
     def reconstruct_word_seq(path):
         res = []
@@ -282,19 +287,17 @@ def find_acro(inp: str):
 
         return res
 
-    paths = sorted(paths, key=lambda p: p[0] - p[-1])
+    paths = sorted(paths, key=lambda item: item[1], reverse=True)
 
-    for path in paths:
-        seq = reconstruct_word_seq(path)
-        is_partial = path[0] != 0 or path[-1] != len(inp)
-        if valid_variant(seq, is_partial):
-            return seq, is_partial
+    path, score = paths[0]
+    seq = reconstruct_word_seq(path)
+    is_partial = path[0] != 0 or path[-1] != len(inp)
 
-    return [], None
+    return seq, is_partial, score
 
 
 def detect_acro(inp: str) -> Acro | None:
-    variant, partial = find_acro(inp)
+    variant, partial, score = find_acro(inp)
 
     if not variant:
         return None
@@ -307,4 +310,5 @@ def detect_acro(inp: str) -> Acro | None:
         forms=forms,
         statistics=calculate_sequence_statistics(normalize_yo(sequence)),
         partial=partial,
+        score=score,
     )

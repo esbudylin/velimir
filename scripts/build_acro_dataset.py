@@ -3,11 +3,13 @@ import logging
 import os
 import re
 from collections import Counter
+from math import log10
 
 from bs4 import BeautifulSoup
 
 from velimir import cyrlat
 from velimir.acro import (
+    WordInfo,
     detect_acro,
     load_char_probabilities,
     load_dictionary,
@@ -28,6 +30,8 @@ from velimir.settings import (
 from web.rnc_url import build_rnc_url
 
 WORD_RE = re.compile(r"[а-яё]+")
+
+OUTPUT_PERCENTILE = 98.0
 
 
 def find_acros():
@@ -58,11 +62,6 @@ def find_acros():
                 continue
 
             if acro := detect_acro(first_letters):
-                logging.info(
-                    "Acro found %s, %s",
-                    poem.path,
-                    " ".join(acro.forms),
-                )
                 yield poem, acro
 
 
@@ -106,13 +105,26 @@ def build_corpus_first_letter_counts(corpus_forms: Counter[str]) -> Counter[str]
     return letter_counts
 
 
-def load_cached_dictionary(cache_path: str) -> set[str] | None:
+def load_cached_dictionary(cache_path: str) -> dict[str, WordInfo] | None:
     try:
-        with open(cache_path, "r", encoding="utf8") as cache_file:
-            forms = {line.strip() for line in cache_file if line.strip()}
+        with open(cache_path, "r", encoding="utf8", newline="") as cache_file:
+            reader = csv.reader(cache_file)
+
+            if next(reader, None) != ["form", "frequency", "is_name"]:
+                logging.warning("Invalid dictionary cache header %s", cache_path)
+                return None
+
+            forms = {}
+
+            for row in reader:
+                if not row:
+                    continue
+
+                form, frequency, is_name = row
+                forms[form] = WordInfo(int(frequency), is_name == "1")
     except FileNotFoundError:
         return None
-    except OSError as error:
+    except (OSError, ValueError) as error:
         logging.warning("Could not read dictionary cache %s: %s", cache_path, error)
         return None
 
@@ -123,15 +135,18 @@ def load_cached_dictionary(cache_path: str) -> set[str] | None:
     return forms
 
 
-def save_cached_dictionary(cache_path: str, forms: set[str]) -> None:
+def save_cached_dictionary(cache_path: str, forms: dict[str, WordInfo]) -> None:
     try:
         cache_directory = os.path.dirname(cache_path)
         if cache_directory:
             os.makedirs(cache_directory, exist_ok=True)
 
-        with open(cache_path, "w", encoding="utf8") as cache_file:
-            for form in sorted(forms):
-                cache_file.write(form + "\n")
+        with open(cache_path, "w", encoding="utf8", newline="") as cache_file:
+            writer = csv.writer(cache_file)
+            writer.writerow(["form", "frequency", "is_name"])
+
+            for form, info in sorted(forms.items()):
+                writer.writerow([form, info.frequency, 1 if info.is_name else 0])
     except OSError as error:
         logging.warning("Could not write dictionary cache %s: %s", cache_path, error)
         return
@@ -228,35 +243,73 @@ def passes_threshold(form: str, count: int, known_normals: set[str]) -> bool:
     return False
 
 
-def build_dictionary(corpus_forms: Counter[str]) -> set[str]:
-    cached_forms = load_cached_dictionary(ACRO_DICTIONARY_CACHE_PATH)
+NAME_GRAMMEMES = {"Name", "Surn", "Patr"}
 
-    if cached_forms is not None:
-        return cached_forms
 
+def extract_name_forms() -> set[str]:
+    candidates = {
+        normalize_yo(word)
+        for word, tag, *_ in morph_analyzer.dictionary.iter_known_words()
+        if tag.grammemes & NAME_GRAMMEMES
+    }
+
+    forms = {
+        form
+        for form in candidates
+        if (parses := morph_analyzer.parse(form))
+        and parses[0].tag.grammemes & NAME_GRAMMEMES
+    }
+
+    logging.info(
+        "Extracted %d name forms from %d pymorphy candidates",
+        len(forms),
+        len(candidates),
+    )
+
+    return forms
+
+
+def build_dictionary(corpus_forms: Counter[str]) -> dict[str, WordInfo]:
     normalized_forms, known_normals = normalize_corpus_forms(corpus_forms)
 
-    forms: set[str] = set()
+    forms: dict[str, WordInfo] = {}
 
     for form, count in normalized_forms.items():
         if not passes_threshold(form, count, known_normals):
             continue
 
-        forms.add(form)
+        forms[form] = WordInfo(count)
 
         if form not in known_normals:
             continue
 
         for parse in morph_analyzer.parse(form):
             if parse.is_known and normalize_yo(parse.normal_form) == form:
-                forms.update(
-                    normalize_yo(word.word) for word in morph_analyzer.get_lexeme(parse)
-                )
+                for word in morph_analyzer.get_lexeme(parse):
+                    lexeme_form = normalize_yo(word.word)
+                    forms.setdefault(lexeme_form, WordInfo(count))
 
     logging.info(
         "Corpus forms: %d, normalized: %d, after threshold validation: %d",
         len(corpus_forms),
         len(normalized_forms),
+        len(forms),
+    )
+
+    added_name_forms = 0
+
+    for form in extract_name_forms():
+        info = forms.get(form)
+
+        if info is None:
+            forms[form] = WordInfo(corpus_forms.get(form, 0), is_name=True)
+            added_name_forms += 1
+        elif not info.is_name:
+            forms[form] = WordInfo(info.frequency, is_name=True)
+
+    logging.info(
+        "Added %d name forms, total dictionary forms: %d",
+        added_name_forms,
         len(forms),
     )
 
@@ -294,7 +347,7 @@ def build_char_probabilities(corpus_forms: Counter[str]) -> dict[str, float]:
     return probabilities
 
 
-def build_acro_data() -> tuple[set[str], dict[str, float]]:
+def build_acro_data() -> tuple[dict[str, WordInfo], dict[str, float]]:
     cached_forms = load_cached_dictionary(ACRO_DICTIONARY_CACHE_PATH)
     cached_probabilities = load_cached_char_probabilities(
         ACRO_CHAR_PROBABILITIES_CACHE_PATH
@@ -315,7 +368,25 @@ def build_acro_data() -> tuple[set[str], dict[str, float]]:
     return forms, probabilities
 
 
+def acro_combined_score(acro) -> float:
+    p_value = acro.statistics["p_value"]
+
+    return acro.score / log10(max(p_value, 1e-12))
+
+
 def write_output(acros):
+    scored = sorted(
+        ((acro_combined_score(acro), poem, acro) for poem, acro in acros),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+
+    if scored and OUTPUT_PERCENTILE > 0:
+        scores = sorted(score for score, _, _ in scored)
+        index = min(len(scores) - 1, int(len(scores) * OUTPUT_PERCENTILE / 100))
+        threshold = scores[index]
+        scored = [item for item in scored if item[0] >= threshold]
+
     with open(ACRO_TABLE_PATH, "w", encoding="utf8", newline="") as csv_file:
         writer = csv.writer(csv_file)
         writer.writerow(
@@ -327,11 +398,13 @@ def write_output(acros):
                 "forms",
                 "partial",
                 "p_value",
+                "score",
+                "combined_score",
                 "corpus_url",
             ]
         )
 
-        for poem, match in acros:
+        for combined_score, poem, match in scored:
             writer.writerow(
                 [
                     poem.author,
@@ -341,6 +414,8 @@ def write_output(acros):
                     " ".join(match.forms),
                     match.partial,
                     match.statistics["p_value"],
+                    match.score,
+                    combined_score,
                     build_rnc_url(poem.path),
                 ]
             )
